@@ -813,7 +813,8 @@ def main():
                  "DJ EQ", "COMB FILTER")
     _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
              "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (),     # stock effects + ColdFire modules, no DSP words
-             "repitch": (), "bass-follow": (), "plocks-p2": (), "analog-bassdrum": ("SPRING REV",),
+             "repitch": (), "midi-follow": (), "midi-scales": (),
+             "midi-harmony": (), "midi-harmony-follow": (), "plocks-p2": (), "analog-bassdrum": ("SPRING REV",),
              "sidechain-compressor": ("SPRING REV",), "kyoti-mute-sidechain": ("SPRING REV",),   # its DSP section in SPRING's words
              # Zac Kyoti's ColdFire modules on the stock effects, no DSP words
              **{_k: () for _k in ("direct-jump-kyoti", "batch-bugfixes", "reload-from-project",
@@ -830,7 +831,7 @@ def main():
              "testgen": ("PLATE REV",),     # TESTGEN runs in its words; the other 13 stay
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
              "rig": _rig, "bottleservice": _rig,
-             "character-txtr": _rig, "mattias-bass-follow": _rig}
+             "character-txtr": _rig, "mattias-midi-follow": _rig, "mattias-midi-harmony": _rig}
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(

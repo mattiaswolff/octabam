@@ -1,7 +1,7 @@
-# mattias-bass-follow compatibility candidate
+# mattias-midi-follow compatibility candidate
 
 The user's OCTABAM2 (`mattias-bus`, BUILD=2) selection plus
-[BASS FOLLOW](../../../modules/bass-follow/README.md). On upstream `5a46eb52`, the baseline rebuilt
+[MIDI FOLLOW](../../../modules/midi-follow/README.md). On upstream `5a46eb52`, the baseline rebuilt
 byte-for-byte to its saved MAIN_OS SHA-256
 `6d171d708c00637d15e91f2c9e2727f27b3c1cc3ade5ed33f390c337f669c68c`.
 
@@ -9,7 +9,8 @@ All original modules and FX1/FX2 choices are retained. This candidate adds
 RAM-only RFOL to each MIDI track's NOTE SETUP D. It has not been flashed.
 Local build receipts are in `out/bass-follow/compatibility/` (not committed).
 
-Build/check: `make check REMIX=mattias-bass-follow BUILD=2`.
+Build/check: `make check REMIX=mattias-midi-follow BUILD=2`.
+The historical results below retain the former Bass Follow names and paths.
 The tag is reused only for local binary comparison; a hardware image needs a
 new build number. This task does not install or copy firmware to a device.
 
@@ -75,8 +76,8 @@ in `out/bass-follow/compatibility/`.
 ## Extended emulator checks (5 Oct 2026)
 
 The same candidate hash above was tested with
-`tools/verify/verify_bass_follow_safety.py`; reproduction commands are in the
-[module README](../../../modules/bass-follow/README.md). No Root Follow firmware
+`verify_bass_follow_safety.py` (now `tools/verify/verify_midi_follow_safety.py`); reproduction commands are in the
+[module README](../../../modules/midi-follow/README.md). No Root Follow firmware
 code changed during this testing. The emulator now honors `--midi-out` after
 interactive `quit`, allowing complete MIDI capture alongside the JIT DSPs.
 

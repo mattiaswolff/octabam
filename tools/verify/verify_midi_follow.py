@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check the built BASS FOLLOW detour; optionally play a copied MIDI project.
+"""Check the built MIDI FOLLOW detour; optionally play a copied MIDI project.
 
-Usage: .venv/bin/python3 tools/verify/verify_bass_follow.py bass-follow --project DIR
+Usage: .venv/bin/python3 tools/verify/verify_midi_follow.py midi-follow --project DIR
 The local template is only read. Fixtures, UART bytes and logs stay in out/.
 """
 import argparse
@@ -19,7 +19,7 @@ import toolpath  # noqa: E402,F401
 from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE, UC_HOOK_MEM_WRITE  # noqa: E402
 from unicorn.m68k_const import *  # noqa: E402,F403
 
-OUT = ROOT / 'out/bass-follow'
+OUT = ROOT / 'out/midi-follow'
 CAPTURE, CAPTURE_END = 0x4009FB00, 0x4009FB08
 SITE, CONTINUE, SKIP = 0x4009FB80, 0x4009FB86, 0x4009FD2A
 REGS = [UC_M68K_REG_D0, UC_M68K_REG_D1, UC_M68K_REG_D2, UC_M68K_REG_D3,
@@ -53,6 +53,7 @@ def machine_gate(image):
     uc.mem_map(0x10000000, 0x200000)
     uc.mem_map(0x80000000, 0x10000)
     pitch, stack = 0x47001000, 0x47008000
+    stack_budget = 192 if "mh_get" in subprocess.check_output(["m68k-elf-nm", str(ROOT/"out/platform/runtime/runtime.elf")], text=True) else 64
     arrivals = []
     unexpected_writes = []
     written_addresses = set()
@@ -62,7 +63,7 @@ def machine_gate(image):
         # Only module state, scratch output, the displaced stock write and
         # a bounded stack frame may change during these machine-code calls.
         allowed = ((root, root + 8), (sources, sources + 8),
-                   (pitch, pitch + 4), (stack - 64, stack),
+                   (pitch, pitch + 4), (stack - stack_budget, stack),
                    (0x47004000 - 43, 0x47004000 - 42))
         if not any(lo <= address and address + size <= hi for lo, hi in allowed):
             unexpected_writes.append((hex(address), size, hex(value)))
@@ -531,11 +532,11 @@ def port_gate(image, project):
 def main():
     global OUT
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('remix', nargs='?', default='bass-follow')
+    ap.add_argument('remix', nargs='?', default='midi-follow')
     ap.add_argument('--project', default=os.environ.get('OT_PROJECT') or None)
     a = ap.parse_args()
-    if a.remix != 'bass-follow':
-        OUT = ROOT/'out'/f'{a.remix}-bass-follow'
+    if a.remix != 'midi-follow':
+        OUT = ROOT/'out'/f'{a.remix}-midi-follow'
     OUT.mkdir(parents=True, exist_ok=True)
     image = ROOT/'out/mainos_bus.bin'
     machine_gate(image)

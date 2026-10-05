@@ -1,14 +1,14 @@
-"""OCTABAM2 selection plus BASS FOLLOW, isolated compatibility candidate."""
+"""OCTABAM2 selection plus MIDI Follow, Scales and Harmony, isolated compatibility candidate."""
 from remix.schema import Proof, Remix
 
 
 REMIX = Remix(
-    name="mattias-bass-follow",
+    name="mattias-midi-harmony",
     family="mods",
     proof=Proof.PORT,
     proof_note="local OCTABAM2 compatibility candidate; not flashed",
     doc=("Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and "
-         "Modulation on FX1; Mode Defaults, RLEN PLEN, Tuner and Root Follow."),
+         "Modulation on FX1; Mode Defaults, RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony."),
     modules=(
         # Fixed FX2 send/return layout.
         "REVERB SERVER",
@@ -30,7 +30,9 @@ REMIX = Remix(
         # Requested firmware behaviour.
         "RLEN PLEN",
         "TUNER",
-        "BASS FOLLOW",
+        "MIDI FOLLOW",
+        "MIDI SCALES",
+        "MIDI HARMONY",
     ),
     fallback="SEND",
 

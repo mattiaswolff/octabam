@@ -1,5 +1,6 @@
 /* OS 1.40C. All new state is module-owned volatile DRAM. */
     .text
+    .include "remix.inc"
     .global bf_capture, bf_note, bf_roots, bf_sources, bf_pre_capture
     .global bf_encoder, bf_draw_value, bf_format, bf_select
 
@@ -65,8 +66,15 @@ bf_pre_capture:
 bf_capture:
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
+    .ifdef HAVE_HARMONY
+    move.l %d7,%d0
+    jsr mh_active
+    andi.l #3,%d0
+    bne.s .capture_done /* Harmony keyboard roots must survive arp-only ticks. */
+    .endif
     move.l -64(%fp),%d1
     bsr.w bf_latch
+.capture_done:
     movem.l (%sp),%d0-%d2/%a0
     lea 16(%sp),%sp
     move.l %d7,%d4
@@ -80,7 +88,24 @@ bf_capture:
 bf_latch:
     clr.l %d0
     move.b 0x220(%a5),%d0
-    bmi.s .latch_return
+    bmi.w .latch_return
+    .ifdef HAVE_HARMONY
+    move.l %d1,-(%sp)
+    move.l %d7,%d1
+    jsr mh_quant
+    move.l (%sp)+,%d1
+    move.l %d0,-(%sp)
+    move.l %d1,-(%sp)
+    move.l %d7,%d0
+    jsr mh_active
+    andi.l #3,%d0
+    move.l (%sp)+,%d1
+    tst.l %d0
+    beq.s .latch_native_scale
+    clr.l %d1
+.latch_native_scale:
+    move.l (%sp)+,%d0
+    .endif
     clr.l %d2
     move.b 0x22c(%a5),%d2
     add.l %d2,%d0
@@ -91,7 +116,33 @@ bf_latch:
     add.l %d2,%d0
     andi.l #255,%d0
     tst.b %d0
-    bmi.s .latch_return
+    bmi.w .latch_return
+    .ifdef HAVE_SCALES
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    .ifdef HAVE_HARMONY
+    move.l %d7,%d0
+    jsr mh_active
+    tst.l %d0
+    bne.s .latch_harmony_restore
+    .endif
+    move.l %d7,%d0
+    jsr ms_raw
+    cmpi.l #24,%d0
+    bls.s .latch_stock_restore
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
+    jsr ms_snap
+    addq.l #4,%sp
+    bra.s .root_mod
+.latch_harmony_restore:
+    move.l (%sp)+,%d0
+    move.l (%sp)+,%d1
+    bra.s .root_mod
+.latch_stock_restore:
+    move.l (%sp)+,%d0
+    move.l (%sp)+,%d1
+    .endif
     tst.l %d1
     ble.s .root_mod
     add.l %d0,%d1
@@ -106,7 +157,7 @@ bf_latch:
     add.l %d2,%d0
     andi.l #255,%d0
     tst.b %d0
-    bmi.s .latch_return
+    bmi.w .latch_return
 .root_mod:
     cmpi.l #12,%d0
     blt.s .latch
@@ -126,6 +177,12 @@ bf_latch:
 bf_note:
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
+    .ifdef HAVE_HARMONY
+    move.l %d7,%d0
+    jsr mh_active
+    andi.l #3,%d0
+    bne.w .restore /* Harmony has already generated the follower chord before arp. */
+    .endif
     tst.b (%a2)
     bmi.s .restore
     lea bf_sources,%a0
@@ -177,6 +234,11 @@ bf_note:
  * One step per detent, skipping self/cycles; no stock staged parameter writes.
  */
 bf_encoder:
+    move.l 4(%sp),%d0
+    cmpi.l #3,%d0
+    beq.s .encoder_follow
+    jmp 0x4003a8e8 /* Native CHAN/BANK/PROG/SBNK, or Harmony's F wrapper. */
+.encoder_follow:
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     move.l 8(%sp),%d1

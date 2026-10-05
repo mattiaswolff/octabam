@@ -1,12 +1,16 @@
 """Per-MIDI-track root follower with a volatile NOTE SETUP D selector."""
 from remix.schema import Category, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
 
+def harmony_inc(modules):
+    return ('.set HAVE_HARMONY,1\n' if 'MIDI HARMONY' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '')
+
+
 MODULE = Module(
-    name="bass-follow", key="BASS FOLLOW", kind=Kind.CF_PATCH,
+    name="midi-follow", key="MIDI FOLLOW", kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author="Local Octabam prototype", author_url="https://github.com/sambanks/octabam",
-    proof=Proof.PORT, proof_note="verify_bass_follow: stock/patched MIDI capture; not flashed",
+    proof=Proof.PORT, proof_note="verify_midi_follow: stock/patched MIDI capture; not flashed",
     doc="NOTE SETUP RFOL selects a source track; bass roots 36-47 plus follower TRAN/P-locks.",
-    linked=(Linked("bassfollow", "modules/bass-follow/bass_follow.s", dram=True),),
+    linked=(Linked("bassfollow", "modules/midi-follow/midi_follow.s", dram=True, include=harmony_inc),),
     symbol_refs=(
         SymbolRef(0x400BC64E, 0x4003A8E8, "bassfollow", "bf_encoder", "NOTE SETUP D encoder"),
         SymbolRef(0x400D3F2C, 0, "bassfollow", "bf_format", "RFOL OFF/T1-T8 formatter"),
@@ -15,7 +19,7 @@ MODULE = Module(
         Poke(0x400D3F5C, bytes(4), bytes.fromhex("400467a4"), "RFOL text widget, like CHAN"),
         Poke(0x400D3E8A, b"----\0\0", b"RFOL\0\0", "NOTE SETUP D label"),
         Poke(0x400D3EFC, bytes.fromhex("00000080"), bytes.fromhex("00000009"), "RFOL nine values"),
-        Poke(0x400D3FC8, bytes.fromhex("00000101"), bytes.fromhex("00000111"), "enable NOTE SETUP D"),
+        Poke(0x400D3FCB, b"\x01", b"\x11", "enable NOTE SETUP D only"),
     ),
     detours=(Detour(0x4009F986, bytes.fromhex("41f980006676"),
                     "bassfollow", "bf_pre_capture", "capture all ordinary source triggers before any track emits"),
@@ -27,5 +31,5 @@ MODULE = Module(
              Detour(0x4009FB80, bytes.fromhex("12126d0001a6"),
                    "bassfollow", "bf_note",
                    "resolve root before the sequencer records the emitted note"),),
-    gates=(Gate("tools/verify/verify_bass_follow.py", stage="image", venv=True),),
+    gates=(Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),),
 )

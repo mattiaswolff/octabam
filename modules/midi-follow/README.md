@@ -1,4 +1,4 @@
-# Bass Follow (experimental)
+# MIDI Follow (experimental)
 
 Each MIDI track can follow another MIDI track's chord root while keeping its
 own rhythm, velocity and note length. At TRAN=0, the bass uses MIDI notes 36–47:
@@ -51,10 +51,10 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
   root in place. The controlled machine-code gate covers these gates; unusual
   mute/plays-free modes still need broader on-device testing.
 
-This is a bass prototype, not the complete OXI harmonizer. There is no audio
-following, live-keyboard harmonizer, chord generation, or performance root
-selector. Follower arpeggiation and shared output MIDI channels remain outside
-the tested use. This image has **not been flashed**.
+On its own, MIDI Follow supplies bass-root following. MIDI Harmony optionally
+adds live keyboard chords and follower chords/arp, as described below. Audio
+following, live performance transposition of a running pattern and shared output
+MIDI channels remain outside the tested use. This image has **not been flashed**.
 
 ## Implementation
 
@@ -88,12 +88,12 @@ With your own unpacked stock 1.40C image and prepared toolchain:
 
 ```sh
 make emu-cf
-make check REMIX=bass-follow
-.venv/bin/python3 tools/verify/verify_bass_follow.py bass-follow --project /path/to/local/project
+make check REMIX=midi-follow
+.venv/bin/python3 tools/verify/verify_midi_follow.py midi-follow --project /path/to/local/project
 ```
 
 The last command reads the project as a template and creates disposable virtual
-cards under `out/bass-follow/`. It does not edit the template or a device card.
+cards under `out/midi-follow/`. It does not edit the template or a device card.
 The module gate also accepts `OT_PROJECT`; without one, the full-port checks
 explicitly skip and the controlled machine-code gate still runs.
 
@@ -121,18 +121,18 @@ the separate panel test below checks the actual UART encoder path.
 The panel test sends actual UART1 key/encoder reports: enter MIDI NOTE SETUP,
 select RFOL, share the source across tracks, leave/reopen the page, switch OFF,
 and boot with defaults. It checks module settings and verifies that the working
-Part mirror is unchanged. LCD screenshots are under `out/bass-follow/ui/`.
-`out/bass-follow/result.json` is written only after all cases pass and records
+Part mirror is unchanged. LCD screenshots are under `out/midi-follow/ui/`.
+`out/midi-follow/result.json` is written only after all cases pass and records
 the tested image hashes; artifacts are local and uncommitted.
 
 For the personal composed remix, the additional safety runner creates disposable
 MIDI and audio fixtures from the same local project template:
 
 ```sh
-make check REMIX=mattias-bass-follow BUILD=2
-.venv/bin/python3 tools/verify/verify_bass_follow_safety.py --project /path/to/local/project
-.venv/bin/python3 tools/verify/verify_bass_follow_safety.py --project /path/to/local/project --mode soak --seconds 120
-.venv/bin/python3 tools/verify/verify_bass_follow_safety.py --project /path/to/local/project --mode soak --seconds 120 --off
+make check REMIX=mattias-midi-follow BUILD=2
+.venv/bin/python3 tools/verify/verify_midi_follow_safety.py --project /path/to/local/project
+.venv/bin/python3 tools/verify/verify_midi_follow_safety.py --project /path/to/local/project --mode soak --seconds 120
+.venv/bin/python3 tools/verify/verify_midi_follow_safety.py --project /path/to/local/project --mode soak --seconds 120 --off
 ```
 
 Keep that build and its runtime symbols in place until the commands finish.
@@ -144,7 +144,7 @@ beside eight FLEX tracks and the remix's audio effects, then switches through
 A01–A04 and Parts 1–4 using panel input. It checks balanced MIDI releases, audio
 activity on every track, RFOL state, module instructions, DSP status and unchanged
 stored banks. Each soak uses its own generated project and virtual card.
-Receipts, captured MIDI, audio and command logs are in `out/bass-follow-safety/`.
+Receipts, captured MIDI, audio and command logs are in `out/midi-follow-safety/`.
 Neither suite measures worst-case physical CPU timing. Follower arp and shared
 output channels remain outside the supported test setup.
 
@@ -160,7 +160,7 @@ not evidence supplied by the emulator.
 The full port runs the patched CPU firmware, modeled timers and RTOS tasks,
 virtual CF storage, panel input and MIDI UART. It can load projects, run the
 sequencer, capture MIDI bytes, operate buttons/encoders and render the firmware's
-LCD. `make panel REMIX=bass-follow OT_PROJECT=/path/to/project` opens an
+LCD. `make panel REMIX=midi-follow OT_PROJECT=/path/to/project` opens an
 interactive virtual panel. These tests do not require emulator audio output.
 
 The extended soak also runs both DSP cores with `--dsp-rt` and captures audio;
@@ -173,3 +173,16 @@ The controlled Unicorn test proves behavior in selected states; the full port
 checks the real UI/sequencer paths. Neither proves electrical DIN output,
 hardware timing/jitter, external synth behavior, or safe flash/boot on a physical
 Octatrack. Hardware testing remains pending.
+
+## MIDI Harmony and MIDI Scales
+
+The module is named **MIDI Follow** (formerly Bass Follow). RFOL is still
+NOTE SETUP D and the standalone bass-root behaviour is unchanged. With
+MIDI Harmony active, root selection happens before chord generation and
+stock arp processing, so a follower can play NOTE, TRI or 7TH instead of
+having its extra notes collapsed. The source's native KEY is inherited.
+MIDI Scales extends that native KEY selector independently.
+
+The NOTE SETUP callback forwards every non-D control to stock. Harmony can
+own F without intercepting CHAN, BANK, PROG or SBNK. The two enable flags
+are claimed as separate bytes so their manifests compose independently.

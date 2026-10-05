@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extended local Root Follow acceptance. Creates disposable fixtures under out/.
 
-Run after building mattias-bass-follow; never uses a physical device.
+Run after building mattias-midi-follow; never uses a physical device.
 """
 import argparse
 import hashlib
@@ -15,12 +15,12 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'tools'))
 import toolpath  # noqa: E402,F401
-import verify_bass_follow as bf
+import verify_midi_follow as bf
 import emu_card
 from hw import ot_project as otp
 from hw import ot_bank
 
-OUT = ROOT/'out/bass-follow-safety'
+OUT = ROOT/'out/midi-follow-safety'
 EMU = ROOT/'out/emu/ot_emu'
 CASES = ('held-boundary', 'stop', 'restart', 'pattern-boundary', 'pattern', 'part', 'project')
 
@@ -204,7 +204,7 @@ def soak_card(source, work):
         shutil.rmtree(project)  # owned disposable fixture, never the source
     with (work/'fixture.log').open('w') as log:
         subprocess.run([sys.executable, str(ROOT/'tools/harness/stress_project.py'),
-                        '--remix', 'mattias-bass-follow', '--source', str(prepared),
+                        '--remix', 'mattias-midi-follow', '--source', str(prepared),
                         '--out', str(project)], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
     for path in project.glob('bank*.work'):
         def mutate(data):
