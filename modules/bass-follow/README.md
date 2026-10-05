@@ -1,0 +1,110 @@
+# Bass Follow (experimental)
+
+Each MIDI track can follow another MIDI track's chord root while keeping its
+own rhythm, velocity and note length. The bass stays in MIDI notes 36–47:
+C → F → G gives 36 → 41 → 43. Scale Quantizer is not required.
+
+## On the Octatrack
+
+1. Select the follower, for example **MIDI T2**.
+2. Open **NOTE SETUP** with **FUNC + SRC** (or double-tap SRC).
+3. Turn **knob D, RFOL**, from **OFF** to **T1**.
+4. Program T1's C/F/G NOTE locks and optional NOTE2–4 chord tones. Its arp can
+   play those chords. Program T2's rhythm; leave the follower's arp OFF.
+5. Give the two tracks different output MIDI channels, then play.
+
+RFOL appears on all eight MIDI tracks. It selects a **track**, independently of
+its output CHAN. Several followers can select the same source. The selector
+skips the track itself and choices that would create a circular dependency.
+Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
+
+- **OFF** plays the track's original notes. Every track starts OFF at boot.
+- Root means the source's first NOTE, with its stock transpose/scale processing;
+  it does not infer the root from a chord inversion. C–E–G arp notes leave the
+  bass on C. A new F–A–C chord moves it to F.
+- A configured follower is monophonic once its source has a known root:
+  NOTE2–4 are suppressed. Before the first eligible source trigger it passes
+  through unchanged.
+- The next follower trig uses the selected source's latest root. A held bass
+  keeps its original note-off, including when RFOL changes or switches OFF.
+- Ordinary same-tick source trigs are captured before any track emits, so
+  **T2 following T8** sees the new root on that tick. Earlier microtimed bass
+  trigs still use the previous root.
+- Roots latch through rests and transport stops. Configuration and roots are
+  **RAM-only**: they survive pattern/Part/project changes in the running session
+  and reset on reboot. They are not saved or copied with a Part/project.
+- Disabled, muted and zero-velocity ordinary source triggers leave the previous
+  root in place. The controlled machine-code gate covers these gates; unusual
+  mute/plays-free modes still need broader on-device testing.
+
+This is a bass prototype, not the complete OXI harmonizer. There is no audio
+following, live-keyboard harmonizer, chord generation, or performance root
+selector. Follower arpeggiation and shared output MIDI channels remain outside
+the tested use. This image has **not been flashed**.
+
+## Implementation
+
+The module uses the linked ColdFire pattern from `modules/repitch` and the
+stock NOTE descriptor, drawer and encoder dispatch. No DSP code is added.
+
+- `0x4009f986`: before the output loop, capture eligible ordinary chord roots
+  for all tracks. Uses the stock trigger/mute mask, enabled-track checks,
+  output channel and velocity. Original NOTE lanes already contain the locks.
+- `0x4009fb00`: capture each eligible source event, including arp ticks, from
+  the original NOTE lane, not the arp's scratch output. Apply the stock
+  transpose and scale correction.
+- `0x4009fb80`: resolve a follower's source and replace its scratch pitch before
+  stock note ownership and release bookkeeping (`0x4009fbbc` / `0x4009fd04`).
+  Chained resolution has a defensive eight-hop bound.
+- NOTE SETUP's unused D slot is labelled RFOL and enabled. Its encoder callback
+  at `0x400bc64e` points to the module; its formatter prints OFF/T1–T8.
+  The drawer detour at `0x40036674` reads module RAM for that slot. The original
+  staged Part value is never replaced or sent through the stock setter.
+
+`bf_sources[8]` holds OFF=0 or source=1…8. `bf_roots[8]` holds the source's bass
+pitch or 0xff (unknown). These initialized bytes belong to the linked runtime;
+there is no persistence format or save/load hook. The generic MIDI sender is
+not hooked. The existing DRAM platform reserves about 10 MB of sample RAM;
+this small module shares that reserve when composed with other DRAM modules.
+
+## Reproduce
+
+With your own unpacked stock 1.40C image and prepared toolchain:
+
+```sh
+make emu-cf
+make check REMIX=bass-follow
+.venv/bin/python3 tools/verify/verify_bass_follow.py bass-follow --project /path/to/local/project
+```
+
+The last command reads the project as a template and creates disposable virtual
+cards under `out/bass-follow/`. It does not edit the template or a device card.
+The module gate also accepts `OT_PROJECT`; without one, the full-port checks
+explicitly skip and the controlled machine-code gate still runs.
+
+The controlled gate executes the actual linked bytes: all 56 source/follower
+pairs, OFF, chains/cycles, 128 root notes, arp isolation, transposition/scales,
+same-tick T8 capture, mute/channel/velocity gates, invalid notes, formatters and
+register preservation. Full-port stock/patched UART captures cover chords,
+source arpeggiation, T8 → T2, fallback, held-note release, unchanged other tracks
+and stored banks. An all-OFF run must match stock MIDI events exactly.
+
+The panel test sends actual UART1 key/encoder reports: enter MIDI NOTE SETUP,
+select RFOL, share the source across tracks, leave/reopen the page, switch OFF,
+and boot with defaults. It checks module settings and verifies that the working
+Part mirror is unchanged. LCD screenshots are under `out/bass-follow/ui/`.
+`out/bass-follow/result.json` is written only after all cases pass and records
+the tested image hashes; artifacts are local and uncommitted.
+
+## What the emulator allows
+
+The full port runs the patched CPU firmware, modeled timers and RTOS tasks,
+virtual CF storage, panel input and MIDI UART. It can load projects, run the
+sequencer, capture MIDI bytes, operate buttons/encoders and render the firmware's
+LCD. `make panel REMIX=bass-follow OT_PROJECT=/path/to/project` opens an
+interactive virtual panel. These tests do not require emulator audio output.
+
+The controlled Unicorn test proves behavior in selected states; the full port
+checks the real UI/sequencer paths. Neither proves electrical DIN output,
+hardware timing/jitter, external synth behavior, or safe flash/boot on a physical
+Octatrack. Hardware testing remains pending.
