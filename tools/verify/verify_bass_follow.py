@@ -77,13 +77,15 @@ def machine_gate(image):
             u.emu_stop()
     uc.hook_add(UC_HOOK_CODE, stop, begin=1, end=0)
 
-    def note(track, slot, value):
+    def note(track, slot, value, transpose=64):
         before = [0x12340000 + i for i in range(16)]
         before[4], before[7], before[10], before[15] = slot, track, pitch, stack
+        before[13] = 0x47002000
         uc.reg_write(UC_M68K_REG_SR, 0x2700)
         for reg, val in zip(REGS, before):
             uc.reg_write(reg, val)
         uc.mem_write(pitch - 1, bytes((0xa5, value, 0x5a)))
+        uc.mem_write(before[13] + 0x22c, bytes((transpose,)))
         arrivals.clear()
         uc.emu_start(SITE, 0, count=500)
         result = uc.mem_read(pitch, 1)[0]
@@ -164,6 +166,17 @@ def machine_gate(image):
     assert capture(0, 66, scale=12) == 41  # F# -> F in C major
     assert capture(0, 61, scale=10) == 37  # C# belongs to D major
     assert capture(0, 61, transpose=66, scale=12) == 38  # transpose THEN scale
+    # Followers retain signed TRAN, including octave shifts rather than mod 12.
+    # Exhaust the normal byte range and reject corrupt/out-of-MIDI results.
+    for n in range(12):
+        capture(0, 60 + n)
+        for offset in range(-64, 64):
+            expected = 36 + n + offset
+            assert note(1, 0, 72, transpose=64+offset) == (expected if 0 <= expected <= 127 else 255)
+        assert note(1, 0, 72, transpose=255) == 255
+        assert note(1, 1, 76, transpose=71) == 255
+        assert note(1, 0, 255, transpose=71) == 255
+        assert note(0, 0, 72, transpose=71) == 72  # RFOL OFF: stock result preserved
     # All 56 source/follower pairs, independent of output MIDI channels.
     for follower in range(8):
         for leader in range(8):
@@ -184,6 +197,7 @@ def machine_gate(image):
     select(0, -1)                # OFF, skipping those same cycles
     capture(0, 67)
     assert note(2, 0, 48) == 43
+    assert note(2, 0, 48, transpose=76) == 55  # chain uses destination's offset
     assert select(7, 1000)[7] == 7  # clamps at T7, skips itself
     assert select(7, -1000)[7] == 0
     assert select(99, 1)[7] == 0
@@ -240,10 +254,10 @@ def machine_gate(image):
         assert bytes(uc.mem_read(pitch, len(expected)+1)) == expected.encode()+b'\0'
     assert {root, sources + 1, pitch} <= written_addresses, 'memory-write hook did not observe known writes'
     assert not unexpected_writes, ('out-of-contract memory writes', unexpected_writes[:10])
-    print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, arp isolation, same-tick T8 source, gates, note-offs path, formatters, registers, bounded memory writes')
+    print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, all follower TRAN offsets, arp isolation, same-tick T8 source, gates, note-offs path, formatters, registers, bounded memory writes')
 
 
-def fixture(source, dest, arp=False, leader=0):
+def fixture(source, dest, arp=False, leader=0, offsets=None):
     import ab_fixture
     from hw import ot_project as otp
     ab_fixture.prepare(source, dest)
@@ -268,9 +282,15 @@ def fixture(source, dest, arp=False, leader=0):
                         data[at+3:at+5] = bytes((68, 71))  # major third and fifth
                         data[at+14] = 1  # UP
                         data[at+15] = 3  # fast enough for three notes before F
+                    if t == 1 and offsets is not None:
+                        data[at+12] = 71  # whole-track TRAN +7; unlocked steps inherit
                     channel = {7: 13, 1: 5, 2: 3}.get(t, 0) if leader == 7 else t + 1
                     data[base + 0x4e2 + 36*t] = channel if t in steps else 0
             for p in range(16):
+                # Explicit normal scale mode, 64-step cycle at 1x. Otherwise
+                # an advanced-mode template can wrap during the MIDI capture.
+                end = 0x16 + (p + 1) * 0x8eec
+                data[end-11:end-6] = bytes((16, 2, 64, 2, 0))
                 for t in range(8):
                     at = 0x492e + p * 0x8eec + t * 0x8b9
                     assert data[at:at+4] == b'MTRA'
@@ -282,6 +302,8 @@ def fixture(source, dest, arp=False, leader=0):
                         for s, n in steps[t].items():
                             lock = at + 0x39 + s * 32
                             data[lock:lock+2] = bytes((n, 90+t))
+                            if t == 1 and offsets is not None and s in offsets:
+                                data[lock+12] = 64 + offsets[s]
                             if t == 1 and s == 3:
                                 data[lock+2] = 12  # held across the F root change
                             if t == leader and s == 4:
@@ -321,16 +343,18 @@ def notes(raw):
     return result
 
 
-def port_case(image, project, arp=False, leader=0, enabled=True, live_change=None, held_boundary=False):
+def port_case(image, project, arp=False, leader=0, enabled=True, live_change=None, held_boundary=False, offsets=None):
     name = "off" if not enabled else "reverse-arp" if leader and arp else "reverse" if leader else "arp" if arp else "chords"
     if live_change:
         name = f'live-{live_change}'
     if held_boundary:
         name = 'held-boundary'
+    if offsets is not None:
+        name = 'offsets-' + name
     work = OUT / name
     work.mkdir(parents=True, exist_ok=True)
     import emu_card
-    fixture(project, work / 'project', arp=arp, leader=leader)
+    fixture(project, work / 'project', arp=arp, leader=leader, offsets=offsets)
     card, _ = emu_card.stage_project(work / 'project', 'OCTABAM', 'BASS', tree=work / 'tree')
     (work / 'card.img').write_bytes(card)
     results, hashes = {}, {}
@@ -408,11 +432,23 @@ def port_case(image, project, arp=False, leader=0, enabled=True, live_change=Non
     expected = ([48, 36, 36, 48, 48, 55, 48] if live_change == 'off' else
                 [48, 36, 36, 38, 38, 40] if live_change == 'source' else
                 [48, 36, 36, 41, 43, 43])
+    if offsets is not None:
+        assert not live_change and not arp and not held_boundary
+        expected = [n + offsets.get(step, 7) for step, n in zip((0, 2, 3, 6, 8, 10), expected)]
+        # Prove the fixture's base setting and P-locks are active in stock too.
+        stock_expected = []
+        for step in (0, 2, 3, 6, 8, 10):
+            pitch = 48 + offsets.get(step, 7)
+            stock_expected.append(pitch)
+            if step == 8:
+                stock_expected.append(pitch + 7)
+        assert [e[2] for e in stock if e[:2] == ('on', bass_ch)] == stock_expected
     assert [e[2] for e in bass] == expected, bass
     assert all(e[3] == 91 for e in bass)
     # F starts while the old C bass is still held; its release stays C.
     f = patched.index(('on', leader_ch, 65, 90+leader))
-    assert patched.index(('off', bass_ch, 36, 0), f) < patched.index(('on', bass_ch, expected[3], 91), f)
+    held_pitch = 36 + offsets.get(3, 7) if offsets is not None else 36
+    assert patched.index(('off', bass_ch, held_pitch, 0), f) < patched.index(('on', bass_ch, expected[3], 91), f)
     print(f'  [ok] port UART ({work.name}): independent rhythm, C/F/G, same-step order, held-note release, other tracks and stored banks')
     return dict(status='pass', leader_notes=leader_notes, bass_notes=[e[2] for e in bass], image_sha256=hashes)
 
@@ -481,6 +517,12 @@ def port_gate(image, project):
     cases['held-boundary'] = port_case(image, project, held_boundary=True)
     cases['live-off'] = port_case(image, project, live_change='off')
     cases['live-source'] = port_case(image, project, live_change='source')
+    # +7 on the whole track, with 0/+12/-12 P-locks and a held +12 note
+    # spanning the leader's C -> F change. Step 10 proves return to base +7.
+    offsets = {2: 0, 3: 12, 6: -12, 8: 12}
+    cases['offsets'] = port_case(image, project, offsets=offsets)
+    cases['offsets-reverse'] = port_case(image, project, leader=7, offsets=offsets)
+    cases['offsets-off'] = port_case(image, project, enabled=False, offsets=offsets)
     panel_gate(image)
     (OUT/'result.json').write_text(json.dumps(dict(status='pass', cases=cases,
                                                   hardware_tested=False), indent=2)+'\n')

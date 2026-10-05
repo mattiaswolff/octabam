@@ -5,7 +5,7 @@ MODULE = Module(
     name="bass-follow", key="BASS FOLLOW", kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author="Local Octabam prototype", author_url="https://github.com/sambanks/octabam",
     proof=Proof.PORT, proof_note="verify_bass_follow: stock/patched MIDI capture; not flashed",
-    doc="NOTE SETUP RFOL selects a MIDI source track; bass roots at MIDI notes 36-47.",
+    doc="NOTE SETUP RFOL selects a source track; bass roots 36-47 plus follower TRAN/P-locks.",
     linked=(Linked("bassfollow", "modules/bass-follow/bass_follow.s", dram=True),),
     symbol_refs=(
         SymbolRef(0x400BC64E, 0x4003A8E8, "bassfollow", "bf_encoder", "NOTE SETUP D encoder"),

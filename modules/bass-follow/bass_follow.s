@@ -150,6 +150,16 @@ bf_note:
     bmi.s .restore
     tst.l %d4
     bne.s .follower_extra
+    /* TRAN is the follower's signed semitone offset (including step locks).
+     * Read the original live lane; scratch has already been transposed and
+     * scale-corrected by stock. Do not add that processing a second time.
+     */
+    moveq #0,%d1
+    move.b 0x22c(%a5),%d1
+    subi.l #64,%d1
+    add.l %d1,%d0
+    cmpi.l #127,%d0
+    bhi.s .follower_extra      /* also rejects negative pitches, no wrapping */
     move.b %d0,(%a2)
     bra.s .restore
 .follower_extra:

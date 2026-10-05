@@ -104,7 +104,7 @@ from the card (section 5).
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| [**BASS FOLLOW**](modules/bass-follow/README.md) | [Local Octabam prototype](https://github.com/sambanks/octabam) | NOTE SETUP RFOL selects a MIDI source track; bass roots at MIDI notes 36-47. | port-gated: verify_bass_follow: stock/patched MIDI capture; not flashed |
+| [**BASS FOLLOW**](modules/bass-follow/README.md) | [Local Octabam prototype](https://github.com/sambanks/octabam) | NOTE SETUP RFOL selects a source track; bass roots 36-47 plus follower TRAN/P-locks. | port-gated: verify_bass_follow: stock/patched MIDI capture; not flashed |
 | [**CC FEEDBACK**](modules/cc-feedback/README.md) | [sambanks](https://github.com/sambanks) | Every knob value change is transmitted as its CC (page 1: 16-45; page 2: CC MAP's 62-73), so a controller's encoders follow the unit. | port-gated: `verify_ccfeedback` (Unicorn) and `verify_set` (the port's MIDI OUT bytes) |
 | [**CC MAP**](modules/cc-map/README.md) | [sambanks](https://github.com/sambanks) | MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's. | on hardware: Sam's MKII (image 96, 13 Sep 2026) |
 | [**USB AUDIO IN AB**](modules/usb-audio-in-ab/README.md) | [bryantysinger](https://github.com/bryantysinger) | A stereo pair from the host into inputs A/B (UAC2 EP3 OUT, implicit feedback); the jacks while the stream is closed. C/D stay on the jacks. | port-gated: `verify_usb_in` under the port (28 Sep 2026); the four-channel form ran on Bryan T's MKII as usbin-test build 16 (27 Sep 2026) |

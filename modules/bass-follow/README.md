@@ -1,8 +1,9 @@
 # Bass Follow (experimental)
 
 Each MIDI track can follow another MIDI track's chord root while keeping its
-own rhythm, velocity and note length. The bass stays in MIDI notes 36–47:
-C → F → G gives 36 → 41 → 43. Scale Quantizer is not required.
+own rhythm, velocity and note length. At TRAN=0, the bass uses MIDI notes 36–47:
+C → F → G gives 36 → 41 → 43. The follower's TRAN adds a signed semitone
+offset to that root. Scale Quantizer is not required.
 
 ## On the Octatrack
 
@@ -12,6 +13,11 @@ C → F → G gives 36 → 41 → 43. Scale Quantizer is not required.
 4. Program T1's C/F/G NOTE locks and optional NOTE2–4 chord tones. Its arp can
    play those chords. Program T2's rhythm; leave the follower's arp OFF.
 5. Give the two tracks different output MIDI channels, then play.
+6. On the follower's **ARP MAIN** page, use **TRAN** for relative pitch:
+   **0** = root, **+7** = perfect fifth, **+12** = octave above, **-12** = octave
+   below. Set it for the whole track, or hold a step and parameter-lock TRAN.
+   A locked value replaces the track's base TRAN for that step; it is not added
+   to the base. The follower's arp remains OFF.
 
 RFOL appears on all eight MIDI tracks. It selects a **track**, independently of
 its output CHAN. Several followers can select the same source. The selector
@@ -27,6 +33,14 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
   through unchanged.
 - The next follower trig uses the selected source's latest root. A held bass
   keeps its original note-off, including when RFOL changes or switches OFF.
+- The follower's NOTE does not set an interval: use TRAN. Its live value,
+  including parameter locks, is added after root selection without an additional
+  scale correction. These are chromatic semitones, not scale degrees; +7 is
+  always a perfect fifth, even when that pitch falls outside the source scale.
+  Pitches outside MIDI 0–127 are suppressed instead of wrapped. Existing stock
+  absent/invalid-note gates still apply before the follower replacement.
+- A dependency chain uses the ultimate source root plus the final follower's
+  own TRAN; intermediate followers' offsets do not accumulate.
 - Ordinary same-tick source trigs are captured before any track emits, so
   **T2 following T8** sees the new root on that tick. Earlier microtimed bass
   trigs still use the previous root.
@@ -53,7 +67,8 @@ stock NOTE descriptor, drawer and encoder dispatch. No DSP code is added.
 - `0x4009fb00`: capture each eligible source event, including arp ticks, from
   the original NOTE lane, not the arp's scratch output. Apply the stock
   transpose and scale correction.
-- `0x4009fb80`: resolve a follower's source and replace its scratch pitch before
+- `0x4009fb80`: resolve a follower's source, add its live TRAN (`a5+0x22c`,
+  biased by 64), and replace its scratch pitch before
   stock note ownership and release bookkeeping (`0x4009fbbc` / `0x4009fd04`).
   Chained resolution has a defensive eight-hop bound.
 - NOTE SETUP's unused D slot is labelled RFOL and enabled. Its encoder callback
@@ -83,13 +98,19 @@ The module gate also accepts `OT_PROJECT`; without one, the full-port checks
 explicitly skip and the controlled machine-code gate still runs.
 
 The controlled gate executes the actual linked bytes: all 56 source/follower
-pairs, OFF, chains/cycles, 128 root notes, arp isolation, transposition/scales,
+pairs, OFF, chains/cycles, 128 root notes, all 128 follower TRAN values for
+each of 12 roots, out-of-range suppression, arp isolation, source transposition/scales,
 same-tick T8 capture, mute/channel/velocity gates, invalid notes, formatters and
 register preservation. A write hook rejects writes outside the declared module
 state, scratch result, displaced stock write and bounded call stack in these tests.
 Full-port stock/patched UART captures cover chords,
 source arpeggiation, T8 → T2, fallback, held-note release, unchanged other tracks
 and stored banks. An all-OFF run must match stock MIDI events exactly.
+Additional stock/patched captures set follower TRAN to +7 and lock individual
+steps to 0, +12 and -12. They check return to the base +7 on an unlocked step,
+a held transposed note's release across a source-root change, reverse source
+order, and exact stock behavior with RFOL OFF. Fixture timing is explicitly
+set so the input project's scale mode cannot change the capture window.
 
 Two live-change cases switch RFOL OFF and from T1 to T3 while playing. A separate
 truncated capture first proves that the bass C is still held at the change
@@ -144,6 +165,9 @@ interactive virtual panel. These tests do not require emulator audio output.
 
 The extended soak also runs both DSP cores with `--dsp-rt` and captures audio;
 its duration is emulated time, and it may take much longer on the host computer.
+
+The relative-TRAN extension is newer than the packaged OCTABAM3 trial image.
+It requires a new build; copying or testing OCTABAM3 does not test this extension.
 
 The controlled Unicorn test proves behavior in selected states; the full port
 checks the real UI/sequencer paths. Neither proves electrical DIN output,
