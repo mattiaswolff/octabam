@@ -61,12 +61,58 @@ claim above applies only to the original comparison, not to this upstream update
 
 `make check REMIX=mattias-bass-follow BUILD=2` passed all runnable checks again,
 using a rebuilt ColdFire port and an isolated DSP host compiled from the updated
-source. The project-dependent skips listed above still apply. The new controlled
+source. At that stage the project-dependent gates still skipped; their later
+results are recorded below. The new controlled
 Root Follow gate also checks for out-of-contract memory writes.
 The expanded stock/patched MIDI suite passed eight cases, including a capture
 proving the bass is held at the change boundary, switching RFOL OFF, and
 switching its source T1 → T3. Both live changes preserve the old note's release
-and leave no hanging notes. This remains a short sequencer fixture, not a
+and leave no hanging notes. That suite uses a short sequencer fixture, not a
 transport/project-transition or sustained-load test.
 Current update receipts are in `out/upstream-update/`; original receipts remain
 in `out/bass-follow/compatibility/`.
+
+## Extended emulator checks (5 Oct 2026)
+
+The same candidate hash above was tested with
+`tools/verify/verify_bass_follow_safety.py`; reproduction commands are in the
+[module README](../../../modules/bass-follow/README.md). No Root Follow firmware
+code changed during this testing. The emulator now honors `--midi-out` after
+interactive `quit`, allowing complete MIDI capture alongside the JIT DSPs.
+
+- Seven stock/patched transition scenarios passed: held-note boundary, STOP,
+  restart, pattern-boundary hold, pattern change, Part change and project change.
+  The Part and project cases also change MIDI channels. All completed transitions
+  release their notes; unrelated MIDI tracks and stored banks remain unchanged.
+- A 120-second RFOL-OFF load test passed with 19,580 note events and no hanging
+  notes. Eight dense MIDI tracks ran beside eight FLEX tracks, both bus effects,
+  the selected FX1 effects, LFOs and parameter locks. Panel input switched through
+  A01–A04 / Parts 1–4. All eight audio stems were nonzero, all 240 capture blocks
+  contained audio, and the checked DSP counters were zero.
+- The updated test runner passed a 20-second RFOL-active run with 3,580 note
+  events, all four patterns/Parts, eight active audio stems and zero checked DSP
+  counters. Its private fixture is byte-identical to the earlier load fixture.
+- A subsequent isolated 120-second RFOL-active run passed with 19,580 note
+  events: 979 bass notes on each of the seven followers, plus 2,937 source chord
+  notes. All notes released after STOP. All eight audio stems and all 240
+  capture blocks were nonzero; all three pattern/Part switches passed. RFOL
+  settings, valid roots, module instructions and stored banks remained intact;
+  the checked DSP counters were zero. This used the same project/bank/sample
+  bytes as the OFF control, with no competing emulator run from this task.
+- The initial 120-second active run was rejected: `pullshort=1`, `stale=1`,
+  `faulted=00`. The emulator's incomplete-pull path has a 100 ms wall-time bound;
+  several emulator processes were running concurrently. Host contention is a
+  possible cause, not an established explanation. The failed artifacts are kept
+  in `out/bass-follow-safety/soak-follow-120s-dsp-rejected/`. That early runner
+  aborted before STOP and MIDI export, so it supplies no final note-release proof.
+  The isolated repeat above did not reproduce the timeout; the original failure
+  remains part of the evidence rather than being treated as a passing run.
+- The previously skipped `verify_set`, `verify_modedefaults`, `verify_tempobus`
+  and `verify_fx2lock` checks all passed against a generated project for this
+  remix. The emulator rebuild, five firmware-independent emulator tests and
+  documentation checks passed.
+
+Durations above are emulated playback time; these runs took longer on the host.
+Results and captures are under `out/bass-follow-safety/`. These checks do not
+qualify physical CPU timing, electrical MIDI, flash/boot or an external synth.
+The saved original OCTABAM2 image remains unchanged. Nothing was flashed.

@@ -104,11 +104,28 @@ Part mirror is unchanged. LCD screenshots are under `out/bass-follow/ui/`.
 `out/bass-follow/result.json` is written only after all cases pass and records
 the tested image hashes; artifacts are local and uncommitted.
 
-Before the first hardware trial, still check transport stop/restart and
-pattern/Part/project changes during held notes, plus a longer dense MIDI run
-alongside this remix's audio load. The current fixture is short and does not
-measure worst-case ColdFire CPU cost. Follower arp and shared output channels
-remain outside the supported test setup.
+For the personal composed remix, the additional safety runner creates disposable
+MIDI and audio fixtures from the same local project template:
+
+```sh
+make check REMIX=mattias-bass-follow BUILD=2
+.venv/bin/python3 tools/verify/verify_bass_follow_safety.py --project /path/to/local/project
+.venv/bin/python3 tools/verify/verify_bass_follow_safety.py --project /path/to/local/project --mode soak --seconds 120
+.venv/bin/python3 tools/verify/verify_bass_follow_safety.py --project /path/to/local/project --mode soak --seconds 120 --off
+```
+
+Keep that build and its runtime symbols in place until the commands finish.
+The transition suite compares stock and patched UART captures for stop/restart,
+pattern, Part and project changes. Truncated captures prove that notes really
+are held at the tested change boundaries. Part/project cases change the output
+channel too, exercising release ownership. The soak runs eight dense MIDI tracks
+beside eight FLEX tracks and the remix's audio effects, then switches through
+A01–A04 and Parts 1–4 using panel input. It checks balanced MIDI releases, audio
+activity on every track, RFOL state, module instructions, DSP status and unchanged
+stored banks. Each soak uses its own generated project and virtual card.
+Receipts, captured MIDI, audio and command logs are in `out/bass-follow-safety/`.
+Neither suite measures worst-case physical CPU timing. Follower arp and shared
+output channels remain outside the supported test setup.
 
 For a device trial, use a new build number and verify the final packaged image
 against the tested MAIN_OS, with a backup and the known-good image available.
@@ -124,6 +141,9 @@ virtual CF storage, panel input and MIDI UART. It can load projects, run the
 sequencer, capture MIDI bytes, operate buttons/encoders and render the firmware's
 LCD. `make panel REMIX=bass-follow OT_PROJECT=/path/to/project` opens an
 interactive virtual panel. These tests do not require emulator audio output.
+
+The extended soak also runs both DSP cores with `--dsp-rt` and captures audio;
+its duration is emulated time, and it may take much longer on the host computer.
 
 The controlled Unicorn test proves behavior in selected states; the full port
 checks the real UI/sequencer paths. Neither proves electrical DIN output,

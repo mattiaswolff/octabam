@@ -2641,7 +2641,17 @@ int main(int _argc, char** _argv)
 				std::printf("main level : sys command %u posted with %d -> gain table[0] = %#x%s (bit 0 of 0x8000004a = %u)\n",
 					ot::g_setMainLevelCase, mainLevel, g, g ? "" : " -- NOT FILLED", m.read8(0x8000004a) & 1);
 			}
-			return serveInteractive(m, rtos, dspPair.get(), card.get(), [&] { if(!lcd.empty() && lcdDirty) lcdFlush(); });
+			const auto result = serveInteractive(m, rtos, dspPair.get(), card.get(), [&] { if(!lcd.empty() && lcdDirty) lcdFlush(); });
+			// Interactive sessions return before the batch's output writers.
+			// Honour the existing capture flag here too (including JIT DSP runs).
+			if(!midiOut.empty())
+			{
+				const auto& tx = rtos.serialTx0();
+				std::ofstream f(midiOut, std::ios::binary);
+				f.write(reinterpret_cast<const char*>(tx.data()), static_cast<std::streamsize>(tx.size()));
+				if(!f) return 1;
+			}
+			return result;
 		}
 
 		// The bench: hold the machine here, every other phase done, until

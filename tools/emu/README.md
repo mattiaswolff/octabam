@@ -147,7 +147,8 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
     of a call).
   - `--dsp-peek core:X|Y|P:addr,len` (upper-case space letter).
   - `--mem-dump addr,len=file`.
-  - `--midi-out FILE` (UART0's transmit bytes).
+  - `--midi-out FILE` (UART0's transmit bytes). Also works with `--interactive`
+    and `--dsp-rt`; send `quit` and wait for process exit to finish the file.
 - **Addresses.** A track's DSP instance record is `0x80000110 + 64·t` (32
   halfwords; see `docs/firmware/MIDI.md`). Its page-2 lane is
   `0x80000810 + 72·t`.
