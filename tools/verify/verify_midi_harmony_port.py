@@ -178,6 +178,49 @@ def note_rules(source):
     return results
 
 
+def chord_rules(source):
+    sym=harmony.symbols();has_follow='bf_sources' in sym;results={}
+    def chord(root,kind):
+        notes=[n for n in range(root,160) if n%12 in harmony.MODES[0]]
+        return [notes[i*2] for i in range(kind+1) if notes[i*2]<=127]
+    for kind in (2,3):
+        for arp in (False,True):
+            name=f'chord-transpose-{kind}-' + ('arp' if arp else 'direct')
+            work=fixture(source,name,{0:kind,1:kind},arp=arp,first_note=71,
+                         tran={0:7,1:1},locks={2:6,3:1,6:12,8:7})
+            extra=['--sequencer','--internal-clock','--frames','7000']
+            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+            events=run(work,'patched',extra);balanced(events)
+            lead=[e[2] for e in events if e[:2]==('on',1)]
+            bass=[e[2] for e in events if e[:2]==('on',2)]
+            want_lead=[n for root in (77,72,74) for n in chord(root,kind)]
+            want_bass=[n for root in (48,47,41,48,45,38) for n in chord(root,kind)]
+            if arp:
+                assert lead and set(lead)<=set(want_lead) and {77,81,84}<=set(lead),lead
+                if has_follow:assert bass and set(bass)<=set(want_bass),bass
+            else:
+                assert lead==want_lead,(lead,want_lead)
+                if has_follow:assert bass==want_bass,(bass,want_bass)
+            results[name]=dict(leader=lead,follower=bass)
+            print(f'  [ok] {name}: snapped root then diatonic thirds; follower P-locks; balanced releases',flush=True)
+            t=1 if has_follow else 0
+            name=f'chord-key-{kind}-' + ('arp' if arp else 'direct')
+            work=fixture(source,name,{t:kind},arp=arp,tran={t:7})
+            script=work/'keys.txt'
+            script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 2 down\n1800 key 2 up\n2200 key 1 down\n3000 key 1 up\n3700 quit\n')
+            extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+                   '--step',f'-:poke:0x100b14cc={t}','--internal-clock','--live-script',script]
+            if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,1','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
+            events=run(work,'keys',extra);balanced(events)
+            pitches=[e[2] for e in events if e[0]=='on']
+            want=chord(50,kind)+chord(48,kind)
+            if arp:assert set(pitches)==set(want),pitches
+            else:assert pitches==want,pitches
+            results[name]=pitches
+            print(f'  [ok] {name}: D minor and C major despite TRAN +7/followed F; inherited scale',flush=True)
+    return results
+
+
 def persistence(source):
     work=fixture(source,'persistence',{0:2,1:1})
     lines=[]
@@ -225,6 +268,7 @@ def main():
     cases.update(extended_scale(a.project))
     cases.update(keyboard(a.project))
     cases.update(note_rules(a.project))
+    cases.update(chord_rules(a.project))
     cases.update(persistence(a.project))
     (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()

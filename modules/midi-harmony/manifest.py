@@ -21,8 +21,8 @@ MODULE = Module(
         Poke(0x400d3fca, b'\x01', b'\x11', 'enable NOTE SETUP F only'),
     ),
     detours=(
-        Detour(0x4009fb3a, bytes.fromhex("102d022c2241"), "midiharmony", "mh_transpose", "NOTE live arp bypasses track TRAN"),
-        Detour(0x4009fb86, bytes.fromhex("77012006d083"), "midiharmony", "mh_output", "NOTE final scale correction before note ownership"),
+        Detour(0x4009fb3a, bytes.fromhex("102d022c2241"), "midiharmony", "mh_transpose", "generated pools bypass duplicate TRAN"),
+        Detour(0x4009fb86, bytes.fromhex("77012006d083"), "midiharmony", "mh_output", "final scale correction before note ownership"),
         Detour(0x40036682, bytes.fromhex('2001e9882040'), 'midiharmony', 'mh_draw_type', 'NOTE SETUP F module value'),
         Detour(0x4003a8e8, bytes.fromhex('4feffff048d70c0c'), 'midiharmony', 'mh_note_encoder', 'NOTE SETUP F TYPE encoder', pad_to=8),
         Detour(0x4007a1b0, bytes.fromhex('181020037403'), 'midiharmony', 'mh_draw_key', 'show source KEY when following'),

@@ -187,6 +187,7 @@ The NOTE SETUP callback forwards every non-D control to stock. Harmony can
 own F without intercepting CHAN, BANK, PROG or SBNK. The two enable flags
 are claimed as separate bytes so their manifests compose independently.
 
-With HARM NOTE enabled, the final follower pitch is snapped into the inherited
-scale after TRAN/P-locks. With HARM OFF, the standalone chromatic offset
+With HARM NOTE, TRI or 7TH enabled, the follower root is snapped into the
+inherited scale after TRAN/P-locks, then any chord tones are built from that
+scale degree. Arp output also receives a final scale correction. With HARM OFF, the standalone chromatic offset
 behaviour described above is retained.

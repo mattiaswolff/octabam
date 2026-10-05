@@ -162,7 +162,7 @@ bf_latch:
     .ifdef HAVE_HARMONY
     move.l %d1,-(%sp)
     move.l %d7,%d1
-    jsr mh_final /* Latch the actual scale-constrained NOTE root. */
+    jsr mh_final /* Latch the actual scale-constrained Harmony root. */
     move.l (%sp)+,%d1
     .endif
 .root_reduce:

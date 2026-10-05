@@ -175,15 +175,23 @@ mh_quant:
     btst %d1,%d4
     rts
 
-/* d0 track, a0 four-byte stock scratch. d0 returns active boolean.
- * Preserves other registers. Unused/high-overflow voices duplicate root:
- * stock arp initializer requires valid pitches and deduplicates its bitmap.
- * A follower keeps the source's chromatic root even when TRAN left the scale;
- * its chord intervals come from the nearest degree, then move with that root.
+/* d0 track, d1 signed transpose, a0 four-byte stock scratch.
+ * mh_generate resolves a followed root; mh_direct uses the supplied pitch.
+ * Return 0 bypassed, 1 generated, -1 invalid root. Preserve other registers.
+ * Transpose first, snap root, then stack scale thirds. Padding duplicates root
+ * because stock's arp bitmap requires valid pitches and deduplicates them.
  */
 mh_generate:
     lea -40(%sp),%sp
     movem.l %d1-%d7/%a0-%a1,(%sp)
+    moveq #1,%d5
+    bra.s .gen_start
+    .global mh_direct
+mh_direct:
+    lea -40(%sp),%sp
+    movem.l %d1-%d7/%a0-%a1,(%sp)
+    moveq #0,%d5
+.gen_start:
     move.l %d0,%d7
     move.l %a0,%a1
     bsr.w mh_active
@@ -192,37 +200,35 @@ mh_generate:
     moveq #0,%d2
     move.b (%a1),%d2
     cmpi.l #127,%d2
-    bhi.w .gen_off
+    bhi.w .gen_invalid
+.ifdef HAVE_FOLLOW
+    tst.l %d5
+    beq.s .gen_own
     move.l %d7,%d0
     bsr.w mh_source
-    move.l %d0,%d5
-.ifdef HAVE_FOLLOW
     cmp.l %d7,%d0
     beq.s .gen_own
     lea bf_roots,%a0
-    moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
-    cmpi.l #127,%d2
-    bls.s .gen_own
-    moveq #0,%d2
-    move.b (%a1),%d2
-    move.l %d7,%d5 /* Unknown source: snap own NOTE to inherited scale. */
+    move.b (%a0,%d0.l),%d0
+    andi.l #255,%d0
+    cmpi.l #127,%d0
+    bhi.s .gen_own
+    move.l %d0,%d2
 .gen_own:
 .endif
+    add.l (%sp),%d2
+    andi.l #255,%d2 /* Same byte arithmetic as stock TRAN/arranger. */
+    cmpi.l #127,%d2
+    bhi.w .gen_invalid
     move.l %d2,%d0
     move.l %d7,%d1
-    bsr.w mh_prepare
-    move.l %d0,%d3
-    /* Chord roots snap here; NOTE defers correction until after TRAN. */
-    cmp.l %d5,%d7
-    bne.s .gen_root
-    move.l %d3,%d2
-.gen_root:
+    bsr.w mh_quant
+    move.l %d0,%d2
     move.b %d2,(%a1)
     move.b %d2,1(%a1)
     move.b %d2,2(%a1)
     move.b %d2,3(%a1)
-    move.l %d5,%d0
+    move.l %d7,%d0
     bsr.w mh_scale_record
     move.l %d0,%d5
     lsr.l #6,%d0
@@ -231,9 +237,8 @@ mh_generate:
     move.w (%a0,%d0.l*2),%d4
     lsr.l #2,%d5
     andi.l #15,%d5
-    /* d2 actual root, d3 quantized root, d4 mask, d5 tonic. */
-    move.l %d3,%d7
-    sub.l %d3,%d2 /* output pitch = new degree + chromatic displacement */
+    /* d2 snapped root, d4 mask, d5 tonic. */
+    move.l %d2,%d7
     moveq #1,%d0
     cmpi.l #1,%d6
     beq.s .gen_return
@@ -259,7 +264,6 @@ mh_generate:
     subq.l #1,%d3
     bne.s .gen_degree
     move.l %d7,%d1
-    add.l %d2,%d1
     cmpi.l #127,%d1
     bhi.s .gen_end
     move.b %d1,(%a1,%d6.l)
@@ -269,8 +273,9 @@ mh_generate:
 .gen_end:
     moveq #1,%d0
     bra.s .gen_return
-.gen_off:
-    moveq #0,%d0
+.gen_invalid:
+    clr.l (%a1) /* Safe bitmap input; sequence output is muted below. */
+    moveq #-1,%d0
 .gen_return:
     movem.l (%sp),%d1-%d7/%a0-%a1
     lea 40(%sp),%sp
@@ -279,9 +284,23 @@ mh_generate:
 mh_sequence:
     lea -12(%sp),%sp
     movem.l %d0-%d1/%a0,(%sp)
+    moveq #0,%d1
+    move.b 0x22c(%a5),%d1
+    subi.l #64,%d1
+    lea 0x46c7a124,%a0
+    moveq #0,%d0
+    move.b (%a0,%d7.l),%d0
+    add.l %d0,%d1
     move.l %d7,%d0
     lea -4(%fp),%a0
     bsr.w mh_generate
+    lea mh_muted,%a0
+    clr.b (%a0,%d7.l)
+    tst.l %d0
+    bpl.s .sequence_ready
+    moveq #1,%d0
+    move.b %d0,(%a0,%d7.l)
+.sequence_ready:
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
     move.l %fp,%d2
@@ -293,7 +312,7 @@ mh_sequence:
 mh_masks:
     .word 0xab5,0x6ad,0x5ab,0xad5,0x6b5,0x5ad,0x56b
 
-/* Stock output still applies TRAN, including step locks, exactly once. */
+/* Harmony replaces native key correction with its effective scale. */
     .global mh_scale
 mh_scale:
     lea -12(%sp),%sp
@@ -313,61 +332,28 @@ mh_scale:
 .scale_zero:
     jmp 0x4009fad8
 
-/* NOTE keeps the requested pitch until TRAN has been applied. Chord modes
- * still choose their scale degree before constructing their chord. */
+/* Follow captures raw NOTE + TRAN before snapping, in every HARM mode. */
     .global mh_prepare
 mh_prepare:
-    lea -12(%sp),%sp
-    movem.l %d1-%d2/%a0,(%sp)
-    move.l %d0,%d2
-    move.l %d1,%d0
-    bsr.w mh_get
-    cmpi.l #1,%d0
-    beq.s .prepare_done
-    move.l %d2,%d0
-    move.l (%sp),%d1
-    bsr.w mh_quant
-    move.l %d0,%d2
-.prepare_done:
-    move.l %d2,%d0
-    movem.l (%sp),%d1-%d2/%a0
-    lea 12(%sp),%sp
     rts
 
-/* NOTE's final pitch is scale-constrained after TRAN/arp offsets.
- * d0 pitch, d1 track -> d0 pitch; preserves all other registers.
- * Invalid pitches remain invalid. OFF/KEY OFF/TRI/7TH retain their rules.
- */
+/* Final correction also keeps stock arp step offsets inside the scale. */
     .global mh_final,mh_output
 mh_final:
-    lea -12(%sp),%sp
-    movem.l %d1-%d2/%a0,(%sp)
-    move.l %d0,%d2
-    move.l %d1,%d0
-    bsr.w mh_get
-    cmpi.l #1,%d0
-    bne.s .final_done
-    move.l %d2,%d0
-    move.l (%sp),%d1
-    bsr.w mh_quant
-    move.l %d0,%d2
-.final_done:
-    move.l %d2,%d0
-    movem.l (%sp),%d1-%d2/%a0
-    lea 12(%sp),%sp
-    rts
+    jmp mh_quant
 
-/* Native arp origin byte: 1 while chromatic keys own its note pool; 0 for
- * sequenced notes. Neutralize TRAN before arithmetic/range checks for NOTE
- * live arp, without changing the saved/live Part parameter. */
+/* Harmony's arp pool already contains transposed, scale-built pitches.
+ * Live pools contain the player's absolute pitches. Neither is transposed
+ * again. OFF/KEY OFF replay stock arithmetic. Invalid sequenced roots are
+ * muted after safely initializing the arp; live keyboard pools remain usable.
+ */
     .global mh_transpose
 mh_transpose:
     lea -12(%sp),%sp
     movem.l %d0-%d1/%a0,(%sp)
     move.l %d7,%d0
     bsr.w mh_active
-    cmpi.l #1,%d0
-    bne.s .transpose_stock
+    beq.s .transpose_stock
     move.l %d7,%d0
     lsl.l #3,%d0
     lea 0x46c77b1e,%a0
@@ -376,16 +362,22 @@ mh_transpose:
     add.l %d0,%d0
     move.b (%a0,%d0.l),%d0
     cmpi.b #1,%d0
-    bne.s .transpose_stock
-    moveq #64,%d0
-    bra.s .transpose_done
-.transpose_stock:
-    move.l (%sp),%d0
-    move.b 0x22c(%a5),%d0
-.transpose_done:
-    move.l 4(%sp),%d1
-    move.l 8(%sp),%a0
+    beq.s .transpose_ready
+    lea mh_muted,%a0
+    tst.b (%a0,%d7.l)
+    bne.s .transpose_muted
+.transpose_ready:
+    movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
+    jmp 0x4009fb58
+.transpose_muted:
+    movem.l (%sp),%d0-%d1/%a0
+    lea 12(%sp),%sp
+    jmp 0x4009fd2a
+.transpose_stock:
+    movem.l (%sp),%d0-%d1/%a0
+    lea 12(%sp),%sp
+    move.b 0x22c(%a5),%d0
     move.l %d1,%a1
     jmp 0x4009fb40
 
@@ -695,34 +687,14 @@ mh_keyboard:
     beq.w .keyboard_done
     lea 40(%sp),%a2
     move.b %d3,(%a2)
-    cmpi.l #1,%d6
-    bne.s .keyboard_chord
-    /* NOTE keyboard supplies the absolute pitch, even on a follower. */
-    move.b %d3,1(%a2)
-    move.b %d3,2(%a2)
-    move.b %d3,3(%a2)
-    bra.s .keyboard_pitch_ready
-.keyboard_chord:
+    /* All keyboard modes choose an absolute root and inherit only scale. */
     move.l %d2,%d0
+    moveq #0,%d1
     move.l %a2,%a0
-    bsr.w mh_generate
-.keyboard_pitch_ready:
-    /* NOTE live pitch already includes the player's choice. */
-    move.l %d2,%d0
-    lsl.l #5,%d0
-    lea 0x46c76fe0,%a0
-    adda.l %d0,%a0
-    moveq #0,%d7
-    move.b 12(%a0),%d7
-    subi.l #64,%d7
-    cmpi.l #1,%d6
-    bne.s .keyboard_offset_ready
-    moveq #0,%d7
-.keyboard_offset_ready:
+    bsr.w mh_direct
 .ifdef HAVE_FOLLOW
     moveq #0,%d0
     move.b (%a2),%d0
-    add.l %d7,%d0
     move.l %d2,%d1
     bsr.w mh_final
     cmpi.l #127,%d0
@@ -738,15 +710,10 @@ mh_keyboard:
     move.b %d0,(%a1,%d2.l)
 .keyboard_no_root:
 .endif
-    tst.b 14(%a0)
-    beq.s .keyboard_transpose
-    moveq #0,%d7
-.keyboard_transpose:
     moveq #0,%d6
 .keyboard_voice:
     moveq #0,%d0
     move.b (%a2,%d6.l),%d0
-    add.l %d7,%d0
     move.l %d2,%d1
     bsr.w mh_final
     moveq #-1,%d1
@@ -841,6 +808,7 @@ mh_release:
     bne.s .release_voice
     rts
     .balign 4
+mh_muted: .space 8,0
 mh_held: .space 4096,255
 mh_refs: .space 1024,0
 

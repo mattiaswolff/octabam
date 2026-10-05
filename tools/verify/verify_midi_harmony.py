@@ -51,9 +51,9 @@ class Machine:
     def setting(self,t,kind=0,key=0,scale=0):
         self.call('mh_set',t,kind)
         self.uc.mem_write(0x46c76df1+68*t,bytes((raw_scale(key,scale),)))
-    def chord(self,t,n):
+    def chord(self,t,n,offset=0,direct=False):
         self.uc.mem_write(self.scratch,bytes((n,11,12,13)))
-        self.call('mh_generate',t,a0=self.scratch)
+        self.call('mh_direct' if direct else 'mh_generate',t,offset & 0xffffffff,a0=self.scratch)
         return list(self.uc.mem_read(self.scratch,4))
 
 def machine_gate():
@@ -80,7 +80,7 @@ def machine_gate():
                     root=min(valid,key=lambda n:(abs(n-note),n))
                     assert m.call('mh_quant',note,0)==root,(mode,key,note)
                     scale_notes=[n for n in range(root,160) if (n-key)%12 in degrees]
-                    expected=[note if kind==1 else root]*4
+                    expected=[root]*4
                     if kind>1:
                         for slot in range(1,kind+1):
                             candidate=scale_notes[slot*2]
@@ -107,7 +107,7 @@ def machine_gate():
         u.mem_write(m.sym['bf_roots'],bytes([255]*8))
         assert m.chord(2,61)==[60,64,67,60] # unknown source: own note, inherited scale
         u.mem_write(m.sym['bf_roots'],bytes((37,255,255,255,255,255,255,255)))
-        assert m.chord(2,72)==[37,41,44,37] # exact chromatic root is retained
+        assert m.chord(2,72)==[36,40,43,36] # followed chromatic root snaps before stacking thirds
         m.setting(0,1,0,1 if 'ms_decode' in m.sym else 0)
         u.mem_write(m.sym['bf_roots'],bytes((41,255,255,255,255,255,255,255)))
         assert m.chord(2,72)==[41,45,48,41] # F major in C dorian
@@ -125,46 +125,81 @@ def final_note_gate():
     for mode,degrees in enumerate(MODES):
         if 'ms_decode' not in m.sym and mode not in (0,5):continue
         for tonic in range(12):
-            m.setting(0,1,tonic,mode)
-            valid=[n for n in range(128) if (n-tonic)%12 in degrees]
-            for pitch in range(128):
-                want=min(valid,key=lambda n:(abs(n-pitch),n))
-                assert m.call('mh_prepare',pitch,0)==pitch
-                assert m.call('mh_final',pitch,0)==want
-    m.setting(0,1)
-    # C# +1 must become D: do not snap C# to C before adding TRAN.
-    assert m.chord(0,61)==[61]*4
-    assert m.call('mh_final',62,0)==62
-    # B +7 -> F# -> F, including the actual post-transpose output detour.
-    u.mem_write(m.scratch,b'\x42')
-    m.call('mh_output',stop=0x4009fb8c,regs={UC_M68K_REG_A2:m.scratch,UC_M68K_REG_D7:0,UC_M68K_REG_D6:128})
-    assert u.mem_read(m.scratch,1)==b'\x41'
-    assert u.reg_read(UC_M68K_REG_D0)==193
-    assert u.reg_read(UC_M68K_REG_D3)==65
-    u.mem_write(m.scratch+0x22c,b'\x47')
-    for live,kind,want in [(0,1,71),(1,1,64),(1,0,71),(1,2,71),(1,3,71)]:
+            for kind in (1,2,3):
+                m.setting(0,kind,tonic,mode)
+                valid=[n for n in range(128) if (n-tonic)%12 in degrees]
+                for pitch in range(128):
+                    want=min(valid,key=lambda n:(abs(n-pitch),n))
+                    assert m.call('mh_prepare',pitch,0)==pitch
+                    assert m.call('mh_final',pitch,0)==want
+    for kind in (1,2,3):
         m.setting(0,kind)
-        u.mem_write(0x46c77b1e,bytes((live,)))
-        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:m.scratch,UC_M68K_REG_D7:0,UC_M68K_REG_D1:50})
-        assert u.reg_read(UC_M68K_REG_D0)&255==want,(live,kind)
+        for note in range(128):
+            for offset in (-64,-1,1,2,7,63):
+                pitch=(note+offset)&255
+                actual=m.chord(0,note,offset)
+                if pitch>127:
+                    assert actual==[0]*4
+                    assert u.reg_read(UC_M68K_REG_D0)==0xffffffff
+                    continue
+                valid=[n for n in range(128) if n%12 in MODES[0]]
+                root=min(valid,key=lambda n:(abs(n-pitch),n))
+                degrees=[n for n in range(root,160) if n%12 in MODES[0]]
+                want=[root]*4
+                if kind>1:
+                    for slot in range(1,kind+1):
+                        if degrees[slot*2]<=127:want[slot]=degrees[slot*2]
+                assert actual==want,(kind,note,offset,actual,want)
+        # Actual sequence hook receives current TRAN/P-lock and arranger offset.
+        lane=m.scratch+0x1000
+        u.mem_write(m.scratch,bytes((61,0,0,0)))
+        u.mem_write(lane+0x22c,bytes((65,)))
+        m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
+        assert list(u.mem_read(m.scratch,4))==([62]*4 if kind==1 else [62,65,69,62 if kind==2 else 72])
+        # The native output must not add either offset twice.
+        u.mem_write(0x46c7a124,bytes((2,)))
+        u.mem_write(m.scratch,bytes((60,0,0,0)))
+        m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
+        assert list(u.mem_read(m.scratch,4))==([62]*4 if kind==1 else [62,65,69,62 if kind==2 else 72])
+        u.mem_write(0x46c7a124,b'\0')
+        for live in (0,1):
+            u.mem_write(0x46c77b1e,bytes((live,)))
+            m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+        # Out-of-range sequenced root is muted, then a valid trig recovers.
+        u.mem_write(0x46c77b1e,b'\0')
+        u.mem_write(lane+0x22c,b'\0')
+        u.mem_write(m.scratch,bytes((0,0,0,0)))
+        m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
+        assert u.mem_read(m.sym['mh_muted'],1)==b'\x01'
+        m.call('mh_transpose',stop=0x4009fd2a,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+        u.mem_write(0x46c77b1e,b'\x01')
+        m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+        u.mem_write(lane+0x22c,b'\x40');u.mem_write(m.scratch,bytes((60,0,0,0)))
+        m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
+        assert u.mem_read(m.sym['mh_muted'],1)==b'\0'
+        # Final arp F# becomes F in all modes, before note ownership.
+        u.mem_write(m.scratch,b'\x42')
+        m.call('mh_output',stop=0x4009fb8c,regs={UC_M68K_REG_A2:m.scratch,UC_M68K_REG_D7:0,UC_M68K_REG_D6:128})
+        assert u.mem_read(m.scratch,1)==b'\x41'
+        assert u.reg_read(UC_M68K_REG_D0)==193
+        for invalid in (128,255,0xffffffff):assert m.call('mh_final',invalid,0)==invalid
+        if 'bf_sources' in m.sym:
+            u.mem_write(m.sym['bf_sources'],bytes((0,1,0,0,0,0,0,0)))
+            m.setting(1,kind,1,5)
+            assert m.call('mh_final',42,1)==41
+            u.mem_write(lane+0x220,bytes((71,)))
+            u.mem_write(lane+0x22c,bytes((71,)))
+            m.call('bf_latch',regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+            assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))
+    for kind in (0,1,2,3):
+        m.setting(0,kind)
+        if kind:u.mem_write(0x46c76df1,b'\0')
+        assert m.call('mh_final',66,0)==66
+        u.mem_write(lane+0x22c,b'\x47')
+        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0,UC_M68K_REG_D1:50})
+        assert u.reg_read(UC_M68K_REG_D0)&255==71
         assert u.reg_read(UC_M68K_REG_A1)==50
-    u.mem_write(0x46c77b1e,b'\0')
-    for kind in (0,2,3):
-        m.setting(0,kind);assert m.call('mh_final',66,0)==66
-    m.setting(0,1);u.mem_write(0x46c76df1,b'\0')
-    assert m.call('mh_final',66,0)==66
-    m.setting(0,1)
-    for invalid in (128,255,0xffffffff):assert m.call('mh_final',invalid,0)==invalid
-    if 'bf_sources' in m.sym:
-        u.mem_write(m.sym['bf_sources'],bytes((0,1,0,0,0,0,0,0)))
-        m.setting(1,1,1,5)
-        assert m.call('mh_final',42,1)==41 # inherited C major, not own C# minor
-        # Source latch must use the same final quantization as its emitted NOTE.
-        u.mem_write(m.scratch+0x220,bytes((71,)))
-        u.mem_write(m.scratch+0x22c,bytes((71,)))
-        m.call('bf_latch',regs={UC_M68K_REG_A5:m.scratch,UC_M68K_REG_D7:0})
-        assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))
-    print('  [ok] NOTE: transpose before final scale snap, all available keys/modes, inherited scale and source root latch')
+    print('  [ok] every HARM mode: TRAN before root snap/chord, final arp snap, bounds, OFF identity and source latch')
 
 
 def keyboard_gate():
@@ -195,9 +230,9 @@ def keyboard_gate():
     m.setting(0,3,5,5) # held notes release their original pitches after edits
     assert key(48,0)==[(48,0)]
     assert key(52,0)==[(52,0),(55,0),(59,0)]
-    m.setting(0,2);u.mem_write(0x46c76fec,b'\x00') # -64 st: root out of range, other tones valid
-    assert key(60,100)==[(0,100),(3,100)]
-    assert key(60,0)==[(0,0),(3,0)]
+    m.setting(0,2);u.mem_write(0x46c76fec,b'\x00') # -64 must not alter absolute keyboard pitches
+    assert key(60,100)==[(60,100),(64,100),(67,100)]
+    assert key(60,0)==[(60,0),(64,0),(67,0)]
     u.mem_write(0x46c76fec,b'\x40')
     m.setting(0,0)
     assert key(61,100)==[(61,100)]
@@ -223,7 +258,11 @@ def keyboard_gate():
     assert key(49,100)==[(48,100)] # C# -> C in effective C major
     u.mem_write(0x46c76fec,b'\x4c')
     assert key(49,0)==[(48,0)] # changing TRAN must not lose ownership
-    print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, invalid-root release')
+    for kind,want in [(2,[50,53,57]),(3,[50,53,57,60])]:
+        m.setting(0,kind,1 if 'bf_sources' in m.sym else 0,5 if 'bf_sources' in m.sym else 0)
+        assert key(50,100)==[(n,100) for n in want]
+        assert key(50,0)==[(n,0) for n in want]
+    print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
 
 
 def project_parser_gate():

@@ -30,3 +30,19 @@ The reusable MIDI suite captures generated chords, stock arp, reverse source
 order, added scales, keyboard releases and real project save/reload on virtual
 CF. Receipts and captures remain under `out/`; no OS bytes are committed.
 Physical MIDI, timing, battery retention and device flashing are untested.
+
+## Scale-constrained Harmony update
+
+NOTE, TRI and 7TH now apply sequenced TRAN/P-locks before snapping the root;
+chords stack thirds within the effective scale. Live keys select an absolute
+root, inherit KEY/scale when following, and ignore stored TRAN. Arp output
+receives a final scale correction. See the Harmony README for trig timing
+and pitch-limit behavior.
+
+For this update, `make check REMIX=midi-harmony` and
+`make check-remix REMIX=mattias-midi-harmony` passed all runnable checks.
+The latter ran without `OT_PROJECT`; project-dependent FX2-lock and standalone
+Follow captures were skipped. The complete Harmony port suite passed on
+the exact personal image using a disposable MIDI project, including the new
+TRI/7TH transpose and keyboard cases, save/reload and warm resume. Build logs and the
+source/image verification receipt are saved under `out/`.
