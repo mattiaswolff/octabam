@@ -92,7 +92,7 @@ bf_latch:
     .ifdef HAVE_HARMONY
     move.l %d1,-(%sp)
     move.l %d7,%d1
-    jsr mh_quant
+    jsr mh_prepare
     move.l (%sp)+,%d1
     move.l %d0,-(%sp)
     move.l %d1,-(%sp)
@@ -159,10 +159,17 @@ bf_latch:
     tst.b %d0
     bmi.w .latch_return
 .root_mod:
+    .ifdef HAVE_HARMONY
+    move.l %d1,-(%sp)
+    move.l %d7,%d1
+    jsr mh_final /* Latch the actual scale-constrained NOTE root. */
+    move.l (%sp)+,%d1
+    .endif
+.root_reduce:
     cmpi.l #12,%d0
     blt.s .latch
     subi.l #12,%d0
-    bra.s .root_mod
+    bra.s .root_reduce
 .latch:
     addi.l #36,%d0
     lea bf_roots,%a0

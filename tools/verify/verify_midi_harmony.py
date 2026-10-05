@@ -80,7 +80,7 @@ def machine_gate():
                     root=min(valid,key=lambda n:(abs(n-note),n))
                     assert m.call('mh_quant',note,0)==root,(mode,key,note)
                     scale_notes=[n for n in range(root,160) if (n-key)%12 in degrees]
-                    expected=[root]*4
+                    expected=[note if kind==1 else root]*4
                     if kind>1:
                         for slot in range(1,kind+1):
                             candidate=scale_notes[slot*2]
@@ -118,6 +118,53 @@ def machine_gate():
     u.mem_write(0x46c76df1,b'\0')
     assert m.chord(0,61)==[61,11,12,13], 'KEY OFF must bypass Harmony'
     print('  [ok] TYPE persistence, TYPE/KEY OFF identity, invalid state and warm-boot sanitizer')
+
+
+def final_note_gate():
+    m=Machine();u=m.uc
+    for mode,degrees in enumerate(MODES):
+        if 'ms_decode' not in m.sym and mode not in (0,5):continue
+        for tonic in range(12):
+            m.setting(0,1,tonic,mode)
+            valid=[n for n in range(128) if (n-tonic)%12 in degrees]
+            for pitch in range(128):
+                want=min(valid,key=lambda n:(abs(n-pitch),n))
+                assert m.call('mh_prepare',pitch,0)==pitch
+                assert m.call('mh_final',pitch,0)==want
+    m.setting(0,1)
+    # C# +1 must become D: do not snap C# to C before adding TRAN.
+    assert m.chord(0,61)==[61]*4
+    assert m.call('mh_final',62,0)==62
+    # B +7 -> F# -> F, including the actual post-transpose output detour.
+    u.mem_write(m.scratch,b'\x42')
+    m.call('mh_output',stop=0x4009fb8c,regs={UC_M68K_REG_A2:m.scratch,UC_M68K_REG_D7:0,UC_M68K_REG_D6:128})
+    assert u.mem_read(m.scratch,1)==b'\x41'
+    assert u.reg_read(UC_M68K_REG_D0)==193
+    assert u.reg_read(UC_M68K_REG_D3)==65
+    u.mem_write(m.scratch+0x22c,b'\x47')
+    for live,kind,want in [(0,1,71),(1,1,64),(1,0,71),(1,2,71),(1,3,71)]:
+        m.setting(0,kind)
+        u.mem_write(0x46c77b1e,bytes((live,)))
+        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:m.scratch,UC_M68K_REG_D7:0,UC_M68K_REG_D1:50})
+        assert u.reg_read(UC_M68K_REG_D0)&255==want,(live,kind)
+        assert u.reg_read(UC_M68K_REG_A1)==50
+    u.mem_write(0x46c77b1e,b'\0')
+    for kind in (0,2,3):
+        m.setting(0,kind);assert m.call('mh_final',66,0)==66
+    m.setting(0,1);u.mem_write(0x46c76df1,b'\0')
+    assert m.call('mh_final',66,0)==66
+    m.setting(0,1)
+    for invalid in (128,255,0xffffffff):assert m.call('mh_final',invalid,0)==invalid
+    if 'bf_sources' in m.sym:
+        u.mem_write(m.sym['bf_sources'],bytes((0,1,0,0,0,0,0,0)))
+        m.setting(1,1,1,5)
+        assert m.call('mh_final',42,1)==41 # inherited C major, not own C# minor
+        # Source latch must use the same final quantization as its emitted NOTE.
+        u.mem_write(m.scratch+0x220,bytes((71,)))
+        u.mem_write(m.scratch+0x22c,bytes((71,)))
+        m.call('bf_latch',regs={UC_M68K_REG_A5:m.scratch,UC_M68K_REG_D7:0})
+        assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))
+    print('  [ok] NOTE: transpose before final scale snap, all available keys/modes, inherited scale and source root latch')
 
 
 def keyboard_gate():
@@ -164,6 +211,18 @@ def keyboard_gate():
     assert key(61,100)==[(61,100)]
     m.setting(0,2)
     assert key(61,0)==[(61,0)] # KEY OFF-to-on has the same ownership rule
+    m.setting(0,1)
+    u.mem_write(0x46c76fec,b'\x47') # TRAN +7 must not shift chromatic input
+    if 'bf_sources' in m.sym:
+        u.mem_write(m.sym['bf_sources'],bytes((2,0,0,0,0,0,0,0)))
+        u.mem_write(m.sym['bf_roots']+1,bytes((41,))) # followed F root
+        m.setting(1,0) # source KEY C major
+        m.setting(0,1,1,5) # own C# minor must be ignored
+    assert key(50,100)==[(50,100)] # D, not followed F, F+2, or D+7
+    assert key(50,0)==[(50,0)]
+    assert key(49,100)==[(48,100)] # C# -> C in effective C major
+    u.mem_write(0x46c76fec,b'\x4c')
+    assert key(49,0)==[(48,0)] # changing TRAN must not lose ownership
     print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, invalid-root release')
 
 
@@ -218,6 +277,7 @@ def main():
     ap.add_argument('remix',nargs='?',default='midi-harmony')
     a=ap.parse_args()
     machine_gate()
+    final_note_gate()
     keyboard_gate()
     controls_gate()
     project_parser_gate()

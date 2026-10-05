@@ -16,10 +16,10 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
-    follow.fixture(source,work/'project',arp=arp,leader=leader)
+    follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
     for p in (work/'project').glob('project.*'):
         raw=re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n',b'',p.read_bytes(),flags=re.M)
         raw+=b'\r\n'+b''.join(f'#MIDI_HARMONY_TYPE_V1_T{t+1}={v}\r\n'.encode() for t,v in records.items())
@@ -30,6 +30,8 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
                 base=otp.PART_BASE+part*otp.PART_STRIDE+9
                 for t in range(8):
                     data[base+0x4e2+36*t+17]=key_raw if t!=1 else 4
+                for t,offset in (tran or {}).items():
+                    data[base+0x3e2+32*t+12]=64+offset
                 if arp:
                     # T2 arpeggiates its generated chord as well as the leader.
                     at=base+0x3e2+32
@@ -142,6 +144,40 @@ def keyboard(source):
     return results
 
 
+def note_rules(source):
+    sym=harmony.symbols();has_follow='bf_sources' in sym;results={}
+    for reverse in ([False,True] if has_follow else [False]):
+        leader=7 if reverse else 0
+        name='note-transpose-reverse' if reverse else 'note-transpose'
+        work=fixture(source,name,{leader:1,1:1},reverse=reverse,first_note=71,
+                     tran={leader:7,1:1},locks={2:6,3:1,6:12,8:7})
+        extra=['--sequencer','--internal-clock','--frames','7000']
+        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,{7 if reverse else 1}']
+        events=run(work,'patched',extra);balanced(events)
+        lead=[e[2] for e in events if e[:2]==('on',13 if reverse else 1)]
+        bass=[e[2] for e in events if e[:2]==('on',5 if reverse else 2)]
+        assert lead==[77,72,74],lead # B+7 -> F, F+7 -> C, G+7 -> D
+        if has_follow:assert bass==[48,47,41,48,45,38],bass
+        results[name]=dict(leader=lead,follower=bass)
+        print(f'  [ok] {name}: final scale snap after TRAN/P-locks; source latch and balanced releases',flush=True)
+    for arp in (False,True):
+        t=1 if has_follow else 0
+        name='note-key-arp' if arp else 'note-key-direct'
+        work=fixture(source,name,{t:1},arp=arp,tran={t:7})
+        script=work/'keys.txt'
+        script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 2 down\n1800 key 2 up\n2200 key 1 down\n3000 key 1 up\n3700 quit\n')
+        extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+               '--step',f'-:poke:0x100b14cc={t}','--internal-clock','--live-script',script]
+        if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,1','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
+        events=run(work,'keys',extra);balanced(events)
+        pitches=[e[2] for e in events if e[0]=='on']
+        if arp:assert set(pitches)=={48,50},pitches
+        else:assert pitches==[50,48],pitches
+        results[name]=pitches
+        print(f'  [ok] {name}: played D remains D with TRAN +7 and followed F; C# snaps to C',flush=True)
+    return results
+
+
 def persistence(source):
     work=fixture(source,'persistence',{0:2,1:1})
     lines=[]
@@ -188,6 +224,7 @@ def main():
     cases=sequence(a.project)
     cases.update(extended_scale(a.project))
     cases.update(keyboard(a.project))
+    cases.update(note_rules(a.project))
     cases.update(persistence(a.project))
     (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()

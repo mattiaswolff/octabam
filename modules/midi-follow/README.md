@@ -186,3 +186,7 @@ MIDI Scales extends that native KEY selector independently.
 The NOTE SETUP callback forwards every non-D control to stock. Harmony can
 own F without intercepting CHAN, BANK, PROG or SBNK. The two enable flags
 are claimed as separate bytes so their manifests compose independently.
+
+With HARM NOTE enabled, the final follower pitch is snapped into the inherited
+scale after TRAN/P-locks. With HARM OFF, the standalone chromatic offset
+behaviour described above is retained.

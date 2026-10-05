@@ -20,7 +20,7 @@ snap to nearest valid notes (ties downward), so adjacent keys can coincide.
 This first version does not replace a running pattern's chord from the live
 keyboard: live performance transposition remains a separate future feature.
 
-The same generator serves live MIDI keys and sequenced NOTE/P-locks.
+Shared scale logic serves live MIDI keys and sequenced NOTE/P-locks.
 Generated chords enter the **stock arp before its note selection**. ARP MODE,
 SPD, RNGE, NLEN, LEG and step offsets retain their stock controls. Original
 NOT2–4 values are never overwritten. Turning HARM OFF restores their use.
@@ -30,8 +30,15 @@ With MIDI Follow, RFOL stays on NOTE SETUP D. The follower retains its own
 HARM, rhythm and TRAN/P-locks, while its chord root and KEY come from the
 ultimate source track. KEY is displayed from that source and is read-only
 on the follower. Disable RFOL to restore the follower's own Part KEY.
-TRAN remains a semitone offset applied once after chord generation; +7 and
-+12 mean exactly those intervals and may intentionally leave the scale.
+For **NOTE**, TRAN/P-locks and arp offsets are applied before a final scale
+correction. The emitted note always belongs to the effective KEY/scale (unless
+KEY is OFF). For example, B +7 in C Major snaps F♯ down to F. Followers use
+the inherited scale for this correction. A chromatic keyboard press instead
+chooses the pitch directly: snap it to the effective scale without adding
+track TRAN. This also applies to live arp and follower tracks: pressing D
+plays D even with source root F and TRAN +7. The source supplies the scale,
+not a replacement keyboard pitch. TRI/7TH retain chromatic TRAN after
+chord generation; this correction is specific to NOTE.
 
 HARM is stored per MIDI track per **project**, not per Part/pattern. It is
 saved in backward-compatible project comment lines and survives battery-RAM
@@ -47,7 +54,8 @@ with reference counts for shared chord tones. A bypassed press also retains
 its stock release path if HARM or KEY is enabled while held. Stock owns MIDI transmission,
 arp insertion/removal and sequenced note-off records.
 
-Harmony skips a second stock scale correction after TRAN. Follow captures
+Harmony skips stock scale correction for generated notes, then applies its
+own final NOTE correction before note ownership is recorded. Follow captures
 Harmony's selected root before the arp and bypasses its old final bass-only
 replacement when Harmony is active. Each module also builds independently.
 
@@ -73,5 +81,8 @@ checks execute linked ColdFire bytes, including all keys/scales/pitches,
 register/memory boundaries, OFF behaviour, overlapping live-key releases,
 HARM/KEY edits while held, native control passthrough and malformed comments.
 The full-port checks exercise actual firmware MIDI, encoder controls and
-project persistence, plus added-scale output with Harmony OFF. They do not verify electrical MIDI timing, battery
+project persistence, plus added-scale output with Harmony OFF. NOTE regressions
+cover TRAN/P-locks before scale snapping, matching source-root capture, and
+absolute keyboard pitches on followers with direct output and live arp.
+They do not verify electrical MIDI timing, battery
 retention, musical feel or a physical flash. No device transfer is performed.

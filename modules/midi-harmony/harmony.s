@@ -211,9 +211,9 @@ mh_generate:
 .endif
     move.l %d2,%d0
     move.l %d7,%d1
-    bsr.w mh_quant
+    bsr.w mh_prepare
     move.l %d0,%d3
-    /* Own notes snap; followed roots retain their exact pitch class. */
+    /* Chord roots snap here; NOTE defers correction until after TRAN. */
     cmp.l %d5,%d7
     bne.s .gen_root
     move.l %d3,%d2
@@ -312,6 +312,100 @@ mh_scale:
     jmp 0x4009fade
 .scale_zero:
     jmp 0x4009fad8
+
+/* NOTE keeps the requested pitch until TRAN has been applied. Chord modes
+ * still choose their scale degree before constructing their chord. */
+    .global mh_prepare
+mh_prepare:
+    lea -12(%sp),%sp
+    movem.l %d1-%d2/%a0,(%sp)
+    move.l %d0,%d2
+    move.l %d1,%d0
+    bsr.w mh_get
+    cmpi.l #1,%d0
+    beq.s .prepare_done
+    move.l %d2,%d0
+    move.l (%sp),%d1
+    bsr.w mh_quant
+    move.l %d0,%d2
+.prepare_done:
+    move.l %d2,%d0
+    movem.l (%sp),%d1-%d2/%a0
+    lea 12(%sp),%sp
+    rts
+
+/* NOTE's final pitch is scale-constrained after TRAN/arp offsets.
+ * d0 pitch, d1 track -> d0 pitch; preserves all other registers.
+ * Invalid pitches remain invalid. OFF/KEY OFF/TRI/7TH retain their rules.
+ */
+    .global mh_final,mh_output
+mh_final:
+    lea -12(%sp),%sp
+    movem.l %d1-%d2/%a0,(%sp)
+    move.l %d0,%d2
+    move.l %d1,%d0
+    bsr.w mh_get
+    cmpi.l #1,%d0
+    bne.s .final_done
+    move.l %d2,%d0
+    move.l (%sp),%d1
+    bsr.w mh_quant
+    move.l %d0,%d2
+.final_done:
+    move.l %d2,%d0
+    movem.l (%sp),%d1-%d2/%a0
+    lea 12(%sp),%sp
+    rts
+
+/* Native arp origin byte: 1 while chromatic keys own its note pool; 0 for
+ * sequenced notes. Neutralize TRAN before arithmetic/range checks for NOTE
+ * live arp, without changing the saved/live Part parameter. */
+    .global mh_transpose
+mh_transpose:
+    lea -12(%sp),%sp
+    movem.l %d0-%d1/%a0,(%sp)
+    move.l %d7,%d0
+    bsr.w mh_active
+    cmpi.l #1,%d0
+    bne.s .transpose_stock
+    move.l %d7,%d0
+    lsl.l #3,%d0
+    lea 0x46c77b1e,%a0
+    adda.l %d0,%a0
+    move.l %d7,%d0
+    add.l %d0,%d0
+    move.b (%a0,%d0.l),%d0
+    cmpi.b #1,%d0
+    bne.s .transpose_stock
+    moveq #64,%d0
+    bra.s .transpose_done
+.transpose_stock:
+    move.l (%sp),%d0
+    move.b 0x22c(%a5),%d0
+.transpose_done:
+    move.l 4(%sp),%d1
+    move.l 8(%sp),%a0
+    lea 12(%sp),%sp
+    move.l %d1,%a1
+    jmp 0x4009fb40
+
+/* After stock transpose/scale and optional Follow, before note ownership. */
+mh_output:
+    lea -12(%sp),%sp
+    movem.l %d0-%d1/%a0,(%sp)
+    moveq #0,%d0
+    move.b (%a2),%d0
+    move.l %d7,%d1
+    bsr.w mh_final
+    move.b %d0,(%a2)
+    movem.l (%sp),%d0-%d1/%a0
+    lea 12(%sp),%sp
+    move.b (%a2),%d1
+    move.b %d1,%d3
+    extb.l %d3
+    move.l %d6,%d0
+    add.l %d3,%d0
+    jmp 0x4009fb8c
 
 mh_reset:
     lea MH_NV,%a0
@@ -596,14 +690,24 @@ mh_keyboard:
     move.l %d2,%d0
     bsr.w mh_active
     beq.w .keyboard_passthrough
+    move.l %d0,%d6
     tst.l %d4
     beq.w .keyboard_done
     lea 40(%sp),%a2
     move.b %d3,(%a2)
+    cmpi.l #1,%d6
+    bne.s .keyboard_chord
+    /* NOTE keyboard supplies the absolute pitch, even on a follower. */
+    move.b %d3,1(%a2)
+    move.b %d3,2(%a2)
+    move.b %d3,3(%a2)
+    bra.s .keyboard_pitch_ready
+.keyboard_chord:
     move.l %d2,%d0
     move.l %a2,%a0
     bsr.w mh_generate
-    /* Stock Part ARP MODE; live keys have no sequencer TRAN until arp emits. */
+.keyboard_pitch_ready:
+    /* NOTE live pitch already includes the player's choice. */
     move.l %d2,%d0
     lsl.l #5,%d0
     lea 0x46c76fe0,%a0
@@ -611,10 +715,16 @@ mh_keyboard:
     moveq #0,%d7
     move.b 12(%a0),%d7
     subi.l #64,%d7
+    cmpi.l #1,%d6
+    bne.s .keyboard_offset_ready
+    moveq #0,%d7
+.keyboard_offset_ready:
 .ifdef HAVE_FOLLOW
     moveq #0,%d0
     move.b (%a2),%d0
     add.l %d7,%d0
+    move.l %d2,%d1
+    bsr.w mh_final
     cmpi.l #127,%d0
     bhi.s .keyboard_no_root
 .keyboard_mod:
@@ -637,6 +747,8 @@ mh_keyboard:
     moveq #0,%d0
     move.b (%a2,%d6.l),%d0
     add.l %d7,%d0
+    move.l %d2,%d1
+    bsr.w mh_final
     moveq #-1,%d1
     move.b %d1,(%a3,%d6.l)
     cmpi.l #127,%d0
