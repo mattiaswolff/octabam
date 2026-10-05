@@ -16,7 +16,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
 import toolpath  # noqa: E402,F401
-from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE  # noqa: E402
+from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE, UC_HOOK_MEM_WRITE  # noqa: E402
 from unicorn.m68k_const import *  # noqa: E402,F403
 
 OUT = ROOT / 'out/bass-follow'
@@ -54,6 +54,20 @@ def machine_gate(image):
     uc.mem_map(0x80000000, 0x10000)
     pitch, stack = 0x47001000, 0x47008000
     arrivals = []
+    unexpected_writes = []
+    written_addresses = set()
+
+    def guard_write(u, access, address, size, value, user):
+        written_addresses.add(address)
+        # Only module state, scratch output, the displaced stock write and
+        # a bounded stack frame may change during these machine-code calls.
+        allowed = ((root, root + 8), (sources, sources + 8),
+                   (pitch, pitch + 4), (stack - 64, stack),
+                   (0x47004000 - 43, 0x47004000 - 42))
+        if not any(lo <= address and address + size <= hi for lo, hi in allowed):
+            unexpected_writes.append((hex(address), size, hex(value)))
+
+    uc.hook_add(UC_HOOK_MEM_WRITE, guard_write)
 
     done = 0x4700fff0
 
@@ -224,7 +238,9 @@ def machine_gate(image):
         assert arrivals == [done]
         expected = f'T{value}' if 1 <= value <= 8 else 'OFF'
         assert bytes(uc.mem_read(pitch, len(expected)+1)) == expected.encode()+b'\0'
-    print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, arp isolation, same-tick T8 source, gates, note-offs path, formatters, registers')
+    assert {root, sources + 1, pitch} <= written_addresses, 'memory-write hook did not observe known writes'
+    assert not unexpected_writes, ('out-of-contract memory writes', unexpected_writes[:10])
+    print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, arp isolation, same-tick T8 source, gates, note-offs path, formatters, registers, bounded memory writes')
 
 
 def fixture(source, dest, arp=False, leader=0):
@@ -275,6 +291,9 @@ def fixture(source, dest, arp=False, leader=0):
         otp._bank_write(dest, int(path.stem[4:]), mutate, guard=False)
     for path in dest.glob('project.*'):
         raw = re.sub(rb'\[SAMPLE\].*?\[/SAMPLE\]\r?\n', b'', path.read_bytes(), flags=re.S)
+        # Fixed clock makes frame 1500 land inside the held step-4 bass note.
+        raw = re.sub(rb'TEMPOx24=\d+', b'TEMPOx24=2880', raw)
+        raw = re.sub(rb'PATTERN_TEMPO_ENABLED=\d+', b'PATTERN_TEMPO_ENABLED=0', raw)
         path.write_bytes(raw)
 
 
@@ -302,8 +321,13 @@ def notes(raw):
     return result
 
 
-def port_case(image, project, arp=False, leader=0, enabled=True):
-    work = OUT / ("off" if not enabled else "reverse-arp" if leader and arp else "reverse" if leader else "arp" if arp else "chords")
+def port_case(image, project, arp=False, leader=0, enabled=True, live_change=None, held_boundary=False):
+    name = "off" if not enabled else "reverse-arp" if leader and arp else "reverse" if leader else "arp" if arp else "chords"
+    if live_change:
+        name = f'live-{live_change}'
+    if held_boundary:
+        name = 'held-boundary'
+    work = OUT / name
     work.mkdir(parents=True, exist_ok=True)
     import emu_card
     fixture(project, work / 'project', arp=arp, leader=leader)
@@ -316,16 +340,24 @@ def port_case(image, project, arp=False, leader=0, enabled=True):
         log = work / f'{label}.log'
         cmd = [str(ROOT / 'out/emu/ot_emu'), '--image', str(firmware),
                '--card', str(work/'card.img'), '--set', 'OCTABAM', '--project', 'BASS',
-               '--sequencer', '--internal-clock', '--frames', '7000', '--load-ms', '90000',
+               '--sequencer', '--internal-clock', '--frames', '1500' if held_boundary else '7000', '--load-ms', '90000',
                '--midi-out', str(capture), '--card-out', str(work/f'{label}-card.img')]
         if label == 'patched' and enabled:
             cmd += ['--step', '-:poke:0x100b14cc=1',
                     '--step', f'-:call:{symbols()["bf_encoder"]:#x},3,{leader + 1 - (leader > 1)}']
+            if live_change:
+                # Use the real encoder callback while the sequencer is playing.
+                # +1 skips T2 itself and selects T3; -1 switches RFOL OFF.
+                delta = -1 if live_change == 'off' else 1
+                cmd += ['--step', f'1500:call:{symbols()["bf_encoder"]:#x},3,{delta}',
+                        '--step', f'1500:dump:{symbols()["bf_sources"]:#x},8={work / "sources.bin"}']
         with log.open('w') as f:
             proc = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
         text = log.read_text()
         assert proc.returncode == 0 and 'run ended REACHED' in text, log
         assert 'load run ended: LOAD PROJECT handled' in text, log
+        if label == 'patched' and live_change:
+            assert (work/'sources.bin').read_bytes()[1] == (0 if live_change == 'off' else 3)
         events = notes(capture.read_bytes())
         results[label] = events
         (work/f'{label}-notes.json').write_text(json.dumps(events, indent=2)+'\n')
@@ -343,8 +375,17 @@ def port_case(image, project, arp=False, leader=0, enabled=True):
             else:
                 assert key in held, ('unmatched note-off', label, key)
                 held.remove(key)
-        assert not held, ('hanging notes', label, held)
+        if held_boundary:
+            # This deliberately truncated run proves the live-change instant
+            # falls inside an active bass note, rather than between notes.
+            assert (2, 36 if label == 'patched' else 48) in held, (label, held)
+        else:
+            assert not held, ('hanging notes', label, held)
     stock, patched = results['stock'], results['patched']
+    if held_boundary:
+        assert [e[2] for e in patched if e[:2] == ('on', 2)] == [48, 36, 36]
+        print('  [ok] port UART: bass C is still held at frame 1500, the live RFOL change boundary')
+        return dict(status='pass', intentionally_truncated=True, image_sha256=hashes)
     if not enabled:
         assert stock == patched
         print('  [ok] port UART (OFF): all MIDI events identical to stock')
@@ -364,11 +405,14 @@ def port_case(image, project, arp=False, leader=0, enabled=True):
         assert leader_notes == [60, 65, 69, 67]
     assert [e[2] for e in stock if e[:2] == ('on', 3)] == [72, 74, 76]
     bass = [e for e in patched if e[:2] == ('on', bass_ch)]
-    assert [e[2] for e in bass] == [48, 36, 36, 41, 43, 43], bass
+    expected = ([48, 36, 36, 48, 48, 55, 48] if live_change == 'off' else
+                [48, 36, 36, 38, 38, 40] if live_change == 'source' else
+                [48, 36, 36, 41, 43, 43])
+    assert [e[2] for e in bass] == expected, bass
     assert all(e[3] == 91 for e in bass)
     # F starts while the old C bass is still held; its release stays C.
     f = patched.index(('on', leader_ch, 65, 90+leader))
-    assert patched.index(('off', bass_ch, 36, 0), f) < patched.index(('on', bass_ch, 41, 91))
+    assert patched.index(('off', bass_ch, 36, 0), f) < patched.index(('on', bass_ch, expected[3], 91), f)
     print(f'  [ok] port UART ({work.name}): independent rhythm, C/F/G, same-step order, held-note release, other tracks and stored banks')
     return dict(status='pass', leader_notes=leader_notes, bass_notes=[e[2] for e in bass], image_sha256=hashes)
 
@@ -434,6 +478,9 @@ def port_gate(image, project):
     cases['reverse'] = port_case(image, project, leader=7)
     cases['reverse-arp'] = port_case(image, project, arp=True, leader=7)
     cases['off'] = port_case(image, project, enabled=False)
+    cases['held-boundary'] = port_case(image, project, held_boundary=True)
+    cases['live-off'] = port_case(image, project, live_change='off')
+    cases['live-source'] = port_case(image, project, live_change='source')
     panel_gate(image)
     (OUT/'result.json').write_text(json.dumps(dict(status='pass', cases=cases,
                                                   hardware_tested=False), indent=2)+'\n')

@@ -85,9 +85,17 @@ explicitly skip and the controlled machine-code gate still runs.
 The controlled gate executes the actual linked bytes: all 56 source/follower
 pairs, OFF, chains/cycles, 128 root notes, arp isolation, transposition/scales,
 same-tick T8 capture, mute/channel/velocity gates, invalid notes, formatters and
-register preservation. Full-port stock/patched UART captures cover chords,
+register preservation. A write hook rejects writes outside the declared module
+state, scratch result, displaced stock write and bounded call stack in these tests.
+Full-port stock/patched UART captures cover chords,
 source arpeggiation, T8 → T2, fallback, held-note release, unchanged other tracks
 and stored banks. An all-OFF run must match stock MIDI events exactly.
+
+Two live-change cases switch RFOL OFF and from T1 to T3 while playing. A separate
+truncated capture first proves that the bass C is still held at the change
+instant. The complete runs require that C's original note-off, the expected
+new notes, and no hanging notes. The callbacks are invoked by the port's script;
+the separate panel test below checks the actual UART encoder path.
 
 The panel test sends actual UART1 key/encoder reports: enter MIDI NOTE SETUP,
 select RFOL, share the source across tracks, leave/reopen the page, switch OFF,
@@ -95,6 +103,19 @@ and boot with defaults. It checks module settings and verifies that the working
 Part mirror is unchanged. LCD screenshots are under `out/bass-follow/ui/`.
 `out/bass-follow/result.json` is written only after all cases pass and records
 the tested image hashes; artifacts are local and uncommitted.
+
+Before the first hardware trial, still check transport stop/restart and
+pattern/Part/project changes during held notes, plus a longer dense MIDI run
+alongside this remix's audio load. The current fixture is short and does not
+measure worst-case ColdFire CPU cost. Follower arp and shared output channels
+remain outside the supported test setup.
+
+For a device trial, use a new build number and verify the final packaged image
+against the tested MAIN_OS, with a backup and the known-good image available.
+Start with RFOL OFF, then one source and one follower on different MIDI
+channels. Check C/F/G, source arp, RFOL changes during long notes and STOP on
+physical MIDI before extending the setup. These are pending hardware checks,
+not evidence supplied by the emulator.
 
 ## What the emulator allows
 
