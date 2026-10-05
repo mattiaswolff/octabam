@@ -48,6 +48,13 @@ TRAN/P-lock; changing TRAN between trigs does not rebuild an existing arp
 pool. Invalid transposed roots are silent until a valid trig; high chord
 voices are omitted. Live keyboard pools remain playable independently.
 
+Live recording stores the **physical key played** in NOTE once, even in
+TRI/7TH mode. Extra generated voices only sound; they do not enter the
+recorder or become NOT2–4 locks. An out-of-scale key remains that key in
+NOTE and snaps when Harmony plays it. Shared chord tones do not suppress
+a new key's recording. Playback regenerates the chord from NOTE, including
+when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
+
 HARM is stored per MIDI track per **project**, not per Part/pattern. It is
 saved in backward-compatible project comment lines and survives battery-RAM
 resume. KEY remains a native Part setting. MIDI Follow's RFOL selection is
@@ -59,6 +66,8 @@ The sequence hook changes the four-note scratch buffer before the stock arp
 initializer. Unused voices duplicate the root for its valid-pitch bitmap;
 stock deduplicates them. Invalid roots use safe zero-pitch padding and a
 per-track volatile mute flag, so invalid bytes never index the arp bitmap.
+The recorder uses the native handoff at `0x4009eb7a` once per physical key
+press/release; generated voices call the stock sender with recording disabled.
 Live keys keep the generated pitches until release, with reference counts
 for shared chord tones. A bypassed press also retains
 its stock release path if HARM or KEY is enabled while held. Stock owns MIDI
@@ -96,6 +105,23 @@ project persistence, plus added-scale output with Harmony OFF. NOTE/TRI/7TH
 regressions cover TRAN/P-locks before root snapping and chord generation,
 matching source-root capture, and absolute keyboard pitches on followers
 with direct output and live arp. Machine checks also cover invalid-root
-muting/recovery and final arp scale correction.
+muting/recovery and final arp scale correction. Live-recording cases use
+REC+PLAY, play C♯/D/F, exit REC and compare the next loop with live output;
+they inspect recorded NOTE bytes and explicitly disabled NOT2–4 locks.
+Use `--recording-only` with the port script for these focused cases.
 They do not verify electrical MIDI timing, battery
 retention, musical feel or a physical flash. No device transfer is performed.
+
+### Live-recording regression found on OCTABAM4
+
+Device feedback identified unexpected NOTE values and explicit empty NOT2–4
+locks after chromatic live recording. The released image reproduced both
+in the port: playing C/D/F triads stored G/A/C as NOTE and raw 64 (zero
+offset) in each extra-note lane. Each generated voice had been sent through
+the native recorder path, so later voices replaced the root.
+
+The correction records the physical key once and keeps generated voices out
+of that path. It does not repair notes already recorded by OCTABAM4. The
+reported single-note playback has not been reproduced in the port: even
+explicit empty extra-note locks still generated chords with HARM and KEY
+active. That hardware symptom remains to be checked with the corrected image.

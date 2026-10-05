@@ -710,6 +710,13 @@ mh_keyboard:
     move.b %d0,(%a1,%d2.l)
 .keyboard_no_root:
 .endif
+    /* Record the physical key once, independently of snapping/live voices. */
+    move.l %d5,-(%sp)
+    move.l %d4,-(%sp)
+    move.l %d3,-(%sp)
+    move.l %d2,-(%sp)
+    bsr.w mh_record_key
+    lea 16(%sp),%sp
     moveq #0,%d6
 .keyboard_voice:
     moveq #0,%d0
@@ -737,7 +744,7 @@ mh_keyboard:
     move.b %d1,(%a4,%d0.l)
     cmpi.b #1,%d1
     bne.s .keyboard_next
-    move.l %d5,-(%sp)
+    clr.l -(%sp) /* Generated voices sound, but never enter the recorder. */
     move.l %d4,-(%sp)
     move.l %d0,-(%sp)
     move.l %d2,-(%sp)
@@ -780,7 +787,57 @@ mh_stock_key:
     lea -28(%sp),%sp
     movem.l %d2-%d7/%a2,(%sp)
     jmp 0x4009e9b0
+/* Stock recorder tail, without transmitting or owning a MIDI voice.
+ * Same four arguments and saved-register frame as mh_stock_key. Resolve
+ * the native Part channel exactly as 0x4009e9c0..0x4009e9f8, then enter its
+ * recorder handoff. Additional chord voices must not enqueue more roots.
+ */
+    .global mh_record_key
+mh_record_key:
+    lea -28(%sp),%sp
+    movem.l %d2-%d7/%a2,(%sp)
+    move.l 44(%sp),%d7
+    tst.l %d7
+    beq.s .record_key_done
+    move.l 32(%sp),%d5
+    move.l 36(%sp),%d3
+    move.l 40(%sp),%d6
+    move.l 0x46c82456,%a1
+    moveq #0,%d0
+    move.b 0x100b14cf,%d0
+    move.l %d5,%d1
+    lsl.l #5,%d1
+    move.l %d1,%a2
+    lea (%a2,%d5.l*4),%a0
+    move.l #0x18b2,%d2
+    muls.l %d2,%d0
+    adda.l %d0,%a0
+    lea (%a1,%a0.l),%a0
+    adda.l #0x8f262,%a0
+    moveq #0,%d4
+    move.b (%a0),%d4
+    beq.s .record_key_handoff /* Stock permits recording with CHAN OFF. */
+    subq.l #1,%d4
+    andi.l #15,%d4
+.record_key_handoff:
+    jmp 0x4009eb7a
+.record_key_done:
+    movem.l (%sp),%d2-%d7/%a2
+    lea 28(%sp),%sp
+    rts
+
 mh_release:
+    moveq #0,%d0
+    move.b (%a3),%d0
+    cmpi.l #127,%d0
+    bhi.s .release_begin
+    move.l %d5,-(%sp)
+    clr.l -(%sp)
+    move.l %d3,-(%sp) /* Same physical pitch as the recorder note-on. */
+    move.l %d2,-(%sp)
+    bsr.w mh_record_key
+    lea 16(%sp),%sp
+.release_begin:
     moveq #0,%d6
 .release_voice:
     moveq #0,%d0
@@ -796,7 +853,7 @@ mh_release:
     subq.l #1,%d1
     move.b %d1,(%a4,%d0.l)
     bne.s .release_next
-    move.l %d5,-(%sp)
+    clr.l -(%sp) /* Recorder release was emitted once, above. */
     clr.l -(%sp)
     move.l %d0,-(%sp)
     move.l %d2,-(%sp)

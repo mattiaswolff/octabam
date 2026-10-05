@@ -221,6 +221,72 @@ def chord_rules(source):
     return results
 
 
+def recording(source):
+    results={}
+    for kind in (1,2,3):
+        name=f'live-record-{kind}'
+        work=fixture(source,name,{0:kind})
+        for path in (work/'project').glob('bank*.work'):
+            def blank(data):
+                for pat in range(16):
+                    for track in range(8):
+                        at=0x492e+pat*0x8eec+track*0x8b9
+                        data[at+9:at+33]=bytes(24)
+                        data[at+0x39:at+0x839]=b'\xff'*2048
+            otp._bank_write(work/'project',int(path.stem[4:]),blank,guard=False)
+        card,_=emu_card.stage_project(work/'project','OCTABAM','BASS',tree=work/'blank-tree')
+        (work/'card.img').write_bytes(card)
+        script=work/'record.txt'
+        # REC+PLAY, play C#/D/F, leave REC, hear the next loop, then STOP.
+        script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x29 down\n700 key 0x28 down\n800 key 0x28 up\n900 key 0x29 up\n1600 key 1 down\n1900 key 1 up\n2600 key 2 down\n2900 key 2 up\n3600 key 5 down\n3900 key 5 up\n4400 key 0x29 down\n4500 key 0x29 up\n14500 key 0x27 down\n14600 key 0x27 up\n15500 quit\n')
+        extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+               '--step','-:poke:0x100b14cc=0','--internal-clock','--live-script',script,
+               '--mem-dump',f'0x400e21e0,0x9b340={work}/bank-ram.bin;0x100b14e2,1={work}/harm.bin;0x46c76df1,1={work}/key.bin']
+        events=run(work,'record',extra);balanced(events)
+        pitches=[e[2] for e in events if e[:2]==('on',1)]
+        expected=[]
+        for root in (48,50,53):
+            degrees=[n for n in range(root,80) if n%12 in harmony.MODES[0]]
+            expected.extend(degrees[::2][:1 if kind==1 else kind+1])
+        assert pitches==expected*2,(pitches,expected) # performed chord == replayed chord
+        bank=(work/'bank-ram.bin').read_bytes()
+        lanes=[bank[0x4900+step*32:0x4920+step*32] for step in range(64)]
+        recorded=[lane for lane in lanes if lane[0]<128]
+        assert [lane[0] for lane in recorded]==[49,50,53],recorded
+        assert all(lane[3:6]==b'\xff'*3 for lane in recorded),recorded
+        assert (work/'harm.bin').read_bytes()==bytes((kind,))
+        assert (work/'key.bin').read_bytes()==b'\x01'
+        results[name]=dict(notes=pitches,recorded_roots=[lane[0] for lane in recorded])
+        print(f'  [ok] {name}: REC+PLAY -> chromatic C#/D/F -> physical keys recorded once -> identical chord playback',flush=True)
+    return results
+
+
+def empty_note_locks(source):
+    results={}
+    for kind in (2,3):
+        for value in (64,0):
+            name=f'explicit-empty-{kind}-{value}'
+            work=fixture(source,name,{0:kind})
+            for path in (work/'project').glob('bank*.work'):
+                def lock(data):
+                    for step in (2,4,8):
+                        at=0x492e+0x39+step*32
+                        data[at+3:at+6]=bytes((value,))*3
+                otp._bank_write(work/'project',int(path.stem[4:]),lock,guard=False)
+            card,_=emu_card.stage_project(work/'project','OCTABAM','BASS',tree=work/'locked-tree')
+            (work/'card.img').write_bytes(card)
+            events=run(work,'play',['--sequencer','--internal-clock','--frames','7000']);balanced(events)
+            pitches=[e[2] for e in events if e[:2]==('on',1)]
+            expected=[]
+            for root in (62,65,67):
+                degrees=[n for n in range(root,100) if n%12 in harmony.MODES[0]]
+                expected.extend(degrees[::2][:kind+1])
+            assert pitches==expected,(pitches,expected)
+            results[name]=pitches
+            print(f'  [ok] {name}: explicit NOT2-4 locks do not suppress generated chord voices',flush=True)
+    return results
+
+
 def persistence(source):
     work=fixture(source,'persistence',{0:2,1:1})
     lines=[]
@@ -263,12 +329,19 @@ def persistence(source):
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
+    ap.add_argument('--recording-only',action='store_true',help='run the recording and explicit-empty-lock regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
+    if a.recording_only:
+        cases=recording(a.project);cases.update(empty_note_locks(a.project))
+        (OUT/'result-recording.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     cases=sequence(a.project)
     cases.update(extended_scale(a.project))
     cases.update(keyboard(a.project))
     cases.update(note_rules(a.project))
     cases.update(chord_rules(a.project))
+    cases.update(recording(a.project))
+    cases.update(empty_note_locks(a.project))
     cases.update(persistence(a.project))
     (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()

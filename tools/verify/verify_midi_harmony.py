@@ -210,26 +210,36 @@ def keyboard_gate():
     u.mem_write(0x46c76fec,bytes((64,0,0)))
     from unicorn.m68k_const import UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A2
     regs=[UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A2]
+    recorded=[];forwarded=[]
     def key(note,velocity):
-        args=[0,note,velocity,0]
+        args=[0,note,velocity,1]
         u.mem_write(m.stack,m.done.to_bytes(4,'big')+b''.join(v.to_bytes(4,'big') for v in args))
         u.reg_write(UC_M68K_REG_A7,m.stack);u.reg_write(UC_M68K_REG_SR,0x2700)
-        m.stops={m.done,0x4009e9b0};pc=m.sym['mh_keyboard'];events=[]
+        m.stops={m.done,0x4009e9b0,m.sym['mh_record_key']};pc=m.sym['mh_keyboard'];events=[]
         for _ in range(20):
             m.arrival=None;u.emu_start(pc,0,count=50000)
             assert m.arrival in m.stops
             if m.arrival==m.done:return events
             sp=u.reg_read(UC_M68K_REG_A7)
+            if m.arrival==m.sym['mh_record_key']:
+                args=[int.from_bytes(u.mem_read(sp+4+4*i,4),'big') for i in range(4)]
+                recorded.append(tuple(args))
+                pc=int.from_bytes(u.mem_read(sp,4),'big');u.reg_write(UC_M68K_REG_A7,sp+4)
+                continue
             args=[int.from_bytes(u.mem_read(sp+32+4*i,4),'big') for i in range(4)]
-            events.append((args[1],args[2]))
+            events.append((args[1],args[2]));forwarded.append(tuple(args))
             for i,r in enumerate(regs):u.reg_write(r,int.from_bytes(u.mem_read(sp+4*i,4),'big'))
             pc=int.from_bytes(u.mem_read(sp+28,4),'big');u.reg_write(UC_M68K_REG_A7,sp+32)
         raise AssertionError('unbounded keyboard loop')
     assert key(48,100)==[(48,100),(52,100),(55,100)]
     assert key(52,100)==[(59,100)]
+    assert recorded==[(0,48,100,1),(0,52,100,1)] # shared E still records its root
+    assert all(event[3]==0 for event in forwarded) # generated tones never record
     m.setting(0,3,5,5) # held notes release their original pitches after edits
     assert key(48,0)==[(48,0)]
     assert key(52,0)==[(52,0),(55,0),(59,0)]
+    assert recorded[-2:]==[(0,48,0,1),(0,52,0,1)]
+    assert all(event[3]==0 for event in forwarded)
     m.setting(0,2);u.mem_write(0x46c76fec,b'\x00') # -64 must not alter absolute keyboard pitches
     assert key(60,100)==[(60,100),(64,100),(67,100)]
     assert key(60,0)==[(60,0),(64,0),(67,0)]
@@ -256,13 +266,39 @@ def keyboard_gate():
     assert key(50,100)==[(50,100)] # D, not followed F, F+2, or D+7
     assert key(50,0)==[(50,0)]
     assert key(49,100)==[(48,100)] # C# -> C in effective C major
+    assert recorded[-1]==(0,49,100,1) # NOTE stores physical C#, not snapped C
     u.mem_write(0x46c76fec,b'\x4c')
     assert key(49,0)==[(48,0)] # changing TRAN must not lose ownership
+    assert recorded[-1]==(0,49,0,1)
     for kind,want in [(2,[50,53,57]),(3,[50,53,57,60])]:
         m.setting(0,kind,1 if 'bf_sources' in m.sym else 0,5 if 'bf_sources' in m.sym else 0)
         assert key(50,100)==[(n,100) for n in want]
         assert key(50,0)==[(n,0) for n in want]
     print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
+
+
+def recorder_gate():
+    m=Machine();u=m.uc;bank=0x400e21e0
+    u.mem_write(0x46c82456,bank.to_bytes(4,'big'))
+    for part in range(8):
+        u.mem_write(0x100b14cf,bytes((part,)))
+        for track in range(8):
+            channel=1+(part+track)%16
+            at=bank+part*0x18b2+track*36+0x8f262
+            u.mem_write(at,bytes((channel,)))
+            for velocity in (0,100):
+                args=(track,50,velocity,1)
+                u.mem_write(m.stack+4,b''.join(n.to_bytes(4,'big') for n in args))
+                m.call('mh_record_key',stop=0x4009eb7a)
+                assert [u.reg_read(r) for r in (UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7)]==[50,channel-1,track,velocity,1]
+                assert u.reg_read(UC_M68K_REG_A7)==m.stack-28
+            u.mem_write(at,b'\0')
+            m.call('mh_record_key',stop=0x4009eb7a) # stock records even with CHAN OFF
+            assert u.reg_read(UC_M68K_REG_D4)==0
+    u.mem_write(at,b'\x01')
+    u.mem_write(m.stack+16,bytes(4))
+    m.call('mh_record_key') # record flag OFF also bypasses
+    print('  [ok] recorder handoff: chosen root once, independent shared tones, native Part channels, CHAN OFF recording and record-flag guard')
 
 
 def project_parser_gate():
@@ -318,6 +354,7 @@ def main():
     machine_gate()
     final_note_gate()
     keyboard_gate()
+    recorder_gate()
     controls_gate()
     project_parser_gate()
 if __name__=='__main__':main()
