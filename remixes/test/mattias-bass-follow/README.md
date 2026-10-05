@@ -116,3 +116,34 @@ Durations above are emulated playback time; these runs took longer on the host.
 Results and captures are under `out/bass-follow-safety/`. These checks do not
 qualify physical CPU timing, electrical MIDI, flash/boot or an external synth.
 The saved original OCTABAM2 image remains unchanged. Nothing was flashed.
+
+## Packaged first-trial image: OCTABAM3
+
+Built with `make image REMIX=mattias-bass-follow BUILD=3` from source commit
+`07983189`. The stock 1.40C SysEx was read from the sibling `mattias-bus`
+worktree using `SYX=../mattias-bus/downloads/extracted/OCTATRACK_OS1.40C.syx`.
+
+The packaged MAIN_OS is 1,115,310 bytes, SHA-256
+`be56577d745bd053a48b00dfd89e3199decabf82556ee0eed597d38689634f5a`.
+Exactly five bytes differ from the tested BUILD=2 image above: the suffixes in
+BusVerb, BusDelay, Spectrum, Character and Modulation change from `2` to `3`.
+Every other MAIN_OS byte, including executable code and DSP payloads, is
+identical. The linked runtime is also byte-identical.
+
+- Card installer `OCTATRACK_OCTABAM3.bin`: 451,780 bytes, SHA-256
+  `ffda58c881b6066c3a38ea46640d288d7c1d09e39d526ec2505627356598c5e6`.
+- MIDI installer `OCTATRACK_OS1.40C_OCTABAM3.syx`: 631,060 bytes, SHA-256
+  `efa92d25db4c3e103f0426c68626064ba256afd8f964e1d1ba7318eec067087b`.
+
+The card checksum, SysEx checksums, container identity, exact SysEx round-trip
+and extracted MAIN_OS identity all passed. BUILD=3 also passed the DRAM boot
+gate (one loader entry, no fatal entry, exact runtime readback), 40 mode-name
+checks and the controlled Root Follow machine-code gate. The long behavioral
+tests were not rerun for this label-only change; their applicability is supported
+by the exact byte comparison, with the earlier timeout caveat retained.
+
+Build and verification receipts are in `out/releases/OCTABAM3/`. A local release
+folder with both installers, SHA256SUMS, instructions and receipts was exported
+to the parent sampler workspace's `artifacts/firmware/OCTABAM3/`.
+No firmware bytes are committed. This package has not been copied to a card,
+flashed, or verified on hardware; it is prepared for a first hardware trial.
