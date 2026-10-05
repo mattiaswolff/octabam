@@ -16,13 +16,14 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=()):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
     follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
     for p in (work/'project').glob('project.*'):
         raw=re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n',b'',p.read_bytes(),flags=re.M)
         raw+=b'\r\n'+b''.join(f'#MIDI_HARMONY_TYPE_V1_T{t+1}={v}\r\n'.encode() for t,v in records.items())
+        raw+=b''.join(f'#MIDI_HARMONY_VOIC_V1_T{t+1}=1\r\n'.encode() for t in auto)
         p.write_bytes(raw)
     for path in (work/'project').glob('bank*.work'):
         def mutate(data):
@@ -223,9 +224,9 @@ def chord_rules(source):
 
 def recording(source):
     results={}
-    for kind in (1,2,3):
-        name=f'live-record-{kind}'
-        work=fixture(source,name,{0:kind})
+    for kind,auto in ((1,False),(2,False),(3,False),(2,True),(3,True)):
+        name=f'live-record-{kind}'+('-auto' if auto else '')
+        work=fixture(source,name,{0:kind},auto=(0,) if auto else ())
         for path in (work/'project').glob('bank*.work'):
             def blank(data):
                 for pat in range(16):
@@ -248,6 +249,9 @@ def recording(source):
         for root in (48,50,53):
             degrees=[n for n in range(root,80) if n%12 in harmony.MODES[0]]
             expected.extend(degrees[::2][:1 if kind==1 else kind+1])
+        if auto:
+            expected=([48,52,55,50,53,57,48,53,57] if kind==2 else
+                      [48,52,55,59,48,50,53,57,48,52,53,57])
         assert pitches==expected*2,(pitches,expected) # performed chord == replayed chord
         bank=(work/'bank-ram.bin').read_bytes()
         lanes=[bank[0x4900+step*32:0x4920+step*32] for step in range(64)]
@@ -288,11 +292,17 @@ def empty_note_locks(source):
 
 
 def persistence(source):
+    expected_key=25 if 'ms_decode' in harmony.symbols() else 2
     work=fixture(source,'persistence',{0:2,1:1})
     lines=[]
     def key(at,k,hold=100):lines.extend([f'{at} key {k:#x} down',f'{at+hold} key {k:#x} up'])
     key(100,0x31);key(600,0x35);key(1100,0x10)
     lines.extend(['1600 key 0x2d down','1700 key 0x22 down','1850 key 0x22 up','1950 key 0x2d up','2300 enc 5 1'])
+    # Open Harmony with the physical F press. Edit both controls and exercise
+    # an unused encoder; the NOTE/ARP native staged lanes must stay intact.
+    key(2400,0x3d,50)
+    lines.extend(['2500 enc 1 1','2550 enc 0 -1','2600 enc 0 1','2650 enc 2 5'])
+    key(2700,0x32,50)
     key(2800,0x32)
     lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up','4000 enc 5 1'])
     key(4500,0x32)
@@ -302,35 +312,88 @@ def persistence(source):
     extra=['--rtc','1800000000','--live-script',script,'--lcd',work/'save.lcd',
            '--mem-dump',f'0x10000000,0x100000={work}/saved-cs1.bin;0x100b14e2,10={work}/saved-state.bin']
     run(work,'save',extra)
-    expected=bytes((3,1,0,0,0,0,0,0,0,0x4a))
+    expected=bytes((3,1,0,0,0,0,0,0,1,0x4a))
     assert (work/'saved-state.bin').read_bytes()==expected
     files=emu_card.extract_image((work/'save-card.img').read_bytes())
     for name in ('project.work','project.strd'):
         assert b'#MIDI_HARMONY_TYPE_V1_T1=3' in files['OCTABAM/BASS/'+name]
-    # Native Part storage contains appended scale ID 25 (C Dorian).
+        assert b'#MIDI_HARMONY_VOIC_V1_T1=1' in files['OCTABAM/BASS/'+name]
+    # Added C Dorian when MIDI Scales is installed, otherwise stock C Minor.
     for name in ('bank01.work','bank01.strd'):
         data=files['OCTABAM/BASS/'+name]
-        assert data[otp.PART_BASE+9+0x4e2+17]==25,(name,data[otp.PART_BASE+9+0x4e2+17])
+        assert data[otp.PART_BASE+9+0x4e2+17]==expected_key,(name,data[otp.PART_BASE+9+0x4e2+17])
     quit_script=work/'quit.txt';quit_script.write_text('1500 quit\n')
     for name,options in [('reload',[]),('warm',['--no-post','--cs1-in',work/'saved-cs1.bin'])]:
         run(work,name,['--rtc','1800000000','--live-script',quit_script,
                       '--mem-dump',f'0x100b14e2,10={work}/{name}-state.bin;0x46c76df1,1={work}/{name}-key.bin']+options,
             card=work/'save-card.img')
         assert (work/f'{name}-state.bin').read_bytes()==expected,name
-        assert (work/f'{name}-key.bin').read_bytes()==b'\x19',name
+        assert (work/f'{name}-key.bin').read_bytes()==bytes((expected_key,)),name
     old=fixture(source,'old-project',{})
     run(old,'load',['--rtc','1800000000','--cs1-in',work/'saved-cs1.bin','--live-script',quit_script,
                     '--mem-dump',f'0x100b14e2,10={old}/state.bin'])
     assert (old/'state.bin').read_bytes()==bytes(9)+b'J'
-    print('  [ok] UART HARM/KEY controls, actual SAVE, disk reload, CS1 warm boot and old-project defaults',flush=True)
+    print('  [ok] UART Harmony page, HARM/VOIC/KEY controls, actual SAVE, disk reload, CS1 warm boot and old-project defaults',flush=True)
     return {'persistence':'pass'}
+
+
+def auto_voicing(source):
+    results={};sym=harmony.symbols();has_follow='bf_sources' in sym
+    for arp in (False,True):
+        work=fixture(source,'auto-sequence-'+('arp' if arp else 'chords'),{0:2,1:1},
+                     arp=arp,first_note=60,auto=(0,))
+        extra=['--sequencer','--internal-clock','--frames','7000']
+        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+        events=run(work,'play',extra);balanced(events)
+        lead=[e[2] for e in events if e[:2]==('on',1)]
+        bass=[e[2] for e in events if e[:2]==('on',2)]
+        if not arp:assert lead==[60,64,67,60,65,69,59,62,67],lead
+        else:assert {60,64,67,65,69,59,62}<=set(lead),lead
+        if has_follow:
+            if not arp:assert bass==[48,36,36,41,43,43],bass
+            else:assert {36,41,43}<=set(bass),bass
+        results[work.name]=dict(leader=lead,follower=bass)
+        print(f'  [ok] {work.name}: C -> inverted F -> inverted G; follower uses harmonic root',flush=True)
+        # Actual chromatic keys, overlapping common C, and releasing C then F.
+        work=fixture(source,'auto-key-'+('arp' if arp else 'chords'),{0:2},arp=arp,auto=(0,))
+        script=work/'keys.txt'
+        script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 0 down\n1800 key 5 down\n2600 key 0 up\n3400 key 5 up\n4300 quit\n')
+        extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+               '--step','-:poke:0x100b14cc=0','--internal-clock','--live-script',script]
+        if has_follow:extra+=['--mem-dump',f'{sym["bf_roots"]:#x},8={work}/roots.bin']
+        events=run(work,'keys',extra);balanced(events)
+        pitches=[e[2] for e in events if e[0]=='on']
+        if not arp:assert pitches==[48,52,55,53,57],pitches
+        else:assert set(pitches)=={48,52,55,53,57},pitches
+        if has_follow:assert (work/'roots.bin').read_bytes()[0]==41
+        results[work.name]=pitches
+        print(f'  [ok] {work.name}: live F is C-F-A, retained F root, balanced overlapping releases',flush=True)
+    # A lasting screenshot proves a separate window, not just injected memory.
+    work=fixture(source,'harmony-page',{0:2})
+    script=work/'page.txt'
+    script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1400 key 0x3d down\n1500 key 0x3d up\n2000 enc 1 1\n2200 key 0 down\n2300 key 0 up\n2400 key 5 down\n2500 key 5 up\n3000 quit\n')
+    events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+                    '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
+                    '--mem-dump',f'0x100b14e2,10={work}/state.bin;{sym["mh_page_win"]:#x},4={work}/window.bin'])
+    assert (work/'state.bin').read_bytes()==bytes((2,0,0,0,0,0,0,0,1,0x4a))
+    assert int.from_bytes((work/'window.bin').read_bytes(),'big')!=0
+    balanced(events)
+    assert [e[2] for e in events if e[0]=='on']==[48,52,55,48,53,57],events
+    subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True)
+    results['harmony-page']='pass'
+    return results
 
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
     ap.add_argument('--recording-only',action='store_true',help='run the recording and explicit-empty-lock regressions')
+    ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
+    if a.voicing_only:
+        cases=auto_voicing(a.project);cases.update(recording(a.project));cases.update(persistence(a.project))
+        (OUT/'result-voicing.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.recording_only:
         cases=recording(a.project);cases.update(empty_note_locks(a.project))
         (OUT/'result-recording.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
@@ -343,5 +406,6 @@ def main():
     cases.update(recording(a.project))
     cases.update(empty_note_locks(a.project))
     cases.update(persistence(a.project))
+    cases.update(auto_voicing(a.project))
     (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()

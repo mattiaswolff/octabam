@@ -274,7 +274,92 @@ def keyboard_gate():
         m.setting(0,kind,1 if 'bf_sources' in m.sym else 0,5 if 'bf_sources' in m.sym else 0)
         assert key(50,100)==[(n,100) for n in want]
         assert key(50,0)==[(n,0) for n in want]
+    if 'bf_sources' in m.sym:u.mem_write(m.sym['bf_sources'],bytes(8))
+    m.setting(0,2);m.call('mh_voic_set',0,1)
+    assert key(48,100)==[(48,100),(52,100),(55,100)]
+    assert key(53,100)==[(53,100),(57,100)] # common C remains held
+    assert recorded[-1]==(0,53,100,1) # physical F, not inversion bass C
+    if 'bf_roots' in m.sym:assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))
+    assert key(48,0)==[(52,0),(55,0)]
+    m.call('mh_voic_set',0,0) # an edit cannot alter held-note ownership
+    assert key(53,0)==[(48,0),(53,0),(57,0)]
     print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
+
+
+def voicing_gate():
+    """Compare linked search against all compact MIDI voicings, not its loops."""
+    m=Machine();u=m.uc
+    history=m.sym['mh_voice_history']
+    regs=[UC_M68K_REG_D0,UC_M68K_REG_D1,UC_M68K_REG_D2,UC_M68K_REG_D3,
+          UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,
+          UC_M68K_REG_A1,UC_M68K_REG_A2,UC_M68K_REG_A3,UC_M68K_REG_A4,UC_M68K_REG_A5,UC_M68K_REG_A6]
+    def voice(t,raw):
+        u.mem_write(m.scratch,bytes(raw))
+        sentinels={r:0x12340000+i for i,r in enumerate(regs) if r!=UC_M68K_REG_D0}
+        m.call('mh_voice',t,a0=m.scratch,regs=sentinels)
+        assert u.reg_read(UC_M68K_REG_D0)==t
+        assert all(u.reg_read(r)==v for r,v in sentinels.items())
+        assert u.reg_read(UC_M68K_REG_A0)==m.scratch
+        assert all(m.scratch<=a and a+n<=m.scratch+4 or
+                   m.stack-192<=a and a+n<=m.stack+4 or
+                   history+8*t<=a and a+n<=history+8*t+8 for a,n in m.writes)
+        return list(u.mem_read(m.scratch,4))
+    def cost(notes,prev):return (sum(abs(a-b) for a,b in zip(notes,prev)),sum(a!=b for a,b in zip(notes,prev)))
+    for kind in (2,3):
+        for mode,degrees in enumerate(MODES):
+            if 'ms_decode' not in m.sym and mode not in (0,5):continue
+            for tonic in range(12):
+                m.setting(0,kind,tonic,mode);m.call('mh_voic_set',0,1)
+                previous=None
+                # Covers every MIDI input, upward and downward register jumps.
+                for note in range(0,128):
+                    note=(note*37)%128
+                    raw=m.chord(0,note);actual=voice(0,raw);count=kind+1
+                    full=raw[:count]==sorted(set(raw[:count]))
+                    if not full:
+                        assert actual==raw
+                        previous=None
+                        continue
+                    pitches=actual[:count];pcs={n%12 for n in raw[:count]}
+                    assert len(set(pitches))==count and pitches==sorted(pitches)
+                    assert {n%12 for n in pitches}==pcs
+                    assert pitches[-1]-pitches[0]<12
+                    assert abs(pitches[0]-raw[0])<=12
+                    if previous is None:assert actual==raw
+                    else:
+                        all_notes=[n for n in range(128) if n%12 in pcs]
+                        candidates=[all_notes[i:i+count] for i in range(len(all_notes)-count+1)
+                                    if all_notes[i+count-1]-all_notes[i]<12 and abs(all_notes[i]-raw[0])<=12]
+                        assert cost(pitches,previous)==min(cost(c,previous) for c in candidates)
+                    previous=pitches
+    m.setting(0,2);m.call('mh_voic_set',0,1)
+    assert voice(0,m.chord(0,48))==[48,52,55,48]
+    assert voice(0,m.chord(0,53))==[48,53,57,48]
+    for t in range(1,8):
+        m.setting(t,2);m.call('mh_voic_set',t,1)
+        assert voice(t,m.chord(t,53))==[53,57,60,53] # independent history
+    assert voice(0,m.chord(0,53))==[48,53,57,48] # repeated root is stable
+    m.call('mh_voic_set',0,0)
+    assert voice(0,m.chord(0,53))==[53,57,60,53]
+    before=bytes(u.mem_read(NV,10))+bytes(u.mem_read(history,64))
+    for t,v in ((8,1),(0xffffffff,1),(0,2),(0,0xffffffff)):
+        m.call('mh_voic_set',t,v)
+        assert bytes(u.mem_read(NV,10))+bytes(u.mem_read(history,64))==before
+    m.call('mh_voic_set',0,1)
+    assert voice(0,m.chord(0,53))==[53,57,60,53]
+    # Type/scale changes reseed, regardless of the prior inversion.
+    m.setting(0,3)
+    assert voice(0,m.chord(0,48))==[48,52,55,59]
+    m.setting(0,3,0,5)
+    assert voice(0,m.chord(0,53))==[53,56,60,63]
+    if 'bf_sources' in m.sym:
+        m.setting(1,2);u.mem_write(m.sym['bf_sources'],bytes((2,0,0,0,0,0,0,0)))
+        # Same effective scale, different source must still reset context.
+        m.setting(0,2);m.call('mh_voic_set',0,1)
+        voice(0,m.chord(0,48,direct=True));voice(0,m.chord(0,53,direct=True))
+        u.mem_write(m.sym['bf_sources'],bytes(8))
+        assert voice(0,m.chord(0,53))==[53,57,60,53]
+    print('  [ok] AUTO: global minimum compact voice movement across MIDI range/scales, register/write guards, per-track history, resets and root identity')
 
 
 def recorder_gate():
@@ -318,6 +403,17 @@ def project_parser_gate():
     load('#MIDI_HARMONY_TYPE_V1_T8=1',parse_only=True)
     assert m.call('mh_get',7)==3
     assert [m.call('mh_get',t) for t in range(7)]==[0]*7
+    for t in range(8):
+        load(f'#MIDI_HARMONY_VOIC_V1_T{t+1}=1\r\n')
+        assert m.call('mh_voic_get',t)==1
+    assert u.mem_read(NV+8,1)==b'\xff'
+    for bad in ('2','-1','1x','','0000'):
+        load(f'#MIDI_HARMONY_VOIC_V1_T1={bad}')
+        assert m.call('mh_voic_get',0)==1
+    load('#MIDI_HARMONY_VOIC_V1_T1=0',parse_only=True)
+    assert m.call('mh_voic_get',0)==1
+    load('#MIDI_HARMONY_VOIC_V1_T1=0')
+    assert m.call('mh_voic_get',0)==0
     print('  [ok] project parser: valid track, malformed/out-of-range comments and parse-only isolation')
 
 
@@ -337,6 +433,14 @@ def controls_gate():
         args(5,delta);m.call(entry,stop=0x40036548)
         assert m.call('mh_get',1)==want
         assert m.call('mh_get',0)==0
+    u.mem_write(m.sym['mh_page_track'],(1).to_bytes(4,'big'))
+    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,1),(1,-1,0)):
+        args(slot,delta);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
+        assert m.call('mh_get' if slot==0 else 'mh_voic_get',1)==want
+    for slot in range(2,7):
+        before=bytes(u.mem_read(NV,10))
+        args(slot,100);m.call('mh_page_encoder')
+        assert bytes(u.mem_read(NV,10))==before
     if 'bf_sources' in m.sym:
         u.mem_write(m.sym['bf_sources'],bytes((0,1,0,0,0,0,0,0)))
         args(5,1);m.call('mh_arp_encoder',stop=0x40079d48)
@@ -354,6 +458,7 @@ def main():
     machine_gate()
     final_note_gate()
     keyboard_gate()
+    voicing_gate()
     recorder_gate()
     controls_gate()
     project_parser_gate()

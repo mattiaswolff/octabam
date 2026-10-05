@@ -9,6 +9,15 @@ On a MIDI track, open **NOTE SETUP** (FUNC + SRC). Knob **F: HARM** selects:
 | TRI | A diatonic triad on the selected note: scale degrees 1, 3, 5 |
 | 7TH | A diatonic seventh chord: scale degrees 1, 3, 5, 7 |
 
+**Press knob F on NOTE SETUP** to open the dedicated **HARMONY** window.
+Knob **A: HARM** edits the same setting; knob **B: VOIC** selects **ROOT**
+(default, the existing root-position chords) or **AUTO** (compact automatic
+voice leading). NO, YES or another F press closes it. Track/page buttons
+also close it; press again to select another track/page. The title identifies
+the track being edited. Transport and chromatic trig keys remain usable.
+The other encoders are inactive, leaving room for future controls such as
+SPREAD. Turning F on NOTE SETUP still edits HARM directly.
+
 Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
 Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales
 adds five modes in every key. **KEY OFF bypasses Harmony**, including chord
@@ -60,10 +69,40 @@ saved in backward-compatible project comment lines and survives battery-RAM
 resume. KEY remains a native Part setting. MIDI Follow's RFOL selection is
 still its existing volatile setting; select it again after power-up.
 
+## Automatic voice leading
+
+With HARM TRI/7TH and VOIC AUTO, each track remembers its previous generated
+chord and chooses a nearby compact inversion for the next one. For example,
+C3–E3–G3 followed by F produces C3–F3–A3. The harmonic root is still **F**:
+Follow gets F, and recording the physical F key stores F in NOTE. Neither
+the lowest voiced note nor the last generated chord tone replaces the root.
+Voicing is applied before the stock arp, which therefore plays the chosen
+inversion too. A follower with its own HARM TRI/7TH and VOIC AUTO chooses its
+own inversions, using the inherited root and scale.
+
+The bounded search considers each inversion at octave offsets 0, -12 and
++12. Every candidate must remain inside MIDI 0–127, fit within one octave,
+and have its lowest note within one octave of the requested root. It first
+minimizes total semitone travel between corresponding sorted voices, then
+prefers more unchanged voices. Exact ties prefer root position, then earlier
+inversions and offsets in the listed order. This is our algorithm, not a
+claim to reproduce OXI's unpublished implementation. At most twelve candidates
+of four voices are considered per chord; there is no unbounded search.
+
+The first chord uses root position. History is per track and shared between
+that track's keyboard and sequence. HARM edits, VOIC edits, project load,
+and boot reset it; a changed effective scale/source or triad/seventh count
+reseeds it on the next chord. A truncated high-MIDI chord keeps the existing
+voice-omission behavior and resets history. Silence/STOP alone does not reset
+history; set VOIC ROOT then AUTO to deliberately reseed it. AUTO is dynamic:
+the same stored root can receive a different inversion after a different
+preceding chord. Held keys retain their original note-offs when settings change.
+VOIC has no effect in HARM OFF/NOTE or with KEY OFF.
+
 ## Implementation boundaries
 
 The sequence hook changes the four-note scratch buffer before the stock arp
-initializer. Unused voices duplicate the root for its valid-pitch bitmap;
+initializer. Unused voices duplicate the root (lowest voice after AUTO) for its valid-pitch bitmap;
 stock deduplicates them. Invalid roots use safe zero-pitch padding and a
 per-track volatile mute flag, so invalid bytes never index the arp bitmap.
 The recorder uses the native handoff at `0x4009eb7a` once per physical key
@@ -79,11 +118,16 @@ recorded. Follow captures Harmony's selected root before the arp and bypasses
 its old final bass-only
 replacement when Harmony is active. Each module also builds independently.
 
-TYPE storage: battery RAM 0x100b14e2..e9, ea reserved, eb version 0x4a.
+TYPE storage: battery RAM 0x100b14e2..e9, ea VOIC bitmask (one AUTO bit per
+track), eb version 0x4a.
 This is the stock linker padding before the record at 0x100b14f0; Quantizer's
 ec..ee bytes are separate. Defaults and boot sanitize it. Project comments
-are `#MIDI_HARMONY_TYPE_V1_T1=0` through T8, each 0..3. Parse-only loads do
-not write settings. A project without these lines starts with HARM OFF.
+are `#MIDI_HARMONY_TYPE_V1_T1=0` through T8, each 0..3, and
+`#MIDI_HARMONY_VOIC_V1_T1=0` through T8, each 0..1. Parse-only loads do
+not write settings. A project without these lines starts with HARM OFF and
+VOIC ROOT. Existing TYPE values and native Part/pattern formats are unchanged.
+Older Harmony builds ignore VOIC comments. The 64-byte voice-leading history
+and window state are volatile module DRAM; neither is saved to a project.
 
 ## Reusable verification
 
@@ -109,8 +153,34 @@ muting/recovery and final arp scale correction. Live-recording cases use
 REC+PLAY, play C♯/D/F, exit REC and compare the next loop with live output;
 they inspect recorded NOTE bytes and explicitly disabled NOT2–4 locks.
 Use `--recording-only` with the port script for these focused cases.
+Use `--voicing-only` for AUTO sequence/keyboard/arp, recorded physical roots,
+Harmony-page controls, and actual save/reload/warm-resume checks. These also
+produce the Harmony window screenshot at `out/harmony-port-suite/harmony-page/page.png`.
+The default full suite includes both groups. The machine gate compares AUTO's
+movement cost against all valid compact voicings across keys/scales/MIDI range,
+checks per-track history and context resets, and polices writes and registers.
 They do not verify electrical MIDI timing, battery
 retention, musical feel or a physical flash. No device transfer is performed.
+
+### Hardware acceptance for AUTO and physical-key recording
+
+Use a disposable pattern, with T1 KEY C Major and TRAN 0. Set HARM TRI,
+press F on NOTE SETUP, and set B VOIC AUTO. Play C then F: expect C–E–G
+then C–F–A. Hold both keys and release them in either order: shared C must
+continue until its final owner releases, with no stuck notes. Repeat with
+the stock arp active, and with HARM 7TH.
+
+Set T2 RFOL T1, HARM NOTE, TRAN 0 and program its rhythm. While performing
+on T1, F must make T2's next trig play F, even though T1's lowest voice is C.
+Repeat with T2 HARM TRI and its own AUTO: it must retain its own rhythm and
+voicing history while using T1's root/scale.
+
+Live-record C, D and F on T1. Inspect NOTE on those trigs: it must show
+the physical keys C, D, F; Harmony must not add NOT2–4 locks. Replay with
+HARM/KEY still enabled and expect chords. A physical C-sharp key must remain
+C-sharp in NOTE while the heard root snaps to C in C Major. Previously
+misrecorded takes are not repaired. Finally save/reload the test project:
+HARM/VOIC should return, while the first AUTO chord starts in root position.
 
 ### Live-recording regression found on OCTABAM4
 

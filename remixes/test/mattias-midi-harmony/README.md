@@ -2,6 +2,10 @@
 
 The personal bus remix plus MIDI Follow, MIDI Scales and MIDI Harmony.
 HARM is NOTE SETUP F; RFOL is D. Extended KEY stays ARP SETUP F.
+Press NOTE SETUP F to open the dedicated Harmony window (A HARM, B VOIC).
+VOIC AUTO adds compact voice leading; Follow and recording retain the
+harmonic/physical root independently of the inversion. See the module's
+reusable verification and hardware acceptance protocol.
 See the three module READMEs for independent behaviour and the reusable
 verification protocol. This is a local candidate, not a flashed release.
 

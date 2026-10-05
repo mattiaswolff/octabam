@@ -1,11 +1,12 @@
 /* MIDI Harmony for 1.40C. No stored note/chord lanes are rewritten.
- * TYPE is stored in eight battery bytes e2..e9; ea reserved, eb version.
+ * TYPE is stored in eight battery bytes e2..e9; ea VOIC bits, eb version.
  * Native KEY/scale remains in the Part. Quantizer ec..ee are separate.
  */
     .text
     .include "remix.inc"
     .set MH_NV,0x100b14e2
     .set MH_VERSION,0x100b14eb
+    .set MH_VOIC,0x100b14ea
     .global mh_get,mh_set,mh_source,mh_quant,mh_generate,mh_sequence
     .global mh_boot,mh_defaults,mh_load,mh_save,mh_arp_encoder,mh_note_encoder,mh_draw_type,mh_type_format,mh_keyboard
 
@@ -31,8 +32,49 @@ mh_set:
     cmpi.l #3,%d1
     bhi.s .set_done
     lea MH_NV,%a0
+    cmp.b (%a0,%d0.l),%d1
+    beq.s .set_done
     move.b %d1,(%a0,%d0.l)
+    lea mh_voice_history,%a0
+    move.l %d0,%d1
+    lsl.l #3,%d1
+    clr.l 4(%a0,%d1.l)
 .set_done:
+    rts
+
+/* One AUTO bit per track; ROOT=0. No new native Part/pattern fields. */
+    .global mh_voic_get,mh_voic_set
+mh_voic_get:
+    cmpi.l #7,%d0
+    bhi.s .voic_off
+    move.b MH_VERSION,%d1
+    cmpi.b #0x4a,%d1
+    bne.s .voic_off
+    moveq #0,%d1
+    move.b MH_VOIC,%d1
+    btst %d0,%d1
+    beq.s .voic_off
+    moveq #1,%d0
+    rts
+.voic_off:
+    moveq #0,%d0
+    rts
+mh_voic_set:
+    cmpi.l #7,%d0
+    bhi.s .voic_set_done
+    cmpi.l #1,%d1
+    bhi.s .voic_set_done
+    tst.l %d1
+    beq.s .voic_clear_bit
+    bset %d0,MH_VOIC
+    bra.s .voic_clear_history
+.voic_clear_bit:
+    bclr %d0,MH_VOIC
+.voic_clear_history:
+    lea mh_voice_history,%a0
+    lsl.l #3,%d0
+    clr.l 4(%a0,%d0.l)
+.voic_set_done:
     rts
 
 /* Effective native KEY, decoded to key<<2 | mode<<6; -1 for OFF.
@@ -294,6 +336,13 @@ mh_sequence:
     move.l %d7,%d0
     lea -4(%fp),%a0
     bsr.w mh_generate
+    tst.l %d0
+    ble.s .sequence_not_voiced
+    move.l %d0,-(%sp)
+    move.l %d7,%d0
+    bsr.w mh_voice
+    move.l (%sp)+,%d0
+.sequence_not_voiced:
     lea mh_muted,%a0
     clr.b (%a0,%d7.l)
     tst.l %d0
@@ -406,6 +455,7 @@ mh_reset:
     clr.b 8(%a0)
     moveq #0x4a,%d0
     move.b %d0,MH_VERSION
+    jsr mh_voice_clear
     rts
 mh_defaults:
     lea -12(%sp),%sp
@@ -433,6 +483,7 @@ mh_boot:
     addq.l #1,%d2
     cmpi.l #8,%d2
     bne.s .boot_track
+    jsr mh_voice_clear
     movem.l (%sp),%d0-%d2/%a0
     lea 16(%sp),%sp
     move.b 0x100b14ae,%d0
@@ -445,8 +496,9 @@ mh_boot:
 mh_load:
     cmpi.l #35,%d0
     bne.w .load_stock
-    lea -28(%sp),%sp
+    lea -32(%sp),%sp
     movem.l %d0-%d3/%d5/%a0-%a1,(%sp)
+    clr.l 28(%sp) /* 0=TYPE comment, 1=VOIC comment */
     move.l %d3,%a0
     lea mh_key,%a1
 .load_prefix:
@@ -454,7 +506,15 @@ mh_load:
     move.b (%a1)+,%d0
     beq.s .load_track
     cmp.b (%a0)+,%d0
+    bne.s .load_other_prefix
+    bra.s .load_prefix
+.load_other_prefix:
+    tst.l 28(%sp)
     bne.w .load_done
+    moveq #1,%d0
+    move.l %d0,28(%sp)
+    move.l %d3,%a0
+    lea mh_voic_key,%a1
     bra.s .load_prefix
 .load_track:
     moveq #0,%d2
@@ -494,13 +554,18 @@ mh_load:
 .load_validate:
     cmpi.l #3,%d1
     bhi.s .load_done
-    tst.l 86(%sp) /* loader's parse-only flag at original sp+58 */
+    tst.l 90(%sp) /* loader's parse-only flag at original sp+58 */
     bne.s .load_done
     move.l %d2,%d0
+    tst.l 28(%sp)
+    beq.s .load_type
+    bsr.w mh_voic_set /* independently validates 0..1 */
+    bra.s .load_done
+.load_type:
     bsr.w mh_set
 .load_done:
     movem.l (%sp),%d0-%d3/%d5/%a0-%a1
-    lea 28(%sp),%sp
+    lea 32(%sp),%sp
     jmp 0x40088224
 .load_stock:
     cmp.l %d0,%d5
@@ -531,6 +596,24 @@ mh_save:
     lea 32(%sp),%sp
     tst.l %d0
     bmi.s .save_fail
+    move.l %d7,%d0
+    bsr.w mh_voic_get
+    move.l %d0,-(%sp)
+    move.l %d7,%d0
+    addq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea mh_voic_fmt
+    move.l %d2,-(%sp)
+    jsr (%a4)
+    move.l %d2,-(%sp)
+    jsr (%a3)
+    move.l %d0,-(%sp)
+    move.l %d2,-(%sp)
+    move.l %d3,-(%sp)
+    jsr (%a2)
+    lea 32(%sp),%sp
+    tst.l %d0
+    bmi.s .save_fail
     addq.l #1,%d7
     cmpi.l #8,%d7
     bne.s .save_track
@@ -543,6 +626,8 @@ mh_save:
     jmp 0x40089638
 mh_key: .asciz "#MIDI_HARMONY_TYPE_V1_T"
 mh_fmt: .asciz "#MIDI_HARMONY_TYPE_V1_T%d=%d\r\n"
+mh_voic_key: .asciz "#MIDI_HARMONY_VOIC_V1_T"
+mh_voic_fmt: .asciz "#MIDI_HARMONY_VOIC_V1_T%d=%d\r\n"
     .balign 2
 /* NOTE SETUP F TYPE. Follow's shared callback forwards every non-D knob
  * here; without Follow the stock callback pointer already names this entry.
@@ -710,6 +795,10 @@ mh_keyboard:
     move.b %d0,(%a1,%d2.l)
 .keyboard_no_root:
 .endif
+    /* The root latch above must see the musical root, never the inversion. */
+    move.l %d2,%d0
+    move.l %a2,%a0
+    bsr.w mh_voice
     /* Record the physical key once, independently of snapping/live voices. */
     move.l %d5,-(%sp)
     move.l %d4,-(%sp)
