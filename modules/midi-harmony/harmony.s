@@ -989,18 +989,7 @@ mh_keyboard:
     move.b (%a2),%d0
     move.l %d2,%d1
     bsr.w mh_final
-    cmpi.l #127,%d0
-    bhi.s .keyboard_no_root
-.keyboard_mod:
-    cmpi.l #12,%d0
-    blt.s .keyboard_latch
-    subi.l #12,%d0
-    bra.s .keyboard_mod
-.keyboard_latch:
-    addi.l #36,%d0
-    lea bf_roots,%a1
-    move.b %d0,(%a1,%d2.l)
-.keyboard_no_root:
+    bsr.w mh_latch_key_root
 .endif
     /* The root latch above must see the musical root, never the inversion. */
     move.l %d2,%d0
@@ -1074,6 +1063,12 @@ mh_keyboard:
 .keyboard_passthrough:
     tst.l %d4
     beq.s .keyboard_stock
+.ifdef HAVE_FOLLOW
+    /* Bypass still publishes the physical root; do not change the stock
+     * sender/recorder arguments or quantize a HARM OFF / KEY OFF key. */
+    move.l %d3,%d0
+    bsr.w mh_latch_key_root
+.endif
     move.l #0xfeffffff,(%a3)
     bra.s .keyboard_stock
 .keyboard_done:
@@ -1087,6 +1082,23 @@ mh_stock_key:
     lea -28(%sp),%sp
     movem.l %d2-%d7/%a2,(%sp)
     jmp 0x4009e9b0
+.ifdef HAVE_FOLLOW
+/* d0=logical pitch, d2=track. Note-ons only; releases never change the root. */
+mh_latch_key_root:
+    cmpi.l #127,%d0
+    bhi.s .key_root_done
+.key_root_mod:
+    cmpi.l #12,%d0
+    blt.s .key_root_store
+    subi.l #12,%d0
+    bra.s .key_root_mod
+.key_root_store:
+    addi.l #36,%d0
+    lea bf_roots,%a1
+    move.b %d0,(%a1,%d2.l)
+.key_root_done:
+    rts
+.endif
 /* Stock recorder tail, without transmitting or owning a MIDI voice.
  * Same four arguments and saved-register frame as mh_stock_key. Resolve
  * the native Part channel exactly as 0x4009e9c0..0x4009e9f8, then enter its

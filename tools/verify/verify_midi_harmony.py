@@ -246,7 +246,23 @@ def keyboard_gate():
     u.mem_write(0x46c76fec,b'\x40')
     m.setting(0,0)
     assert key(61,100)==[(61,100)]
+    if 'bf_roots' in m.sym:assert u.mem_read(m.sym['bf_roots'],1)==bytes((37,)), 'HARM OFF keyboard must publish C# root'
     assert key(61,100)==[(61,100)] # bypass repeats retain the stock call path
+    if 'bf_roots' in m.sym:
+        assert forwarded[-1]==(0,61,100,1) # native recorder still owns bypass notes
+        assert key(65,100)==[(65,100)]
+        assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))
+        assert key(65,0)==[(65,0)]
+        assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,)) # release retains latest root
+        # An arp tick using a live pool must not relatch unrelated stored C.
+        u.mem_write(0x46c77b1e,b'\x01')
+        lane=0x46c76dc0;frame=m.scratch+0x200
+        u.mem_write(lane+0x220,bytes((60,)))
+        u.mem_write(lane+0x22c,bytes((64,)))
+        u.mem_write(frame-64,bytes(4))
+        m.call('bf_capture',stop=0x4009fb08,regs={UC_M68K_REG_D7:0,UC_M68K_REG_A5:lane,UC_M68K_REG_A6:frame})
+        assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))
+        u.mem_write(0x46c77b1e,b'\x00')
     m.setting(0,2)
     assert key(61,0)==[(61,0)] # enabling Harmony must still release stock press
     assert key(48,100)==[(48,100),(52,100),(55,100)]
@@ -254,6 +270,7 @@ def keyboard_gate():
     assert key(48,0)==[(48,0),(52,0),(55,0)]
     m.setting(0,2);u.mem_write(0x46c76df1,b'\0')
     assert key(61,100)==[(61,100)]
+    if 'bf_roots' in m.sym:assert u.mem_read(m.sym['bf_roots'],1)==bytes((37,)), 'KEY OFF must still publish live root'
     m.setting(0,2)
     assert key(61,0)==[(61,0)] # KEY OFF-to-on has the same ownership rule
     m.setting(0,1)

@@ -236,6 +236,7 @@ Use `--recording-only` with the port script for these focused cases.
 Use `--voicing-only` for AUTO sequence/keyboard/arp, recorded physical roots,
 SPRD variants, Harmony-page controls, and actual save/reload/warm-resume checks. These also
 produce the Harmony window screenshot at `out/harmony-port-suite/harmony-page/page.png`.
+Use `--bypass-follow-only` for live HARM OFF / KEY OFF source roots driving rhythmic followers.
 Use `--octave-only` for live C-minor octave jumps in TRI/7TH with every spacing.
 Use `--spread-only` for the ten spaced sequence/arp and follower-root cases.
 Use `--inversions-only` for manual inversions, stock arp, follower-root identity,

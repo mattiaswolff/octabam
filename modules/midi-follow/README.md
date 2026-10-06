@@ -191,3 +191,19 @@ With HARM NOTE, TRI or 7TH enabled, the follower root is snapped into the
 inherited scale after TRAN/P-locks, then any chord tones are built from that
 scale degree. Arp output also receives a final scale correction. With HARM OFF, the standalone chromatic offset
 behaviour described above is retained.
+
+
+### Live source with Harmony bypassed
+
+When MIDI Harmony is installed, chromatic key presses publish the source
+root even with its HARM OFF or KEY OFF. A rhythmic follower can use RFOL
+with its own HARM OFF, NOTE, TRI or 7TH. Bypassed source keys keep the stock
+sound and recording path; the root is the physical key's pitch class.
+Note-offs retain the last played root. Arp-only ticks from a live keyboard
+pool must not replace it with the source's unrelated stored NOTE. Ordinary
+source pattern trigs still publish their own root when they occur.
+
+Run `verify_midi_harmony_port.py --bypass-follow-only --project /path/to/template`
+for live-source/follower UART regressions with source arp on/off and KEY OFF.
+The keyboard linked-code gate also checks bypass recording arguments, root
+retention on release, and protection from stale stored NOTE during live arp.

@@ -410,6 +410,45 @@ def auto_voicing(source):
     return results
 
 
+def bypass_follow(source):
+    """A live source publishes its root even when Harmony/KEY is bypassed."""
+    sym=harmony.symbols();results={}
+    if 'bf_sources' not in sym:return results
+    for source_type,key_raw,dest_type in ((0,1,0),(0,1,1),(0,1,2),(2,0,0),(1,1,1)):
+        for arp in (False,True):
+            name=f'bypass-follow-{source_type}-{key_raw}-{dest_type}-{int(arp)}'
+            work=fixture(source,name,{0:source_type,1:dest_type},arp=arp,key_raw=key_raw)
+            for path in (work/'project').glob('bank*.work'):
+                def mutate(data):
+                    for pattern in range(16):
+                        for track in (0,2):
+                            at=0x492e+pattern*0x8eec+track*0x8b9
+                            data[at+9:at+33]=bytes(24) # source has no programmed trigs
+                    for part in range(8):
+                        base=otp.PART_BASE+part*otp.PART_STRIDE+9
+                        data[base+0x3e2+32+14]=0 # follower emits its own rhythmic chord
+                otp._bank_write(work/'project',int(path.stem[4:]),mutate,guard=False)
+            card,_=emu_card.stage_project(work/'project','OCTABAM','BASS',tree=work/'tree')
+            (work/'card.img').write_bytes(card)
+            script=work/'keys.txt'
+            script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 5 down\n1500 key 0x28 down\n1600 key 0x28 up\n5000 key 5 up\n6000 key 0x27 down\n6100 key 0x27 up\n6800 quit\n')
+            events=run(work,'keys',['--step','-:poke:0x80000015=1',
+                       '--step','-:poke:0x460d16f3=1','--step','-:poke:0x100b14cc=1',
+                       '--step',f'-:call:{sym["bf_encoder"]:#x},3,1',
+                       '--step','-:poke:0x100b14cc=0','--internal-clock','--live-script',script,
+                       '--mem-dump',f'{sym["bf_roots"]:#x},8={work}/roots.bin'])
+            balanced(events)
+            bass=[e[2] for e in events if e[:2]==('on',2)]
+            want={41,45,48} if dest_type==2 else {41}
+            assert bass and set(bass)==want,(name,bass,want)
+            assert (work/'roots.bin').read_bytes()[0]==41,(name,'lost live F root')
+            lead=[e[2] for e in events if e[:2]==('on',1)]
+            assert lead and set(lead)=={53},(name,lead)
+            results[name]=dict(leader=lead,follower=bass)
+            print(f'  [ok] {name}: live F drives rhythmic follower, including source arp ticks',flush=True)
+    return results
+
+
 def octave_output(source):
     """Real chromatic keys: octave selection must survive AUTO's history."""
     results={}
@@ -525,12 +564,17 @@ def manual_inversions(source):
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
+    ap.add_argument('--bypass-follow-only',action='store_true',help='live HARM OFF / KEY OFF source with rhythmic MIDI followers')
     ap.add_argument('--octave-only',action='store_true',help='live AUTO octave-jump regressions in C minor')
     ap.add_argument('--recording-only',action='store_true',help='run the recording and explicit-empty-lock regressions')
     ap.add_argument('--spread-only',action='store_true',help='run the spaced sequence/arp and follower-root cases')
     ap.add_argument('--inversions-only',action='store_true',help='manual MIDI/arp/follow, recording and persistence')
     ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
+    if a.bypass_follow_only:
+        cases=bypass_follow(a.project)
+        (OUT/'result-bypass-follow.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.octave_only:
         cases=octave_output(a.project)
         (OUT/'result-octave.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
@@ -561,6 +605,7 @@ def main():
     cases.update(persistence(a.project))
     cases.update(auto_voicing(a.project))
     cases.update(octave_output(a.project))
+    cases.update(bypass_follow(a.project))
     cases.update(spread_output(a.project))
     cases.update(manual_inversions(a.project))
     cases.update(persistence(a.project,4,1))

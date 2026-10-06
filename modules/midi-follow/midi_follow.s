@@ -71,6 +71,16 @@ bf_capture:
     jsr mh_active
     andi.l #3,%d0
     bne.s .capture_done /* Harmony keyboard roots must survive arp-only ticks. */
+    /* HARM OFF / KEY OFF live pools also have a root published by the
+     * keyboard. Never replace it with the unrelated stored NOTE lane. */
+    move.l %d7,%d0
+    lsl.l #2,%d0
+    add.l %d7,%d0
+    add.l %d0,%d0
+    lea 0x46c77b1e,%a0
+    move.b (%a0,%d0.l),%d1
+    cmpi.b #1,%d1
+    beq.s .capture_done
     .endif
     move.l -64(%fp),%d1
     bsr.w bf_latch
