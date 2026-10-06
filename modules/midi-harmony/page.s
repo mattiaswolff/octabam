@@ -2,6 +2,7 @@
  * NOTE SETUP F press opens it; A=HARM, B=VOIC, C=SPRD. Native ARP KEY stays put.
  * Track is fixed while open. Track/page keys close the window; a subsequent
  * press selects the track/page. Transport and chromatic keys pass through.
+ * Six-cell layout: top row HARM/VOIC/SPRD, lower row reserved; track in footer.
  * Values use the stock PLAYBACK 4/2/3-position selector widgets.
  * No UI-task/ISR hook: redraw only on open or an encoder edit.
  */
@@ -131,29 +132,6 @@ mh_page_draw:
     move.l %a5,-(%sp)
     jsr 0x40035624
     addq.l #4,%sp
-    move.l mh_page_track,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea .page_title
-    move.l %a2,-(%sp)
-    jsr 0x40013a08
-    lea 12(%sp),%sp
-    moveq #5,%d0
-    moveq #44,%d1
-    move.l %a2,%a0
-    bsr.w .page_text
-    moveq #5,%d0
-    moveq #30,%d1
-    lea .page_harm_label,%a0
-    bsr.w .page_text
-    moveq #44,%d0
-    moveq #30,%d1
-    lea .page_voic_label,%a0
-    bsr.w .page_text
-    moveq #83,%d0
-    moveq #30,%d1
-    lea .page_sprd_label,%a0
-    bsr.w .page_text
     /* Native PLAYBACK selectors: exact count, with our value formatters.
      * ABI: widget(x,y,slot,value,flags,formatter,surface).
      * Full layout, no lock highlight; the modal owns its own surface.
@@ -161,25 +139,49 @@ mh_page_draw:
     move.l mh_page_track,%d0
     jsr mh_get
     move.l %d0,%d1
-    moveq #7,%d0
+    moveq #10,%d0
     lea mh_type_format,%a0
     lea 0x40046c28,%a1 /* four positions */
     bsr.w .page_selector
     move.l mh_page_track,%d0
     jsr mh_voic_get
     move.l %d0,%d1
-    moveq #46,%d0
+    moveq #49,%d0
     lea mh_page_voic_format,%a0
     lea 0x40046f10,%a1 /* two positions */
     bsr.w .page_selector
     move.l mh_page_track,%d0
     jsr mh_sprd_get
     move.l %d0,%d1
-    moveq #85,%d0
+    moveq #87,%d0
     lea mh_page_sprd_format,%a0
     lea 0x40046d9c,%a1 /* three positions */
     bsr.w .page_selector
-    moveq #5,%d0
+    bsr.w .page_grid
+    move.l mh_page_track,%d0
+    addq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea .page_title
+    move.l %a2,-(%sp)
+    jsr 0x40013a08
+    lea 12(%sp),%sp
+    moveq #4,%d0
+    moveq #4,%d1
+    move.l %a2,%a0
+    bsr.w .page_text
+    moveq #12,%d0
+    moveq #52,%d1
+    lea .page_harm_label,%a0
+    bsr.w .page_text
+    moveq #51,%d0
+    moveq #52,%d1
+    lea .page_voic_label,%a0
+    bsr.w .page_text
+    moveq #89,%d0
+    moveq #52,%d1
+    lea .page_sprd_label,%a0
+    bsr.w .page_text
+    moveq #85,%d0
     moveq #4,%d1
     lea .page_back,%a0
     bsr.w .page_text
@@ -189,13 +191,33 @@ mh_page_draw:
     movem.l (%sp),%d2-%d3/%a2/%a5
     lea 44(%sp),%sp
     rts
+.page_grid: /* Stock line/box primitive; six cells above a shared footer. */
+    lea -8(%sp),%sp
+    movem.l %d2/%a2,(%sp)
+    moveq #4,%d2
+    lea .page_grid_lines,%a2
+.page_grid_line:
+    pea 1
+    move.l 12(%a2),-(%sp)
+    move.l 8(%a2),-(%sp)
+    move.l 4(%a2),-(%sp)
+    move.l (%a2),-(%sp)
+    move.l %a5,-(%sp)
+    jsr 0x40012254
+    lea 24(%sp),%sp
+    lea 16(%a2),%a2
+    subq.l #1,%d2
+    bne.s .page_grid_line
+    movem.l (%sp),%d2/%a2
+    lea 8(%sp),%sp
+    rts
 .page_selector: /* d0=x,d1=value,a0=formatter,a1=stock widget,a5=surface */
     move.l %a5,-(%sp)
     move.l %a0,-(%sp)
     clr.l -(%sp) /* flags: full widget, no highlight */
     move.l %d1,-(%sp)
     clr.l -(%sp) /* slot is unused by these stock widgets */
-    pea 9
+    pea 36
     move.l %d0,-(%sp)
     jsr (%a1)
     lea 28(%sp),%sp
@@ -231,9 +253,9 @@ mh_page_sprd_format:
     lea 24(%sp),%sp
     rts
 .page_title: .asciz "HARMONY T%d"
-.page_harm_label: .asciz "A HARM"
-.page_voic_label: .asciz "B VOIC"
-.page_sprd_label: .asciz "C SPRD"
+.page_harm_label: .asciz "HARM"
+.page_voic_label: .asciz "VOIC"
+.page_sprd_label: .asciz "SPRD"
 .page_close: .asciz "CLOSE"
 .page_open: .asciz "OPEN"
 .page_wide: .asciz "WIDE"
@@ -241,6 +263,11 @@ mh_page_sprd_format:
 .page_auto: .asciz "AUTO"
 .page_back: .asciz "NO:BACK"
     .balign 4
+.page_grid_lines:
+    .long 38,12,38,58
+    .long 77,12,77,58
+    .long 0,35,115,35
+    .long 0,12,115,12
 .page_voices: .long .page_root,.page_auto
 .page_spreads: .long .page_close,.page_open,.page_wide
 mh_page_layer:

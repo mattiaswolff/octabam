@@ -15,8 +15,11 @@ Knob **A: HARM** edits the same setting; knob **B: VOIC** selects **ROOT**
 Knob **C: SPRD** selects **CLOSE** (default), **OPEN** or **WIDE**.
 The controls use the stock PLAYBACK selector graphics: four positions for
 HARM, two for VOIC and three for SPRD, with the value printed underneath.
+They occupy the top row of a six-cell grid, matching the physical encoder
+positions without letter prefixes. The lower row is empty and inactive;
+the footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
-also close it; press again to select another track/page. The title identifies
+also close it; press again to select another track/page. The footer identifies
 the track being edited. Transport and chromatic trig keys remain usable.
 The other encoders are inactive, leaving room for future controls. Turning F on NOTE SETUP still edits HARM directly.
 
