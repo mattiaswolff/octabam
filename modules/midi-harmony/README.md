@@ -101,6 +101,14 @@ Voicing is applied before the stock arp, which therefore plays the chosen
 inversion too. A follower with its own HARM TRI/7TH and VOIC AUTO chooses its
 own inversions, using the inherited root and scale.
 
+Deliberate octave jumps move the voicing too: C3 → C4 raises every voice
+one octave, including an already inverted or OPEN/WIDE chord. Before scoring,
+AUTO shifts its previous chord by the whole-octave portion of the logical
+root's change (toward zero: +12…+23 means +12; −12…−23 means −12).
+Smaller root changes keep ordinary voice leading; crossing B3 → C4 does not
+force an octave jump. MIDI limits still apply. This uses transient history
+only; project settings and recorded notes are unchanged.
+
 The bounded search considers each inversion at octave offsets 0, -12 and
 +12. Each starts as a compact inversion within one octave, then applies the
 selected spread. Every sounded candidate must remain inside MIDI 0–127 and
@@ -228,6 +236,7 @@ Use `--recording-only` with the port script for these focused cases.
 Use `--voicing-only` for AUTO sequence/keyboard/arp, recorded physical roots,
 SPRD variants, Harmony-page controls, and actual save/reload/warm-resume checks. These also
 produce the Harmony window screenshot at `out/harmony-port-suite/harmony-page/page.png`.
+Use `--octave-only` for live C-minor octave jumps in TRI/7TH with every spacing.
 Use `--spread-only` for the ten spaced sequence/arp and follower-root cases.
 Use `--inversions-only` for manual inversions, stock arp, follower-root identity,
 root omission, physical-key recording/replay and manual-VOIC/OMIT save/reload/warm resume.
@@ -283,3 +292,13 @@ of that path. It does not repair notes already recorded by OCTABAM4. The
 reported single-note playback has not been reproduced in the port: even
 explicit empty extra-note locks still generated chords with HARM and KEY
 active. That hardware symptom remains to be checked with the corrected image.
+
+### AUTO octave regression (OCTABAM5 hardware report)
+
+With C minor, HARM TRI, VOIC AUTO, SPRD OPEN, OMIT OFF, play C3 → C4 → C3.
+Expect C3–G3–E♭4 → C4–G4–E♭5 → C3–G3–E♭4, with no stuck notes.
+OCTABAM5 incorrectly reused the first chord for both roots; the emulator
+reproduced that failure through actual chromatic-key events. Repeat with
+7TH and other spacing choices, then C → F to retain smooth voice leading.
+The automated regressions live in the linked gate and full-firmware suite;
+a passing emulator run is not hardware acceptance of the corrected build.

@@ -301,6 +301,40 @@ def keyboard_gate():
     print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
 
 
+def register_reference(previous,old_root,new_root):
+    # Preserve deliberate register jumps, with sub-octave moves voice-led.
+    delta=new_root-old_root
+    shift=(abs(delta)//12)*12*(1 if delta>=0 else -1)
+    return [n+shift for n in previous]
+
+
+def octave_gate():
+    m=Machine();u=m.uc
+    def voice(root):
+        raw=m.chord(0,root)
+        u.mem_write(m.scratch,bytes(raw));m.call('mh_voice',0,a0=m.scratch)
+        return list(u.mem_read(m.scratch,4))
+    for kind in (2,3):
+        for mode in (0,5):
+            for spread in range(3):
+                for omit in (0,1):
+                    m.setting(0,kind,0,mode);m.call('mh_voic_set',0,1)
+                    m.call('mh_sprd_set',0,spread);m.call('mh_omit_set',0,omit)
+                    original=voice(48)
+                    assert voice(60)==[n+12 for n in original]
+                    assert voice(84)==[n+36 for n in original]
+                    assert voice(48)==original
+                    inverted=voice(53) # retains nearby C -> F voice leading
+                    assert voice(65)==[n+12 for n in inverted]
+                    assert voice(41)==[n-12 for n in inverted]
+                    assert voice(53)==inverted
+    # Crossing C within a small interval must not force an octave shift.
+    m.setting(0,2);m.call('mh_voic_set',0,1);m.call('mh_sprd_set',0,0);m.call('mh_omit_set',0,0)
+    assert voice(59)==[59,62,65,59]
+    assert voice(60)==[60,64,67,60]
+    print('  [ok] AUTO register: octave and multi-octave jumps, prior inversions, spread/omit and adjacent B-C')
+
+
 def voicing_gate():
     """Compare linked search against all compact MIDI voicings, not its loops."""
     m=Machine();u=m.uc
@@ -345,8 +379,9 @@ def voicing_gate():
                         all_notes=[n for n in range(128) if n%12 in pcs]
                         candidates=[all_notes[i:i+count] for i in range(len(all_notes)-count+1)
                                     if all_notes[i+count-1]-all_notes[i]<12 and abs(all_notes[i]-raw[0])<=12]
-                        assert cost(pitches,previous)==min(cost(c,previous) for c in candidates)
-                    previous=pitches
+                        target=register_reference(previous,previous_root,raw[0])
+                        assert cost(pitches,target)==min(cost(c,target) for c in candidates)
+                    previous=pitches;previous_root=raw[0]
     m.setting(0,2);m.call('mh_voic_set',0,1)
     assert voice(0,m.chord(0,48))==[48,52,55,48]
     assert voice(0,m.chord(0,53))==[48,53,57,48]
@@ -425,11 +460,13 @@ def spread_gate():
                                     spaced=spread_notes(close,spread)
                                     if spaced is not None:candidates.append(spaced)
                             if not auto or previous is None or not candidates:assert actual[:count]==seed
-                            else:assert cost(actual[:count],previous)==min(cost(c,previous) for c in candidates)
+                            else:
+                                target=register_reference(previous,previous_root,raw[0])
+                                assert cost(actual[:count],target)==min(cost(c,target) for c in candidates)
                             assert actual[:count]==sorted(set(actual[:count]))
                             assert {p%12 for p in actual[:count]}==pcs
                             if count==3:assert actual[3]==actual[0]
-                            previous=actual[:count]
+                            previous=actual[:count];previous_root=raw[0]
     # Per-track packed settings preserve one another and reject invalid writes.
     for t in range(8):
         for kind in range(4):
@@ -665,6 +702,7 @@ def main():
     machine_gate()
     final_note_gate()
     keyboard_gate()
+    octave_gate()
     voicing_gate()
     inversion_gate()
     omit_gate()

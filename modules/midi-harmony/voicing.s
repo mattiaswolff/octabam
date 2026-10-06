@@ -8,6 +8,9 @@
  * This first minimizes total movement, then maximizes held common voices.
  * Exact ties prefer root position, then the earlier inversion/offset.
  * Score the actual spread pitches, not an unspread intermediate chord.
+ * Root jumps of >=12 semitones shift the reference by their whole-octave
+ * component (toward zero). Small root moves retain ordinary voice leading.
+ * History's token high byte holds the previous logical root, not the bass.
  * First chord/context change seeds root position with the chosen spread. Incomplete top-of-MIDI
  * chords keep the generator's omission behavior and invalidate history.
  */
@@ -23,7 +26,7 @@ mh_voice_clear:
     rts
 
 mh_voice:
-    lea -84(%sp),%sp
+    lea -88(%sp),%sp
     movem.l %d0-%d7/%a0-%a4,(%sp)
     cmpi.l #7,%d0
     bhi.w .voice_done
@@ -89,11 +92,31 @@ mh_voice:
     cmpi.l #1,%d0
     bne.w .voice_remember
     move.l 72(%sp),%d5
-    cmp.l 4(%a2),%d5
+    move.l 4(%a2),%d0
+    andi.l #0x00ffffff,%d0 /* root register is not a context change */
+    cmp.l %d0,%d5
     bne.w .voice_remember
     moveq #0,%d0
     move.b (%a3),%d0
     move.l %d0,68(%sp) /* anchor root */
+    moveq #0,%d1
+    move.b 4(%a2),%d1 /* previous logical root in token's high byte */
+    sub.l %d1,%d0
+    moveq #0,%d1
+.voice_register_up:
+    cmpi.l #12,%d0
+    blt.s .voice_register_down
+    subi.l #12,%d0
+    addi.l #12,%d1
+    bra.s .voice_register_up
+.voice_register_down:
+    cmpi.l #-12,%d0
+    bgt.s .voice_register_ready
+    addi.l #12,%d0
+    subi.l #12,%d1
+    bra.s .voice_register_down
+.voice_register_ready:
+    move.l %d1,84(%sp) /* signed reference shift; never stored as a pitch */
     move.l #0x7fffffff,%d0
     move.l %d0,64(%sp)
     moveq #0,%d4 /* inversion */
@@ -142,6 +165,7 @@ mh_voice:
     move.b (%a0,%d3.l),%d0
     moveq #0,%d1
     move.b (%a2,%d3.l),%d1
+    add.l 84(%sp),%d1
     sub.l %d1,%d0
     beq.s .voice_same
     bpl.s .voice_positive
@@ -179,6 +203,7 @@ mh_voice:
     move.l 56(%sp),(%a4)
     move.l 56(%sp),(%a2)
     move.l 72(%sp),4(%a2)
+    move.b 52(%sp),4(%a2) /* preserve root independently of chosen inversion */
     move.l 80(%sp),%d0
     cmpi.l #1,%d0
     beq.s .voice_omit
@@ -198,7 +223,7 @@ mh_voice:
     clr.l 4(%a2)
 .voice_done:
     movem.l (%sp),%d0-%d7/%a0-%a4
-    lea 84(%sp),%sp
+    lea 88(%sp),%sp
     rts
 /* Remove the harmonic root pitch class from all four pool entries.
  * Fill unused slots by duplicating the lowest remaining tone for stock arp.

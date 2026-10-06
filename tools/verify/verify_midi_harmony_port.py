@@ -410,6 +410,28 @@ def auto_voicing(source):
     return results
 
 
+def octave_output(source):
+    """Real chromatic keys: octave selection must survive AUTO's history."""
+    results={}
+    for kind in (2,3):
+        for spread in range(3):
+            name=f'auto-octave-{kind}-{spread}'
+            work=fixture(source,name,{0:kind},key_raw=2,auto=(0,),spreads={0:spread})
+            script=work/'keys.txt'
+            script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 0 down\n1500 key 0 up\n2000 key 12 down\n2500 key 12 up\n3000 key 0 down\n3500 key 0 up\n4300 quit\n')
+            events=run(work,'keys',['--step','-:poke:0x80000015=1',
+                       '--step','-:poke:0x460d16f3=1','--step','-:poke:0x100b14cc=0',
+                       '--live-script',script])
+            balanced(events)
+            base=harmony.spread_notes([48,51,55]+([58] if kind==3 else []),spread)
+            want=base+[n+12 for n in base]+base
+            pitches=[e[2] for e in events if e[0]=='on']
+            assert pitches==want,(name,pitches,want)
+            results[name]=pitches
+            print(f'  [ok] {name}: C minor up/down an octave, balanced live note releases',flush=True)
+    return results
+
+
 def spread_output(source):
     results={};sym=harmony.symbols();has_follow='bf_sources' in sym
     # Fixed, musically readable expectations independently pin the candidate
@@ -503,11 +525,16 @@ def manual_inversions(source):
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
+    ap.add_argument('--octave-only',action='store_true',help='live AUTO octave-jump regressions in C minor')
     ap.add_argument('--recording-only',action='store_true',help='run the recording and explicit-empty-lock regressions')
     ap.add_argument('--spread-only',action='store_true',help='run the spaced sequence/arp and follower-root cases')
     ap.add_argument('--inversions-only',action='store_true',help='manual MIDI/arp/follow, recording and persistence')
     ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
+    if a.octave_only:
+        cases=octave_output(a.project)
+        (OUT/'result-octave.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.inversions_only:
         cases=manual_inversions(a.project);cases.update(recording(a.project));cases.update(persistence(a.project,4,1))
         (OUT/'result-inversions.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
@@ -533,6 +560,7 @@ def main():
     cases.update(empty_note_locks(a.project))
     cases.update(persistence(a.project))
     cases.update(auto_voicing(a.project))
+    cases.update(octave_output(a.project))
     cases.update(spread_output(a.project))
     cases.update(manual_inversions(a.project))
     cases.update(persistence(a.project,4,1))
