@@ -69,18 +69,25 @@ mh_voice:
     moveq #0,%d0
     move.b (%a3,%d3.l),%d0
     cmpi.l #127,%d0
-    bhi.w .voice_reset
+    bhi.w .voice_partial
     cmp.l %d1,%d0
-    ble.w .voice_reset
+    ble.w .voice_partial
     move.l %d0,%d1
     addq.l #1,%d3
     cmp.l %d6,%d3
     blt.s .voice_validate
     lea 56(%sp),%a0
+    move.l 80(%sp),%d0
+    cmpi.l #2,%d0
+    blt.s .voice_apply_spread
+    subq.l #1,%d0
+    bsr.w mh_invert
+.voice_apply_spread:
     move.l 76(%sp),%d0
     bsr.w mh_spread /* Failure leaves CLOSE intact at the MIDI ceiling. */
-    tst.l 80(%sp)
-    beq.w .voice_remember
+    move.l 80(%sp),%d0
+    cmpi.l #1,%d0
+    bne.w .voice_remember
     move.l 72(%sp),%d5
     cmp.l 4(%a2),%d5
     bne.w .voice_remember
@@ -172,8 +179,20 @@ mh_voice:
     move.l 56(%sp),(%a4)
     move.l 56(%sp),(%a2)
     move.l 72(%sp),4(%a2)
-    tst.l 80(%sp)
-    beq.s .voice_reset
+    move.l 80(%sp),%d0
+    cmpi.l #1,%d0
+    beq.s .voice_omit
+.voice_partial:
+    clr.l 4(%a2)
+.voice_omit:
+    move.l (%sp),%d0 /* original track, not the search scratch register */
+    jsr mh_omit_get
+    tst.l %d0
+    beq.s .voice_done
+    moveq #0,%d1
+    move.b 52(%sp),%d1 /* original harmonic root, before inversion */
+    move.l %a4,%a0
+    bsr.w mh_omit_root
     bra.s .voice_done
 .voice_reset:
     clr.l 4(%a2)
@@ -181,6 +200,101 @@ mh_voice:
     movem.l (%sp),%d0-%d7/%a0-%a4
     lea 84(%sp),%sp
     rts
+/* Remove the harmonic root pitch class from all four pool entries.
+ * Fill unused slots by duplicating the lowest remaining tone for stock arp.
+ * An empty result is all FF: sequence converts it to a safe muted pool;
+ * keyboard skips invalid notes but still records/releases the physical key.
+ */
+    .global mh_omit_root
+mh_omit_root:
+    lea -24(%sp),%sp
+    movem.l %d0-%d4,(%sp)
+    moveq #-1,%d0
+    move.l %d0,20(%sp)
+.omit_root_mod:
+    cmpi.l #12,%d1
+    blt.s .omit_root_start
+    subi.l #12,%d1
+    bra.s .omit_root_mod
+.omit_root_start:
+    moveq #0,%d2
+    moveq #0,%d3
+.omit_root_next:
+    moveq #0,%d4
+    move.b (%a0,%d2.l),%d4
+    cmpi.l #127,%d4
+    bhi.s .omit_root_skip
+    move.l %d4,%d0
+.omit_note_mod:
+    cmpi.l #12,%d0
+    blt.s .omit_note_test
+    subi.l #12,%d0
+    bra.s .omit_note_mod
+.omit_note_test:
+    cmp.l %d1,%d0
+    beq.s .omit_root_skip
+    move.b %d4,20(%sp,%d3.l)
+    addq.l #1,%d3
+.omit_root_skip:
+    addq.l #1,%d2
+    cmpi.l #4,%d2
+    blt.s .omit_root_next
+    tst.l %d3
+    beq.s .omit_root_copy
+    move.b 20(%sp),%d0
+.omit_root_pad:
+    cmpi.l #4,%d3
+    bge.s .omit_root_copy
+    move.b %d0,20(%sp,%d3.l)
+    addq.l #1,%d3
+    bra.s .omit_root_pad
+.omit_root_copy:
+    move.l 20(%sp),(%a0)
+    movem.l (%sp),%d0-%d4
+    lea 24(%sp),%sp
+    rts
+
+/* Manual inversion: d0=1..3, d6=count, a0=sorted complete root chord.
+ * Clamp to count-1 (3RD on a triad uses 2ND). Raise each rotated note by
+ * one octave. Atomic fallback to root position if any pitch exceeds 127.
+ * Registers preserved. Spread is applied afterward by the caller.
+ */
+    .global mh_invert
+mh_invert:
+    lea -28(%sp),%sp
+    movem.l %d0-%d4/%a1,(%sp)
+    cmp.l %d6,%d0
+    blt.s .invert_start
+    move.l %d6,%d0
+    subq.l #1,%d0
+.invert_start:
+    move.l (%a0),24(%sp)
+    lea 24(%sp),%a1
+    moveq #0,%d2
+.invert_pitch:
+    move.l %d0,%d1
+    add.l %d2,%d1
+    moveq #0,%d3
+    cmp.l %d6,%d1
+    blt.s .invert_unwrapped
+    sub.l %d6,%d1
+    moveq #12,%d3
+.invert_unwrapped:
+    moveq #0,%d4
+    move.b (%a0,%d1.l),%d4
+    add.l %d4,%d3
+    cmpi.l #127,%d3
+    bhi.s .invert_done
+    move.b %d3,(%a1,%d2.l)
+    addq.l #1,%d2
+    cmp.l %d6,%d2
+    blt.s .invert_pitch
+    move.l (%a1),(%a0)
+.invert_done:
+    movem.l (%sp),%d0-%d4/%a1
+    lea 28(%sp),%sp
+    rts
+
 /* d0 spread, d6 count, a0 sorted close chord. d0=success; other regs
  * preserved. OPEN lifts the second-lowest voice an octave and sorts it to
  * the end. WIDE lifts every voice above the bass one octave. No partial

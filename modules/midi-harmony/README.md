@@ -11,12 +11,13 @@ On a MIDI track, open **NOTE SETUP** (FUNC + SRC). Knob **F: HARM** selects:
 
 **Press knob F on NOTE SETUP** to open the dedicated **HARMONY** window.
 Knob **A: HARM** edits the same setting; knob **B: VOIC** selects **ROOT**
-(default, root-position chords) or **AUTO** (automatic voice leading).
+(default), **1ST**, **2ND**, **3RD** or **AUTO** (automatic voice leading).
 Knob **C: SPRD** selects **CLOSE** (default), **OPEN** or **WIDE**.
+Knob **D: OMIT** selects **OFF** (default) or **ROOT**.
 The controls use the stock PLAYBACK selector graphics: four positions for
-HARM, two for VOIC and three for SPRD, with the value printed underneath.
+HARM, five for VOIC and three for SPRD, with the value printed underneath.
 They occupy the top row of a six-cell grid, matching the physical encoder
-positions without letter prefixes. The lower row is empty and inactive;
+positions without letter prefixes. OMIT occupies the lower-left cell; the other two lower cells are inactive;
 the footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The footer identifies
@@ -69,10 +70,25 @@ NOTE and snaps when Harmony plays it. Shared chord tones do not suppress
 a new key's recording. Playback regenerates the chord from NOTE, including
 when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
 
-HARM, VOIC and SPRD are stored per MIDI track per **project**, not per Part/pattern. They are
+HARM, VOIC, SPRD and OMIT are stored per MIDI track per **project**, not per Part/pattern. They are
 saved in backward-compatible project comment lines and survive battery-RAM
 resume. KEY remains a native Part setting. MIDI Follow's RFOL selection is
 still its existing volatile setting; select it again after power-up.
+
+## Manual inversions
+
+VOIC ROOT keeps the generated root-position chord. 1ST, 2ND and 3RD rotate
+one, two or three lower chord tones upward by an octave. With CLOSE spacing,
+C3–E3–G3 becomes E3–G3–C4 (1ST) or G3–C4–E4 (2ND). For C3–E3–G3–B3,
+3RD gives B3–C4–E4–G4. On a triad, 3RD uses 2ND; changing back to 7TH
+restores the selected 3RD inversion. SPRD applies after inversion.
+
+Manual inversions affect the next triggered chord, including the stock arp,
+and do not use previous-chord history. The logical root and the recorded
+physical key are unchanged. If an inversion exceeds MIDI 127, keep root
+position and apply SPRD if it fits; an already incomplete chord keeps the
+generator's omission behavior. Existing ROOT/AUTO projects keep their choices.
+HARM, VOIC, SPRD and OMIT are track defaults, not parameter-lock destinations.
 
 ## Automatic voice leading
 
@@ -96,7 +112,7 @@ claim to reproduce OXI's unpublished implementation. At most twelve candidates
 of four voices are considered per chord; there is no unbounded search.
 
 The first chord uses root position with the selected spread. History is per track and shared between
-that track's keyboard and sequence. HARM/VOIC/SPRD edits, project load,
+that track's keyboard and sequence. HARM/VOIC/SPRD/OMIT edits, project load,
 and boot reset it; a changed effective scale/source or triad/seventh count
 reseeds it on the next chord. A truncated high-MIDI chord keeps the existing
 voice-omission behavior and resets history. Silence/STOP alone does not reset
@@ -107,7 +123,7 @@ VOIC and SPRD have no effect in HARM OFF/NOTE or with KEY OFF.
 
 ## Chord spacing
 
-SPRD sets the spacing of the chosen inversion, independently of ROOT/AUTO:
+SPRD sets the spacing of the chosen inversion, independently of manual/AUTO voicing:
 
 | SPRD | Rule | C triad, VOIC ROOT | C seventh, VOIC ROOT |
 | --- | --- | --- | --- |
@@ -129,10 +145,27 @@ wrap or clip to a different pitch class. Changing SPRD affects the next
 chord trigger; held notes retain their original release pitches. It resets
 that track's AUTO history, so the next chord starts in root position.
 
+## Omit the root
+
+OMIT ROOT removes the **harmonic root pitch class** after voicing and spread.
+For C major, ROOT gives E–G; 1ST also gives E–G (removing the upper C),
+and 2ND gives G–E (removing C between them). For C major seventh, 3RD
+becomes B–E–G. OFF restores the complete chord on the next trigger.
+A bass follower still follows C, and recording still stores the physical C
+key. This can leave the root to a separate bass track without changing harmony.
+
+Only HARM TRI/7TH with an active KEY use OMIT. NOTE and OFF stay unchanged.
+AUTO still optimizes the complete underlying chord before removing its root;
+this preserves its existing voice-leading decisions. Held keys retain their
+original releases if OMIT changes. Stock arp receives the remaining notes.
+At the upper MIDI limit, any available non-root tones still play. If none
+remain, the chord is silent, with safe empty-pool handling and balanced
+physical-key recorder ownership. No fake note zero or wrapped pitch is sent.
+
 ## Implementation boundaries
 
 The sequence hook changes the four-note scratch buffer before the stock arp
-initializer. Unused voices duplicate the root (lowest voice after AUTO) for its valid-pitch bitmap;
+initializer. Unused voices duplicate the root (lowest voice after voicing) for its valid-pitch bitmap;
 stock deduplicates them. Invalid roots use safe zero-pitch padding and a
 per-track volatile mute flag, so invalid bytes never index the arp bitmap.
 The recorder uses the native handoff at `0x4009eb7a` once per physical key
@@ -149,16 +182,20 @@ its old final bass-only
 replacement when Harmony is active. Each module also builds independently.
 
 Battery RAM 0x100b14e2..e9 stores one byte per track: TYPE in bits 0–1,
-SPRD in bits 2–3 (0 CLOSE, 1 OPEN, 2 WIDE). ea is the VOIC bitmask
-(one AUTO bit per track); eb is version 0x4b. Boot migrates the previous
-0x4a layout, preserving TYPE/VOIC and defaulting SPRD to CLOSE.
+SPRD in bits 2–3 (0 CLOSE, 1 OPEN, 2 WIDE), manual inversion in bits 4–5
+(0 root, 1 first, 2 second, 3 third), with OMIT ROOT in bit 6. ea retains one
+AUTO bit per track; eb is version 0x4d. Boot migrates 0x4c preserving manual
+inversions, 0x4b preserving TYPE/SPRD/AUTO, and 0x4a preserving TYPE/AUTO
+with CLOSE spacing. Old versions start with OMIT OFF.
 This is the stock linker padding before the record at 0x100b14f0; Quantizer's
 ec..ee bytes are separate. Defaults and boot sanitize it. Project comments
 are `#MIDI_HARMONY_TYPE_V1_T1=0` through T8, each 0..3, and
-`#MIDI_HARMONY_VOIC_V1_T1=0` through T8, each 0..1, plus
-`#MIDI_HARMONY_SPRD_V1_T1=0` through T8, each 0..2. Parse-only loads do
+`#MIDI_HARMONY_VOIC_V1_T1=0` through T8, each 0..4 (0 ROOT, 1 AUTO,
+2 1ST, 3 2ND, 4 3RD; the existing 0/1 meanings are unchanged), plus
+`#MIDI_HARMONY_SPRD_V1_T1=0` through T8, each 0..2, and
+`#MIDI_HARMONY_OMIT_V1_T1=0` through T8, each 0..1. Parse-only loads do
 not write settings. A project without these lines starts with HARM OFF and
-VOIC ROOT and SPRD CLOSE. Existing TYPE comment values and native
+VOIC ROOT, SPRD CLOSE and OMIT OFF. Existing TYPE comment values and native
 Part/pattern formats are unchanged. Older Harmony builds ignore unknown
 comments; their battery-version check resets Harmony settings on firmware
 rollback, so reload the saved project to restore the settings they support. The 64-byte voice-leading history
@@ -192,13 +229,25 @@ Use `--voicing-only` for AUTO sequence/keyboard/arp, recorded physical roots,
 SPRD variants, Harmony-page controls, and actual save/reload/warm-resume checks. These also
 produce the Harmony window screenshot at `out/harmony-port-suite/harmony-page/page.png`.
 Use `--spread-only` for the ten spaced sequence/arp and follower-root cases.
+Use `--inversions-only` for manual inversions, stock arp, follower-root identity,
+root omission, physical-key recording/replay and manual-VOIC/OMIT save/reload/warm resume.
 The default full suite includes all groups. The machine gate compares AUTO's
 movement cost against all valid compact and spaced voicings across keys/scales/MIDI range,
 checks per-track history and context resets, and polices writes and registers.
 They do not verify electrical MIDI timing, battery
 retention, musical feel or a physical flash. No device transfer is performed.
 
-### Hardware acceptance for AUTO and physical-key recording
+### Hardware acceptance for inversions, AUTO and physical-key recording
+
+With HARM TRI, VOIC 1ST/2ND, SPRD CLOSE and KEY C Major, check C gives
+E–G–C / G–C–E. Select 3RD: a triad still uses 2ND; HARM 7TH gives
+B–C–E–G. Repeat with OPEN/WIDE and the stock arp. A root-following bass
+must still play C, then F when playing F. Record physical C/D/F keys and
+confirm NOTE stores those keys and replay regenerates the selected inversion.
+Enable OMIT ROOT and confirm only C disappears from each C chord, regardless
+of inversion, while the bass still plays C. Save/reload the project and check
+the manual VOIC and OMIT choices survive.
+
 
 Use a disposable pattern, with T1 KEY C Major and TRAN 0. Set HARM TRI,
 press F on NOTE SETUP, set B VOIC AUTO and C SPRD CLOSE. Play C then F: expect C–E–G

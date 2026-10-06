@@ -16,7 +16,7 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
     follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
@@ -25,6 +25,8 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
         raw+=b'\r\n'+b''.join(f'#MIDI_HARMONY_TYPE_V1_T{t+1}={v}\r\n'.encode() for t,v in records.items())
         raw+=b''.join(f'#MIDI_HARMONY_VOIC_V1_T{t+1}=1\r\n'.encode() for t in auto)
         raw+=b''.join(f'#MIDI_HARMONY_SPRD_V1_T{t+1}={v}\r\n'.encode() for t,v in (spreads or {}).items())
+        raw+=b''.join(f'#MIDI_HARMONY_VOIC_V1_T{t+1}={v}\r\n'.encode() for t,v in (voicings or {}).items())
+        raw+=b''.join(f'#MIDI_HARMONY_OMIT_V1_T{t+1}={v}\r\n'.encode() for t,v in (omits or {}).items())
         p.write_bytes(raw)
     for path in (work/'project').glob('bank*.work'):
         def mutate(data):
@@ -225,9 +227,9 @@ def chord_rules(source):
 
 def recording(source):
     results={}
-    for kind,auto,spread in ((1,False,0),(2,False,0),(3,False,0),(2,True,0),(3,True,0),(2,True,1),(3,True,2)):
-        name=f'live-record-{kind}'+('-auto' if auto else '')+(f'-spread{spread}' if spread else '')
-        work=fixture(source,name,{0:kind},auto=(0,) if auto else (),spreads={0:spread})
+    for kind,voic,spread,omit in ((1,0,0,0),(2,0,0,0),(3,0,0,0),(2,1,0,0),(3,1,0,0),(2,1,1,0),(3,1,2,0),(2,2,1,0),(3,4,0,0),(2,2,1,1),(3,4,0,1),(2,1,0,1)):
+        name=f'live-record-{kind}'+(f'-voic{voic}' if voic>1 else '-auto' if voic else '')+(f'-spread{spread}' if spread else '')+('-omit' if omit else '')
+        work=fixture(source,name,{0:kind},spreads={0:spread},voicings={0:voic},omits={0:omit})
         for path in (work/'project').glob('bank*.work'):
             def blank(data):
                 for pat in range(16):
@@ -250,19 +252,25 @@ def recording(source):
         for root in (48,50,53):
             degrees=[n for n in range(root,80) if n%12 in harmony.MODES[0]]
             expected.extend(degrees[::2][:1 if kind==1 else kind+1])
-        if auto:
+        if voic==1:
             expected=([48,52,55,50,53,57,48,53,57] if kind==2 else
                       [48,52,55,59,48,50,53,57,48,52,53,57])
-        if spread:
+        if spread and voic<2:
             expected=([48,55,64,50,57,65,48,57,65] if kind==2 else
                       [48,64,67,71,48,62,65,69,48,64,65,69])
+        if voic>1:
+            expected=([52,60,67,53,62,69,57,65,72] if kind==2 else
+                      [59,60,64,67,60,62,65,69,64,65,69,72])
+        if omit:
+            count=kind+1
+            expected=[n for i,root in enumerate((48,50,53)) for n in expected[i*count:(i+1)*count] if n%12!=root%12]
         assert pitches==expected*2,(pitches,expected) # performed chord == replayed chord
         bank=(work/'bank-ram.bin').read_bytes()
         lanes=[bank[0x4900+step*32:0x4920+step*32] for step in range(64)]
         recorded=[lane for lane in lanes if lane[0]<128]
         assert [lane[0] for lane in recorded]==[49,50,53],recorded
         assert all(lane[3:6]==b'\xff'*3 for lane in recorded),recorded
-        assert (work/'harm.bin').read_bytes()==bytes((kind+4*spread,))
+        assert (work/'harm.bin').read_bytes()==bytes((kind+4*spread+64*omit+(16*(voic-1) if voic>1 else 0),))
         assert (work/'key.bin').read_bytes()==b'\x01'
         results[name]=dict(notes=pitches,recorded_roots=[lane[0] for lane in recorded])
         print(f'  [ok] {name}: REC+PLAY -> chromatic C#/D/F -> physical keys recorded once -> identical chord playback',flush=True)
@@ -295,9 +303,10 @@ def empty_note_locks(source):
     return results
 
 
-def persistence(source):
+def persistence(source,voic=1,omit=0):
     expected_key=25 if 'ms_decode' in harmony.symbols() else 2
-    work=fixture(source,'persistence',{0:2,1:1})
+    name=('persistence' if voic==1 else f'persistence-voic{voic}')+('-omit' if omit else '')
+    work=fixture(source,name,{0:2,1:1})
     lines=[]
     def key(at,k,hold=100):lines.extend([f'{at} key {k:#x} down',f'{at+hold} key {k:#x} up'])
     key(100,0x31);key(600,0x35);key(1100,0x10)
@@ -305,7 +314,7 @@ def persistence(source):
     # Open Harmony with the physical F press. Edit all three controls and exercise
     # an unused encoder; the NOTE/ARP native staged lanes must stay intact.
     key(2400,0x3d,50)
-    lines.extend(['2500 enc 1 1','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1','2650 enc 3 5'])
+    lines.extend([f'2500 enc 1 {4 if voic==1 else voic-1}','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1',f'2640 enc 3 {omit}','2650 enc 4 5'])
     key(2700,0x32,50)
     key(2800,0x32)
     lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up','4000 enc 5 1'])
@@ -316,13 +325,14 @@ def persistence(source):
     extra=['--rtc','1800000000','--live-script',script,'--lcd',work/'save.lcd',
            '--mem-dump',f'0x10000000,0x100000={work}/saved-cs1.bin;0x100b14e2,10={work}/saved-state.bin']
     run(work,'save',extra)
-    expected=bytes((7,1,0,0,0,0,0,0,1,0x4b))
+    expected=bytes((7+64*omit+(16*(voic-1) if voic>1 else 0),1,0,0,0,0,0,0,int(voic==1),0x4d))
     assert (work/'saved-state.bin').read_bytes()==expected
     files=emu_card.extract_image((work/'save-card.img').read_bytes())
     for name in ('project.work','project.strd'):
         assert b'#MIDI_HARMONY_TYPE_V1_T1=3' in files['OCTABAM/BASS/'+name]
-        assert b'#MIDI_HARMONY_VOIC_V1_T1=1' in files['OCTABAM/BASS/'+name]
+        assert f'#MIDI_HARMONY_VOIC_V1_T1={voic}'.encode() in files['OCTABAM/BASS/'+name]
         assert b'#MIDI_HARMONY_SPRD_V1_T1=1' in files['OCTABAM/BASS/'+name]
+        assert f'#MIDI_HARMONY_OMIT_V1_T1={omit}'.encode() in files['OCTABAM/BASS/'+name]
     # Added C Dorian when MIDI Scales is installed, otherwise stock C Minor.
     for name in ('bank01.work','bank01.strd'):
         data=files['OCTABAM/BASS/'+name]
@@ -338,18 +348,19 @@ def persistence(source):
     # and adds CLOSE; do not confuse disk reload with this migration path.
     legacy=bytearray((work/'saved-cs1.bin').read_bytes())
     legacy[0xb14e2:0xb14ea]=bytes(v&3 for v in expected[:8])
+    legacy[0xb14ea]=1 # legacy AUTO for T1
     legacy[0xb14eb]=0x4a
     (work/'legacy-cs1.bin').write_bytes(legacy)
     run(work,'migrate',['--rtc','1800000000','--no-post','--cs1-in',work/'legacy-cs1.bin',
                        '--live-script',quit_script,'--mem-dump',f'0x100b14e2,10={work}/migrate-state.bin'],
         card=work/'save-card.img')
-    assert (work/'migrate-state.bin').read_bytes()==bytes((3,1,0,0,0,0,0,0,1,0x4b))
+    assert (work/'migrate-state.bin').read_bytes()==bytes((3,1,0,0,0,0,0,0,1,0x4d))
     old=fixture(source,'old-project',{})
     run(old,'load',['--rtc','1800000000','--cs1-in',work/'saved-cs1.bin','--live-script',quit_script,
                     '--mem-dump',f'0x100b14e2,10={old}/state.bin'])
-    assert (old/'state.bin').read_bytes()==bytes(9)+b'K'
+    assert (old/'state.bin').read_bytes()==bytes(9)+b'M'
     print('  [ok] UART Harmony page, HARM/VOIC/SPRD/KEY controls, actual SAVE, disk reload, CS1 warm boot/migration and old-project defaults',flush=True)
-    return {'persistence':'pass'}
+    return {work.name:'pass'}
 
 
 def auto_voicing(source):
@@ -386,11 +397,11 @@ def auto_voicing(source):
     # A lasting screenshot proves a separate window, not just injected memory.
     work=fixture(source,'harmony-page',{0:2})
     script=work/'page.txt'
-    script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1400 key 0x3d down\n1500 key 0x3d up\n2000 enc 1 1\n2100 enc 2 1\n2200 key 0 down\n2300 key 0 up\n2400 key 5 down\n2500 key 5 up\n3000 quit\n')
+    script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1400 key 0x3d down\n1500 key 0x3d up\n2000 enc 1 4\n2100 enc 2 1\n2200 key 0 down\n2300 key 0 up\n2400 key 5 down\n2500 key 5 up\n3000 quit\n')
     events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                     '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
                     '--mem-dump',f'0x100b14e2,10={work}/state.bin;{sym["mh_page_win"]:#x},4={work}/window.bin'])
-    assert (work/'state.bin').read_bytes()==bytes((6,0,0,0,0,0,0,0,1,0x4b))
+    assert (work/'state.bin').read_bytes()==bytes((6,0,0,0,0,0,0,0,1,0x4d))
     assert int.from_bytes((work/'window.bin').read_bytes(),'big')!=0
     balanced(events)
     assert [e[2] for e in events if e[0]=='on']==[48,55,64,48,57,65],events
@@ -438,13 +449,69 @@ def spread_output(source):
     return results
 
 
+def manual_inversions(source):
+    results={};sym=harmony.symbols();has_follow='bf_sources' in sym
+    examples={(2,2):[64,67,72,69,72,77,71,74,79],
+              (2,3):[67,72,76,72,77,81,74,79,83],
+              (3,4):[71,72,76,79,76,77,81,84,77,79,83,86]}
+    for kind,choice,omit in ((2,2,0),(2,3,0),(3,4,0),(2,2,1),(3,4,1)):
+        expected=examples[kind,choice]
+        if omit:
+            count=kind+1
+            expected=[n for i,root in enumerate((60,65,67)) for n in expected[i*count:(i+1)*count] if n%12!=root%12]
+        for arp in ((False,True) if choice==4 else (False,)):
+            work=fixture(source,f'manual-{kind}-{choice}'+('-omit' if omit else '')+('-arp' if arp else ''),
+                         {0:kind,1:1},arp=arp,first_note=60,voicings={0:choice},omits={0:omit})
+            extra=['--sequencer','--internal-clock','--frames','7000']
+            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+            events=run(work,'play',extra);balanced(events)
+            lead=[e[2] for e in events if e[:2]==('on',1)]
+            bass=[e[2] for e in events if e[:2]==('on',2)]
+            if not arp:assert lead==expected,(lead,expected)
+            else:assert set(lead)<=set(expected) and lead[:3]==expected[:3] and {77,83}<=set(lead),lead
+            if has_follow:
+                if not arp:assert bass==[48,36,36,41,43,43],bass
+                else:assert {36,41,43}<=set(bass),bass
+            results[work.name]=dict(leader=lead,follower=bass)
+            print(f'  [ok] {work.name}: manual inversion before arp, original follower root, balanced notes',flush=True)
+    work=fixture(source,'omit-empty-sequence',{0:2,1:1},first_note=127,omits={0:1})
+    extra=['--sequencer','--internal-clock','--frames','7000']
+    if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+    events=run(work,'play',extra);balanced(events)
+    lead=[e[2] for e in events if e[:2]==('on',1)]
+    assert lead==[69,72,71,74],lead # empty first chord must not leak note zero
+    if has_follow:
+        bass=[e[2] for e in events if e[:2]==('on',2)]
+        assert bass==[48,43,43,41,43,43],bass
+    results[work.name]=lead
+    print('  [ok] omit-empty-sequence: silent root-only chord, follower root retained, next chord recovers',flush=True)
+    work=fixture(source,'manual-page',{0:3})
+    script=work/'page.txt'
+    script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1400 key 0x3d down\n1500 key 0x3d up\n2000 enc 1 3\n2100 enc 2 2\n2150 enc 3 1\n2200 key 0 down\n2300 key 0 up\n2400 key 5 down\n2500 key 5 up\n3000 quit\n')
+    events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+                    '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
+                    '--mem-dump',f'0x100b14e2,10={work}/state.bin'])
+    assert (work/'state.bin').read_bytes()==bytes((123,0,0,0,0,0,0,0,0,0x4d))
+    balanced(events)
+    assert [e[2] for e in events if e[0]=='on']==[59,76,79,64,81,84],events
+    subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True)
+    results['manual-page']='pass'
+    print('  [ok] manual-page: physical encoder 3RD/WIDE/OMIT ROOT, live chord MIDI and five-position widget capture',flush=True)
+    return results
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
     ap.add_argument('--recording-only',action='store_true',help='run the recording and explicit-empty-lock regressions')
     ap.add_argument('--spread-only',action='store_true',help='run the spaced sequence/arp and follower-root cases')
+    ap.add_argument('--inversions-only',action='store_true',help='manual MIDI/arp/follow, recording and persistence')
     ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
+    if a.inversions_only:
+        cases=manual_inversions(a.project);cases.update(recording(a.project));cases.update(persistence(a.project,4,1))
+        (OUT/'result-inversions.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.spread_only:
         cases=spread_output(a.project)
         (OUT/'result-spread.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
@@ -467,5 +534,7 @@ def main():
     cases.update(persistence(a.project))
     cases.update(auto_voicing(a.project))
     cases.update(spread_output(a.project))
+    cases.update(manual_inversions(a.project))
+    cases.update(persistence(a.project,4,1))
     (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()
