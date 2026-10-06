@@ -1,5 +1,5 @@
 /* Harmony window: native window/input-layer pattern from the Tuner module.
- * NOTE SETUP F press opens it; A=HARM, B=VOIC. Native ARP KEY stays put.
+ * NOTE SETUP F press opens it; A=HARM, B=VOIC, C=SPRD. Native ARP KEY stays put.
  * Track is fixed while open. Track/page keys close the window; a subsequent
  * press selects the track/page. Transport and chromatic keys pass through.
  * No UI-task/ISR hook: redraw only on open or an encoder edit.
@@ -50,10 +50,12 @@ mh_page_encoder:
     movem.l %d2-%d4,(%sp)
     move.l 16(%sp),%d2 /* knob */
     move.l 20(%sp),%d3 /* signed detents */
-    cmpi.l #1,%d2
-    bhi.s .page_encoder_done
+    cmpi.l #2,%d2
+    bhi.w .page_encoder_done
     move.l mh_page_track,%d4
     move.l %d4,%d0
+    cmpi.l #2,%d2
+    beq.s .page_sprd
     tst.l %d2
     bne.s .page_voic
     jsr mh_get
@@ -77,6 +79,28 @@ mh_page_encoder:
     move.l %d0,%d1
     move.l %d4,%d0
     jsr mh_set
+    bra.w .page_encoder_draw
+.page_sprd:
+    jsr mh_sprd_get
+    cmpi.l #2,%d3
+    ble.s .page_sprd_low
+    moveq #2,%d3
+.page_sprd_low:
+    cmpi.l #-2,%d3
+    bge.s .page_sprd_add
+    moveq #-2,%d3
+.page_sprd_add:
+    add.l %d3,%d0
+    bpl.s .page_sprd_max
+    moveq #0,%d0
+.page_sprd_max:
+    cmpi.l #2,%d0
+    ble.s .page_sprd_set
+    moveq #2,%d0
+.page_sprd_set:
+    move.l %d0,%d1
+    move.l %d4,%d0
+    jsr mh_sprd_set
     bra.s .page_encoder_draw
 .page_voic:
     tst.l %d3
@@ -117,13 +141,17 @@ mh_page_draw:
     moveq #44,%d1
     move.l %a2,%a0
     bsr.w .page_text
-    moveq #8,%d0
+    moveq #5,%d0
     moveq #30,%d1
     lea .page_harm_label,%a0
     bsr.w .page_text
-    moveq #65,%d0
+    moveq #44,%d0
     moveq #30,%d1
     lea .page_voic_label,%a0
+    bsr.w .page_text
+    moveq #83,%d0
+    moveq #30,%d1
+    lea .page_sprd_label,%a0
     bsr.w .page_text
     move.l mh_page_track,%d0
     jsr mh_get
@@ -131,7 +159,7 @@ mh_page_draw:
     move.l %a2,-(%sp)
     jsr mh_type_format
     addq.l #8,%sp
-    moveq #8,%d0
+    moveq #5,%d0
     moveq #19,%d1
     move.l %a2,%a0
     bsr.w .page_text
@@ -142,7 +170,14 @@ mh_page_draw:
     beq.s .page_voice_text
     lea .page_auto,%a0
 .page_voice_text:
-    moveq #65,%d0
+    moveq #44,%d0
+    moveq #19,%d1
+    bsr.w .page_text
+    move.l mh_page_track,%d0
+    jsr mh_sprd_get
+    lea .page_spreads,%a0
+    move.l (%a0,%d0.l*4),%a0
+    moveq #83,%d0
     moveq #19,%d1
     bsr.w .page_text
     moveq #5,%d0
@@ -168,10 +203,15 @@ mh_page_draw:
 .page_title: .asciz "HARMONY T%d"
 .page_harm_label: .asciz "A HARM"
 .page_voic_label: .asciz "B VOIC"
+.page_sprd_label: .asciz "C SPRD"
+.page_close: .asciz "CLOSE"
+.page_open: .asciz "OPEN"
+.page_wide: .asciz "WIDE"
 .page_root: .asciz "ROOT"
 .page_auto: .asciz "AUTO"
 .page_back: .asciz "NO:BACK"
     .balign 4
+.page_spreads: .long .page_close,.page_open,.page_wide
 mh_page_layer:
     .long 0,mh_page_keys,mh_page_encs,0,0,-1,-1
 mh_page_keys:

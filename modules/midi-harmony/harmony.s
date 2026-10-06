@@ -1,5 +1,5 @@
 /* MIDI Harmony for 1.40C. No stored note/chord lanes are rewritten.
- * TYPE is stored in eight battery bytes e2..e9; ea VOIC bits, eb version.
+ * TYPE/SPRD share eight battery bytes e2..e9; ea VOIC bits, eb version.
  * Native KEY/scale remains in the Part. Quantizer ec..ee are separate.
  */
     .text
@@ -10,18 +10,19 @@
     .global mh_get,mh_set,mh_source,mh_quant,mh_generate,mh_sequence
     .global mh_boot,mh_defaults,mh_load,mh_save,mh_arp_encoder,mh_note_encoder,mh_draw_type,mh_type_format,mh_keyboard
 
-/* TYPE only, one byte per MIDI track. Native KEY/scale stays in the Part. */
+/* One byte per track: bits 0..1 TYPE, bits 2..3 SPRD (0..2). */
 mh_get:
     cmpi.l #7,%d0
     bhi.s .get_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4a,%d1
+    cmpi.b #0x4b,%d1
     bne.s .get_off
     lea MH_NV,%a0
     move.b (%a0,%d0.l),%d0
     andi.l #255,%d0
-    cmpi.l #3,%d0
+    cmpi.l #11,%d0
     bhi.s .get_off
+    andi.l #3,%d0
     rts
 .get_off:
     moveq #0,%d0
@@ -32,6 +33,12 @@ mh_set:
     cmpi.l #3,%d1
     bhi.s .set_done
     lea MH_NV,%a0
+    move.l %d2,-(%sp)
+    moveq #0,%d2
+    move.b (%a0,%d0.l),%d2
+    andi.l #12,%d2
+    or.l %d2,%d1
+    move.l (%sp)+,%d2
     cmp.b (%a0,%d0.l),%d1
     beq.s .set_done
     move.b %d1,(%a0,%d0.l)
@@ -42,13 +49,53 @@ mh_set:
 .set_done:
     rts
 
+/* SPRD CLOSE=0, OPEN=1, WIDE=2, in the existing track byte. */
+    .global mh_sprd_get,mh_sprd_set
+mh_sprd_get:
+    cmpi.l #7,%d0
+    bhi.s .sprd_off
+    move.b MH_VERSION,%d1
+    cmpi.b #0x4b,%d1
+    bne.s .sprd_off
+    lea MH_NV,%a0
+    move.b (%a0,%d0.l),%d0
+    andi.l #255,%d0
+    cmpi.l #11,%d0
+    bhi.s .sprd_off
+    lsr.l #2,%d0
+    rts
+.sprd_off:
+    moveq #0,%d0
+    rts
+mh_sprd_set:
+    cmpi.l #7,%d0
+    bhi.s .sprd_done
+    cmpi.l #2,%d1
+    bhi.s .sprd_done
+    lea MH_NV,%a0
+    move.l %d2,-(%sp)
+    moveq #0,%d2
+    move.b (%a0,%d0.l),%d2
+    andi.l #3,%d2
+    lsl.l #2,%d1
+    or.l %d2,%d1
+    move.l (%sp)+,%d2
+    cmp.b (%a0,%d0.l),%d1
+    beq.s .sprd_done
+    move.b %d1,(%a0,%d0.l)
+    lea mh_voice_history,%a0
+    lsl.l #3,%d0
+    clr.l 4(%a0,%d0.l)
+.sprd_done:
+    rts
+
 /* One AUTO bit per track; ROOT=0. No new native Part/pattern fields. */
     .global mh_voic_get,mh_voic_set
 mh_voic_get:
     cmpi.l #7,%d0
     bhi.s .voic_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4a,%d1
+    cmpi.b #0x4b,%d1
     bne.s .voic_off
     moveq #0,%d1
     move.b MH_VOIC,%d1
@@ -453,7 +500,7 @@ mh_reset:
     clr.l (%a0)
     clr.l 4(%a0)
     clr.b 8(%a0)
-    moveq #0x4a,%d0
+    moveq #0x4b,%d0
     move.b %d0,MH_VERSION
     jsr mh_voice_clear
     rts
@@ -469,17 +516,36 @@ mh_boot:
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
     move.b MH_VERSION,%d1
-    cmpi.b #0x4a,%d1
+    cmpi.b #0x4b,%d1
     beq.s .boot_valid
-    bsr.s mh_reset
+    cmpi.b #0x4a,%d1 /* Previous TYPE/VOIC layout: preserve, add CLOSE. */
+    bne.s .boot_reset
+    lea MH_NV,%a0
+    moveq #8,%d2
+.boot_migrate:
+    move.b (%a0),%d1
+    cmpi.b #3,%d1
+    bls.s .boot_migrate_next
+    clr.b (%a0)
+.boot_migrate_next:
+    addq.l #1,%a0
+    subq.l #1,%d2
+    bne.s .boot_migrate
+    moveq #0x4b,%d1
+    move.b %d1,MH_VERSION
+    bra.s .boot_valid
+.boot_reset:
+    bsr.w mh_reset
 .boot_valid:
     moveq #0,%d2
 .boot_track:
     move.l %d2,%d0
-    bsr.w mh_get
-    move.l %d0,%d1
-    move.l %d2,%d0
-    bsr.w mh_set
+    lea MH_NV,%a0
+    move.b (%a0,%d2.l),%d1
+    cmpi.b #11,%d1
+    bls.s .boot_next
+    clr.b (%a0,%d2.l)
+.boot_next:
     addq.l #1,%d2
     cmpi.l #8,%d2
     bne.s .boot_track
@@ -498,7 +564,7 @@ mh_load:
     bne.w .load_stock
     lea -32(%sp),%sp
     movem.l %d0-%d3/%d5/%a0-%a1,(%sp)
-    clr.l 28(%sp) /* 0=TYPE comment, 1=VOIC comment */
+    clr.l 28(%sp) /* 0=TYPE comment, 1=VOIC comment, 2=SPRD comment */
     move.l %d3,%a0
     lea mh_key,%a1
 .load_prefix:
@@ -509,12 +575,14 @@ mh_load:
     bne.s .load_other_prefix
     bra.s .load_prefix
 .load_other_prefix:
-    tst.l 28(%sp)
-    bne.w .load_done
-    moveq #1,%d0
-    move.l %d0,28(%sp)
+    addq.l #1,28(%sp)
+    move.l 28(%sp),%d5
+    cmpi.l #2,%d5
+    bhi.w .load_done
     move.l %d3,%a0
     lea mh_voic_key,%a1
+    bne.s .load_prefix
+    lea mh_sprd_key,%a1
     bra.s .load_prefix
 .load_track:
     moveq #0,%d2
@@ -559,7 +627,13 @@ mh_load:
     move.l %d2,%d0
     tst.l 28(%sp)
     beq.s .load_type
+    move.l 28(%sp),%d5
+    cmpi.l #2,%d5
+    beq.s .load_sprd
     bsr.w mh_voic_set /* independently validates 0..1 */
+    bra.s .load_done
+.load_sprd:
+    bsr.w mh_sprd_set /* independently validates 0..2 */
     bra.s .load_done
 .load_type:
     bsr.w mh_set
@@ -595,7 +669,7 @@ mh_save:
     jsr (%a2)
     lea 32(%sp),%sp
     tst.l %d0
-    bmi.s .save_fail
+    bmi.w .save_fail
     move.l %d7,%d0
     bsr.w mh_voic_get
     move.l %d0,-(%sp)
@@ -613,10 +687,28 @@ mh_save:
     jsr (%a2)
     lea 32(%sp),%sp
     tst.l %d0
-    bmi.s .save_fail
+    bmi.w .save_fail
+    move.l %d7,%d0
+    bsr.w mh_sprd_get
+    move.l %d0,-(%sp)
+    move.l %d7,%d0
+    addq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea mh_sprd_fmt
+    move.l %d2,-(%sp)
+    jsr (%a4)
+    move.l %d2,-(%sp)
+    jsr (%a3)
+    move.l %d0,-(%sp)
+    move.l %d2,-(%sp)
+    move.l %d3,-(%sp)
+    jsr (%a2)
+    lea 32(%sp),%sp
+    tst.l %d0
+    bmi.w .save_fail
     addq.l #1,%d7
     cmpi.l #8,%d7
-    bne.s .save_track
+    bne.w .save_track
     move.l (%sp)+,%d7
     move.b 0x8000004e,%d0
     extb.l %d0
@@ -626,6 +718,8 @@ mh_save:
     jmp 0x40089638
 mh_key: .asciz "#MIDI_HARMONY_TYPE_V1_T"
 mh_fmt: .asciz "#MIDI_HARMONY_TYPE_V1_T%d=%d\r\n"
+mh_sprd_key: .asciz "#MIDI_HARMONY_SPRD_V1_T"
+mh_sprd_fmt: .asciz "#MIDI_HARMONY_SPRD_V1_T%d=%d\r\n"
 mh_voic_key: .asciz "#MIDI_HARMONY_VOIC_V1_T"
 mh_voic_fmt: .asciz "#MIDI_HARMONY_VOIC_V1_T%d=%d\r\n"
     .balign 2

@@ -58,7 +58,7 @@ class Machine:
 
 def machine_gate():
     m=Machine();u=m.uc
-    assert bytes(u.mem_read(NV,10))==bytes(9)+b'J'
+    assert bytes(u.mem_read(NV,10))==bytes(9)+b'K'
     # Per-track TYPE writes leave the other tracks and adjacent Quantizer alone.
     values=[t%4 for t in range(8)]
     for t,v in enumerate(values):m.call('mh_set',t,v)
@@ -97,7 +97,7 @@ def machine_gate():
     u.mem_write(NV,b'\xff'*10)
     assert m.call('mh_get',0)==0
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes(9)+b'J'
+    assert bytes(u.mem_read(NV,10))==bytes(9)+b'K'
     if 'bf_sources' in m.sym:
         u.mem_write(m.sym['bf_sources'],bytes((0,1,2,0,0,0,0,0)))
         u.mem_write(m.sym['bf_roots'],bytes((38,255,255,255,255,255,255,255)))
@@ -283,6 +283,12 @@ def keyboard_gate():
     assert key(48,0)==[(52,0),(55,0)]
     m.call('mh_voic_set',0,0) # an edit cannot alter held-note ownership
     assert key(53,0)==[(48,0),(53,0),(57,0)]
+    for spread,want in ((1,[48,55,64]),(2,[48,64,67])):
+        m.call('mh_sprd_set',0,spread)
+        assert key(48,100)==[(n,100) for n in want]
+        assert recorded[-1]==(0,48,100,1)
+        m.call('mh_sprd_set',0,0)
+        assert key(48,0)==[(n,0) for n in want]
     print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
 
 
@@ -362,6 +368,90 @@ def voicing_gate():
     print('  [ok] AUTO: global minimum compact voice movement across MIDI range/scales, register/write guards, per-track history, resets and root identity')
 
 
+def spread_notes(notes,spread):
+    if spread==0:return list(notes)
+    raised=[n+(12 if (i==1 if spread==1 else i>0) else 0) for i,n in enumerate(notes)]
+    return sorted(raised) if max(raised)<=127 else None
+
+
+def spread_gate():
+    m=Machine();u=m.uc;history=m.sym['mh_voice_history']
+    regs=[UC_M68K_REG_D1,UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,
+          UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A1,
+          UC_M68K_REG_A2,UC_M68K_REG_A3,UC_M68K_REG_A4,UC_M68K_REG_A5,UC_M68K_REG_A6]
+    def voice(t,raw):
+        u.mem_write(m.scratch,bytes(raw))
+        sentinels={r:0x12340000+i for i,r in enumerate(regs)}
+        m.call('mh_voice',t,a0=m.scratch,regs=sentinels)
+        assert u.reg_read(UC_M68K_REG_D0)==t and u.reg_read(UC_M68K_REG_A0)==m.scratch
+        assert all(u.reg_read(r)==v for r,v in sentinels.items())
+        assert all(m.scratch<=a and a+n<=m.scratch+4 or
+                   m.stack-192<=a and a+n<=m.stack+4 or
+                   history+8*t<=a and a+n<=history+8*t+8 for a,n in m.writes)
+        return list(u.mem_read(m.scratch,4))
+    def cost(a,b):return (sum(abs(x-y) for x,y in zip(a,b)),sum(x!=y for x,y in zip(a,b)))
+    for spread in (1,2):
+        for auto in (0,1):
+            for kind in (2,3):
+                count=kind+1
+                for mode in range(7):
+                    if 'ms_decode' not in m.sym and mode not in (0,5):continue
+                    for tonic in range(12):
+                        m.setting(0,kind,tonic,mode)
+                        m.call('mh_voic_set',0,auto);m.call('mh_sprd_set',0,spread)
+                        previous=None
+                        for n in range(128):
+                            raw=m.chord(0,(n*37)%128);actual=voice(0,raw)
+                            if raw[:count]!=sorted(set(raw[:count])):
+                                assert actual==raw
+                                previous=None
+                                continue
+                            seed=spread_notes(raw[:count],spread) or raw[:count]
+                            pcs={p%12 for p in raw[:count]}
+                            all_notes=[p for p in range(128) if p%12 in pcs]
+                            candidates=[]
+                            for i in range(len(all_notes)-count+1):
+                                close=all_notes[i:i+count]
+                                if close[-1]-close[0]<12 and abs(close[0]-raw[0])<=12:
+                                    spaced=spread_notes(close,spread)
+                                    if spaced is not None:candidates.append(spaced)
+                            if not auto or previous is None or not candidates:assert actual[:count]==seed
+                            else:assert cost(actual[:count],previous)==min(cost(c,previous) for c in candidates)
+                            assert actual[:count]==sorted(set(actual[:count]))
+                            assert {p%12 for p in actual[:count]}==pcs
+                            if count==3:assert actual[3]==actual[0]
+                            previous=actual[:count]
+    # Per-track packed settings preserve one another and reject invalid writes.
+    for t in range(8):
+        for kind in range(4):
+            for spread in range(3):
+                m.call('mh_sprd_set',t,spread);m.call('mh_set',t,kind)
+                assert m.call('mh_get',t)==kind and m.call('mh_sprd_get',t)==spread
+    before=bytes(u.mem_read(NV,10))+bytes(u.mem_read(history,64))
+    for t,v in ((8,1),(0xffffffff,1),(0,3),(0,0xffffffff)):
+        m.call('mh_sprd_set',t,v)
+        assert bytes(u.mem_read(NV,10))+bytes(u.mem_read(history,64))==before
+    # Previous battery layout migrates without losing HARM or VOIC; garbage
+    # track bytes cannot turn into accidental spread selections.
+    u.mem_write(NV,bytes((0,1,2,3,255,4,12,3,0xa5,0x4a)))
+    m.call('mh_boot',stop=0x4001022a)
+    assert bytes(u.mem_read(NV,10))==bytes((0,1,2,3,0,0,0,3,0xa5,0x4b))
+    u.mem_write(NV,bytes((11,10,9,8,7,6,255,12,0xa5,0x4b)))
+    m.call('mh_boot',stop=0x4001022a)
+    assert bytes(u.mem_read(NV,10))==bytes((11,10,9,8,7,6,0,0,0xa5,0x4b))
+    # OFF/NOTE/KEY OFF ignore spread; toggling spacing reseeds AUTO.
+    for kind in (0,1):
+        m.setting(0,kind);m.call('mh_sprd_set',0,2)
+        raw=m.chord(0,48);assert voice(0,raw)==raw
+    m.setting(0,2);u.mem_write(0x46c76df1,b'\0')
+    raw=m.chord(0,48);assert voice(0,raw)==raw
+    m.setting(0,2);m.call('mh_voic_set',0,1);m.call('mh_sprd_set',0,0)
+    voice(0,m.chord(0,48));voice(0,m.chord(0,53))
+    m.call('mh_sprd_set',0,1)
+    assert voice(0,m.chord(0,53))==[53,60,69,53]
+    print('  [ok] SPRD: ROOT/AUTO x TRI/7TH x scales/keys/MIDI range, sounded-voice cost, bounds, register/write guards, packed state and migration')
+
+
 def recorder_gate():
     m=Machine();u=m.uc;bank=0x400e21e0
     u.mem_write(0x46c82456,bank.to_bytes(4,'big'))
@@ -414,6 +504,15 @@ def project_parser_gate():
     assert m.call('mh_voic_get',0)==1
     load('#MIDI_HARMONY_VOIC_V1_T1=0')
     assert m.call('mh_voic_get',0)==0
+    for t in range(8):
+        load(f'#MIDI_HARMONY_SPRD_V1_T{t+1}={t%3}\r\n')
+        assert m.call('mh_sprd_get',t)==t%3
+        assert m.call('mh_get',t)==(3 if t==7 else 0)
+    for bad in ('3','-1','1x','','0000'):
+        load(f'#MIDI_HARMONY_SPRD_V1_T8={bad}')
+        assert m.call('mh_sprd_get',7)==1
+    load('#MIDI_HARMONY_SPRD_V1_T8=2',parse_only=True)
+    assert m.call('mh_sprd_get',7)==1
     print('  [ok] project parser: valid track, malformed/out-of-range comments and parse-only isolation')
 
 
@@ -434,10 +533,10 @@ def controls_gate():
         assert m.call('mh_get',1)==want
         assert m.call('mh_get',0)==0
     u.mem_write(m.sym['mh_page_track'],(1).to_bytes(4,'big'))
-    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,1),(1,-1,0)):
+    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,1),(1,-1,0),(2,1,1),(2,0x7fffffff,2),(2,-1,1),(2,-0x80000000,0)):
         args(slot,delta);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
-        assert m.call('mh_get' if slot==0 else 'mh_voic_get',1)==want
-    for slot in range(2,7):
+        assert m.call(('mh_get','mh_voic_get','mh_sprd_get')[slot],1)==want
+    for slot in range(3,7):
         before=bytes(u.mem_read(NV,10))
         args(slot,100);m.call('mh_page_encoder')
         assert bytes(u.mem_read(NV,10))==before
@@ -459,6 +558,7 @@ def main():
     final_note_gate()
     keyboard_gate()
     voicing_gate()
+    spread_gate()
     recorder_gate()
     controls_gate()
     project_parser_gate()
