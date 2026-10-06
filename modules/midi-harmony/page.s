@@ -2,6 +2,7 @@
  * NOTE SETUP F press opens it; A=HARM, B=VOIC, C=SPRD. Native ARP KEY stays put.
  * Track is fixed while open. Track/page keys close the window; a subsequent
  * press selects the track/page. Transport and chromatic keys pass through.
+ * Values use the stock PLAYBACK 4/2/3-position selector widgets.
  * No UI-task/ISR hook: redraw only on open or an encoder edit.
  */
     .text
@@ -153,33 +154,31 @@ mh_page_draw:
     moveq #30,%d1
     lea .page_sprd_label,%a0
     bsr.w .page_text
+    /* Native PLAYBACK selectors: exact count, with our value formatters.
+     * ABI: widget(x,y,slot,value,flags,formatter,surface).
+     * Full layout, no lock highlight; the modal owns its own surface.
+     */
     move.l mh_page_track,%d0
     jsr mh_get
-    move.l %d0,-(%sp)
-    move.l %a2,-(%sp)
-    jsr mh_type_format
-    addq.l #8,%sp
-    moveq #5,%d0
-    moveq #19,%d1
-    move.l %a2,%a0
-    bsr.w .page_text
+    move.l %d0,%d1
+    moveq #7,%d0
+    lea mh_type_format,%a0
+    lea 0x40046c28,%a1 /* four positions */
+    bsr.w .page_selector
     move.l mh_page_track,%d0
     jsr mh_voic_get
-    lea .page_root,%a0
-    tst.l %d0
-    beq.s .page_voice_text
-    lea .page_auto,%a0
-.page_voice_text:
-    moveq #44,%d0
-    moveq #19,%d1
-    bsr.w .page_text
+    move.l %d0,%d1
+    moveq #46,%d0
+    lea mh_page_voic_format,%a0
+    lea 0x40046f10,%a1 /* two positions */
+    bsr.w .page_selector
     move.l mh_page_track,%d0
     jsr mh_sprd_get
-    lea .page_spreads,%a0
-    move.l (%a0,%d0.l*4),%a0
-    moveq #83,%d0
-    moveq #19,%d1
-    bsr.w .page_text
+    move.l %d0,%d1
+    moveq #85,%d0
+    lea mh_page_sprd_format,%a0
+    lea 0x40046d9c,%a1 /* three positions */
+    bsr.w .page_selector
     moveq #5,%d0
     moveq #4,%d1
     lea .page_back,%a0
@@ -189,6 +188,37 @@ mh_page_draw:
 .page_draw_done:
     movem.l (%sp),%d2-%d3/%a2/%a5
     lea 44(%sp),%sp
+    rts
+.page_selector: /* d0=x,d1=value,a0=formatter,a1=stock widget,a5=surface */
+    move.l %a5,-(%sp)
+    move.l %a0,-(%sp)
+    clr.l -(%sp) /* flags: full widget, no highlight */
+    move.l %d1,-(%sp)
+    clr.l -(%sp) /* slot is unused by these stock widgets */
+    pea 9
+    move.l %d0,-(%sp)
+    jsr (%a1)
+    lea 28(%sp),%sp
+    rts
+    .global mh_page_voic_format,mh_page_sprd_format
+mh_page_voic_format:
+    lea .page_voices,%a1
+    moveq #1,%d1
+    bra.s .page_value_format
+mh_page_sprd_format:
+    lea .page_spreads,%a1
+    moveq #2,%d1
+.page_value_format: /* Native formatter ABI: (char *buffer, int value). */
+    move.l 4(%sp),%a0
+    move.l 8(%sp),%d0
+    cmp.l %d1,%d0
+    bls.s .page_value_valid
+    moveq #0,%d0
+.page_value_valid:
+    move.l (%a1,%d0.l*4),%a1
+.page_value_copy:
+    move.b (%a1)+,(%a0)+
+    bne.s .page_value_copy
     rts
 .page_text: /* d0=x,d1=y,a0=string,a5=surface; native C ABI */
     move.l %a0,-(%sp)
@@ -211,6 +241,7 @@ mh_page_draw:
 .page_auto: .asciz "AUTO"
 .page_back: .asciz "NO:BACK"
     .balign 4
+.page_voices: .long .page_root,.page_auto
 .page_spreads: .long .page_close,.page_open,.page_wide
 mh_page_layer:
     .long 0,mh_page_keys,mh_page_encs,0,0,-1,-1

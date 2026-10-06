@@ -13,6 +13,8 @@ On a MIDI track, open **NOTE SETUP** (FUNC + SRC). Knob **F: HARM** selects:
 Knob **A: HARM** edits the same setting; knob **B: VOIC** selects **ROOT**
 (default, root-position chords) or **AUTO** (automatic voice leading).
 Knob **C: SPRD** selects **CLOSE** (default), **OPEN** or **WIDE**.
+The controls use the stock PLAYBACK selector graphics: four positions for
+HARM, two for VOIC and three for SPRD, with the value printed underneath.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The title identifies
 the track being edited. Transport and chromatic trig keys remain usable.
