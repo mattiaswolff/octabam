@@ -1,5 +1,5 @@
 /* MIDI Harmony for 1.40C. No stored note/chord lanes are rewritten.
- * TYPE/SPRD/manual inversion/OMIT share e2..e9; ea AUTO bits, eb version.
+ * TYPE/SPRD/manual inversion/ROOT share e2..e9; ea AUTO bits, eb version.
  * Native KEY/scale remains in the Part. Quantizer ec..ee are separate.
  */
     .text
@@ -10,16 +10,16 @@
     .global mh_get,mh_set,mh_source,mh_quant,mh_generate,mh_sequence
     .global mh_boot,mh_defaults,mh_load,mh_save,mh_arp_encoder,mh_note_encoder,mh_draw_type,mh_type_format,mh_keyboard
 
-/* One byte per track: bits 0..1 TYPE, bits 2..3 SPRD (0..2), bits 4..5 inversion (0..3), bit 6 OMIT ROOT. */
+/* One byte per track: bits 0..1 TYPE, bits 2..3 SPRD (0..2), bits 4..5 inversion (0..3), bits 6..7 ROOT (KEEP/OMIT/-1 OCT/-2 OCT). */
 mh_get:
     cmpi.l #7,%d0
     bhi.s .get_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4e,%d1
     bne.s .get_off
     lea MH_NV,%a0
     move.b (%a0,%d0.l),%d0
-    andi.l #143,%d0 /* ignore inversion; reject reserved bits */
+    andi.l #15,%d0 /* ignore inversion and ROOT; reject invalid spread */
     cmpi.l #11,%d0
     bhi.s .get_off
     andi.l #3,%d0
@@ -36,7 +36,7 @@ mh_set:
     move.l %d2,-(%sp)
     moveq #0,%d2
     move.b (%a0,%d0.l),%d2
-    andi.l #124,%d2
+    andi.l #252,%d2
     or.l %d2,%d1
     move.l (%sp)+,%d2
     cmp.b (%a0,%d0.l),%d1
@@ -55,11 +55,11 @@ mh_sprd_get:
     cmpi.l #7,%d0
     bhi.s .sprd_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4e,%d1
     bne.s .sprd_off
     lea MH_NV,%a0
     move.b (%a0,%d0.l),%d0
-    andi.l #143,%d0 /* ignore inversion; reject reserved bits */
+    andi.l #15,%d0 /* ignore inversion and ROOT; reject invalid spread */
     cmpi.l #11,%d0
     bhi.s .sprd_off
     lsr.l #2,%d0
@@ -76,7 +76,7 @@ mh_sprd_set:
     move.l %d2,-(%sp)
     moveq #0,%d2
     move.b (%a0,%d0.l),%d2
-    andi.l #115,%d2
+    andi.l #243,%d2
     lsl.l #2,%d1
     or.l %d2,%d1
     move.l (%sp)+,%d2
@@ -97,12 +97,12 @@ mh_voic_get:
     cmpi.l #7,%d0
     bhi.s .voic_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4e,%d1
     bne.s .voic_off
     lea MH_NV,%a0
     moveq #0,%d1
     move.b (%a0,%d0.l),%d1
-    andi.l #143,%d1
+    andi.l #15,%d1
     cmpi.l #11,%d1
     bhi.s .voic_off
     moveq #0,%d1
@@ -142,7 +142,7 @@ mh_voic_set:
     move.l %d2,-(%sp)
     moveq #0,%d2
     move.b (%a0,%d0.l),%d2
-    andi.l #79,%d2
+    andi.l #207,%d2
     or.l %d2,%d1
     move.b %d1,(%a0,%d0.l)
     move.l (%sp)+,%d2
@@ -152,45 +152,58 @@ mh_voic_set:
 .voic_set_done:
     rts
 
-/* OMIT OFF=0, ROOT=1. Same project/track lifetime as HARM. */
-    .global mh_omit_get,mh_omit_set
+/* ROOT KEEP=0, OMIT=1, -1 OCT=2, -2 OCT=3; packed in bits 6..7.
+ * Legacy OMIT entry points remain binary-valued for old project comments.
+ */
+    .global mh_root_get,mh_root_set,mh_omit_get,mh_omit_set
 mh_omit_get:
+    bsr.s mh_root_get
+    cmpi.l #1,%d0
+    bls.s .root_return
+    moveq #0,%d0
+.root_return:
+    rts
+mh_root_get:
     cmpi.l #7,%d0
-    bhi.s .omit_off
+    bhi.s .root_keep
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
-    bne.s .omit_off
+    cmpi.b #0x4e,%d1
+    bne.s .root_keep
     lea MH_NV,%a0
     moveq #0,%d1
     move.b (%a0,%d0.l),%d1
-    andi.l #143,%d1
+    andi.l #15,%d1
     cmpi.l #11,%d1
-    bhi.s .omit_off
-    move.b (%a0,%d0.l),%d0
+    bhi.s .root_keep
+    moveq #0,%d1
+    move.b (%a0,%d0.l),%d1
+    move.l %d1,%d0
     lsr.l #6,%d0
-    andi.l #1,%d0
     rts
-.omit_off:
+.root_keep:
     moveq #0,%d0
     rts
 mh_omit_set:
-    cmpi.l #7,%d0
-    bhi.s .omit_set_done
     cmpi.l #1,%d1
-    bhi.s .omit_set_done
+    bhi.s .root_set_done
+mh_root_set:
+    cmpi.l #7,%d0
+    bhi.s .root_set_done
+    cmpi.l #3,%d1
+    bhi.s .root_set_done
     lea MH_NV,%a0
-    lea (%a0,%d0.l),%a0
-    tst.l %d1
-    beq.s .omit_clear
-    bset #6,(%a0)
-    bra.s .omit_history
-.omit_clear:
-    bclr #6,(%a0)
-.omit_history:
+    move.l %d2,-(%sp)
+    moveq #0,%d2
+    move.b (%a0,%d0.l),%d2
+    andi.l #63,%d2
+    lsl.l #6,%d1
+    or.l %d2,%d1
+    move.l (%sp)+,%d2
+    move.b %d1,(%a0,%d0.l)
     lea mh_voice_history,%a0
     lsl.l #3,%d0
     clr.l 4(%a0,%d0.l)
-.omit_set_done:
+.root_set_done:
     rts
 
 /* Effective native KEY, decoded to key<<2 | mode<<6; -1 for OFF.
@@ -575,7 +588,7 @@ mh_reset:
     clr.l (%a0)
     clr.l 4(%a0)
     clr.b 8(%a0)
-    moveq #0x4d,%d0
+    moveq #0x4e,%d0
     move.b %d0,MH_VERSION
     jsr mh_voice_clear
     rts
@@ -591,8 +604,11 @@ mh_boot:
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4e,%d1
     beq.s .boot_valid
+    moveq #127,%d0 /* 0x4d: preserve KEEP/OMIT; bit 7 was reserved. */
+    cmpi.b #0x4d,%d1
+    beq.s .boot_migrate_start
     moveq #59,%d0 /* 0x4c: manual inversions, add OMIT OFF. */
     cmpi.b #0x4c,%d1
     beq.s .boot_migrate_start
@@ -615,7 +631,7 @@ mh_boot:
     addq.l #1,%a0
     subq.l #1,%d2
     bne.s .boot_migrate
-    moveq #0x4d,%d1
+    moveq #0x4e,%d1
     move.b %d1,MH_VERSION
     bra.s .boot_valid
 .boot_reset:
@@ -626,7 +642,7 @@ mh_boot:
     move.l %d2,%d0
     lea MH_NV,%a0
     move.b (%a0,%d2.l),%d1
-    andi.l #143,%d1
+    andi.l #15,%d1
     cmpi.l #11,%d1
     bls.s .boot_next
     clr.b (%a0,%d2.l)
@@ -649,7 +665,7 @@ mh_load:
     bne.w .load_stock
     lea -32(%sp),%sp
     movem.l %d0-%d3/%d5/%a0-%a1,(%sp)
-    clr.l 28(%sp) /* 0=TYPE comment, 1=VOIC comment, 2=SPRD, 3=OMIT */
+    clr.l 28(%sp) /* 0=TYPE comment, 1=VOIC comment, 2=SPRD, 3=legacy OMIT, 4=ROOT */
     move.l %d3,%a0
     lea mh_key,%a1
 .load_prefix:
@@ -662,9 +678,12 @@ mh_load:
 .load_other_prefix:
     addq.l #1,28(%sp)
     move.l 28(%sp),%d5
-    cmpi.l #3,%d5
+    cmpi.l #4,%d5
     bhi.w .load_done
     move.l %d3,%a0
+    lea mh_root_key,%a1
+    beq.s .load_prefix
+    cmpi.l #3,%d5
     lea mh_omit_key,%a1
     beq.s .load_prefix
     cmpi.l #2,%d5
@@ -716,11 +735,16 @@ mh_load:
     tst.l 28(%sp)
     beq.s .load_type
     move.l 28(%sp),%d5
+    cmpi.l #4,%d5
+    beq.s .load_root
     cmpi.l #3,%d5
     beq.s .load_omit
     cmpi.l #2,%d5
     beq.s .load_sprd
     bsr.w mh_voic_set /* independently validates 0..4; 0/1 retain their meaning */
+    bra.s .load_done
+.load_root:
+    bsr.w mh_root_set
     bra.s .load_done
 .load_omit:
     bsr.w mh_omit_set
@@ -817,6 +841,24 @@ mh_save:
     lea 32(%sp),%sp
     tst.l %d0
     bmi.w .save_fail
+    move.l %d7,%d0
+    bsr.w mh_root_get
+    move.l %d0,-(%sp)
+    move.l %d7,%d0
+    addq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea mh_root_fmt
+    move.l %d2,-(%sp)
+    jsr (%a4)
+    move.l %d2,-(%sp)
+    jsr (%a3)
+    move.l %d0,-(%sp)
+    move.l %d2,-(%sp)
+    move.l %d3,-(%sp)
+    jsr (%a2)
+    lea 32(%sp),%sp
+    tst.l %d0
+    bmi.w .save_fail
     addq.l #1,%d7
     cmpi.l #8,%d7
     bne.w .save_track
@@ -831,6 +873,8 @@ mh_key: .asciz "#MIDI_HARMONY_TYPE_V1_T"
 mh_fmt: .asciz "#MIDI_HARMONY_TYPE_V1_T%d=%d\r\n"
 mh_sprd_key: .asciz "#MIDI_HARMONY_SPRD_V1_T"
 mh_sprd_fmt: .asciz "#MIDI_HARMONY_SPRD_V1_T%d=%d\r\n"
+mh_root_key: .asciz "#MIDI_HARMONY_ROOT_V1_T"
+mh_root_fmt: .asciz "#MIDI_HARMONY_ROOT_V1_T%d=%d\r\n"
 mh_omit_key: .asciz "#MIDI_HARMONY_OMIT_V1_T"
 mh_omit_fmt: .asciz "#MIDI_HARMONY_OMIT_V1_T%d=%d\r\n"
 mh_voic_key: .asciz "#MIDI_HARMONY_VOIC_V1_T"

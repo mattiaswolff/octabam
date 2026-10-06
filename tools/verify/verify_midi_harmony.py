@@ -58,7 +58,7 @@ class Machine:
 
 def machine_gate():
     m=Machine();u=m.uc
-    assert bytes(u.mem_read(NV,10))==bytes(9)+b'M'
+    assert bytes(u.mem_read(NV,10))==bytes(9)+b'N'
     # Per-track TYPE writes leave the other tracks and adjacent Quantizer alone.
     values=[t%4 for t in range(8)]
     for t,v in enumerate(values):m.call('mh_set',t,v)
@@ -97,7 +97,7 @@ def machine_gate():
     u.mem_write(NV,b'\xff'*10)
     assert m.call('mh_get',0)==0
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes(9)+b'M'
+    assert bytes(u.mem_read(NV,10))==bytes(9)+b'N'
     if 'bf_sources' in m.sym:
         u.mem_write(m.sym['bf_sources'],bytes((0,1,2,0,0,0,0,0)))
         u.mem_write(m.sym['bf_roots'],bytes((38,255,255,255,255,255,255,255)))
@@ -498,10 +498,10 @@ def spread_gate():
     # track bytes cannot turn into accidental spread selections.
     u.mem_write(NV,bytes((0,1,2,3,255,4,12,3,0xa5,0x4a)))
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes((0,1,2,3,0,0,0,3,0xa5,0x4d))
+    assert bytes(u.mem_read(NV,10))==bytes((0,1,2,3,0,0,0,3,0xa5,0x4e))
     u.mem_write(NV,bytes((11,10,9,8,7,6,255,12,0xa5,0x4b)))
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes((11,10,9,8,7,6,0,0,0xa5,0x4d))
+    assert bytes(u.mem_read(NV,10))==bytes((11,10,9,8,7,6,0,0,0xa5,0x4e))
     # OFF/NOTE/KEY OFF ignore spread; toggling spacing reseeds AUTO.
     for kind in (0,1):
         m.setting(0,kind);m.call('mh_sprd_set',0,2)
@@ -597,9 +597,53 @@ def omit_gate():
     # Inversion-only battery state migrates with OMIT OFF.
     u.mem_write(NV,bytes((59,54,33,16,2,1,0,3,0x80,0x4c)))
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes((59,54,33,16,2,1,0,3,0x80,0x4d))
+    assert bytes(u.mem_read(NV,10))==bytes((59,54,33,16,2,1,0,3,0x80,0x4e))
     assert all(m.call('mh_omit_get',t)==0 for t in range(8))
     print('  [ok] OMIT: harmonic-root removal across voicings/spreads/MIDI range, silent empty pools, OFF/NOTE identity, packed settings and migration')
+
+
+def root_placement_gate():
+    m=Machine();u=m.uc;history=m.sym['mh_voice_history']
+    for kind in range(4):
+        for choice in range(5):
+            for spread in range(3):
+                m.setting(0,kind);m.call('mh_voic_set',0,choice);m.call('mh_sprd_set',0,spread)
+                for note in range(128):
+                    raw=m.chord(0,note)
+                    m.call('mh_root_set',0,0);u.mem_write(m.scratch,bytes(raw))
+                    m.call('mh_voice',0,a0=m.scratch)
+                    full=set(u.mem_read(m.scratch,4))-{255}
+                    for mode,drop in ((2,12),(3,24)):
+                        m.call('mh_root_set',0,mode);u.mem_write(m.scratch,bytes(raw))
+                        regs={r:0x12340000+i for i,r in enumerate((UC_M68K_REG_D1,UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A1,UC_M68K_REG_A2,UC_M68K_REG_A3,UC_M68K_REG_A4))}
+                        m.call('mh_voice',0,a0=m.scratch,regs=regs)
+                        got=list(u.mem_read(m.scratch,4));actual=set(got)-{255}
+                        want=full if kind<2 else {n for n in full if n%12!=raw[0]%12} | ({raw[0]-drop} if raw[0]>=drop else set())
+                        assert actual==want,(kind,choice,spread,note,mode,full,got,want)
+                        assert len(actual)<=len(full) and all(0<=n<=127 for n in actual)
+                        assert all(u.reg_read(r)==v for r,v in regs.items())
+                        assert all(m.scratch<=a and a+n<=m.scratch+4 or m.stack-256<=a and a+n<=m.stack+4 or history<=a and a+n<=history+8 for a,n in m.writes)
+    # AUTO history must still describe the upper chord, independent of ROOT.
+    for mode in (2,3):
+        m.setting(0,3);m.call('mh_voic_set',0,1);m.call('mh_sprd_set',0,0);m.call('mh_root_set',0,mode)
+        for root,want in ((48,[48-(12 if mode==2 else 24),52,55,59]),(53,[53-(12 if mode==2 else 24),48,52,57])):
+            raw=m.chord(0,root);u.mem_write(m.scratch,bytes(raw));m.call('mh_voice',0,a0=m.scratch)
+            assert list(u.mem_read(m.scratch,4))==want,(mode,root,list(u.mem_read(m.scratch,4)),want)
+    for t in range(8):
+        for mode in range(4):
+            m.call('mh_root_set',t,mode)
+            for voic in range(5):
+                m.call('mh_voic_set',t,voic);m.call('mh_sprd_set',t,2);m.call('mh_set',t,3)
+                assert m.call('mh_root_get',t)==mode and m.call('mh_voic_get',t)==voic
+    before=bytes(u.mem_read(NV,10));m.call('mh_boot',stop=0x4001022a)
+    assert bytes(u.mem_read(NV,10))==before
+    for t,v in ((8,2),(0xffffffff,1),(0,4),(0,0xffffffff)):
+        m.call('mh_root_set',t,v);assert bytes(u.mem_read(NV,10))==before
+    # Old bit 7 must not turn into a bass setting during migration.
+    u.mem_write(NV,bytes((0,64,123,127,128,255,59,3,0xa5,0x4d)))
+    m.call('mh_boot',stop=0x4001022a)
+    assert bytes(u.mem_read(NV,10))==bytes((0,64,123,0,0,0,59,3,0xa5,0x4e))
+    print('  [ok] ROOT: both octave drops across HARM/voicings/spreads/MIDI range, AUTO history, four-voice limit, underflow, register/write guards and migration')
 
 
 def recorder_gate():
@@ -675,6 +719,15 @@ def project_parser_gate():
         assert m.call('mh_omit_get',0)==1
     load('#MIDI_HARMONY_OMIT_V1_T1=0',parse_only=True)
     assert m.call('mh_omit_get',0)==1
+    for t in range(8):
+        for mode in range(4):
+            load(f'#MIDI_HARMONY_ROOT_V1_T{t+1}={mode}\r\n')
+            assert m.call('mh_root_get',t)==mode
+    for bad in ('4','-1','2x','','0000'):
+        load(f'#MIDI_HARMONY_ROOT_V1_T1={bad}')
+        assert m.call('mh_root_get',0)==3
+    load('#MIDI_HARMONY_ROOT_V1_T1=0',parse_only=True)
+    assert m.call('mh_root_get',0)==3
     print('  [ok] project parser: valid track, malformed/out-of-range comments and parse-only isolation')
 
 
@@ -695,9 +748,9 @@ def controls_gate():
         assert m.call('mh_get',1)==want
         assert m.call('mh_get',0)==0
     u.mem_write(m.sym['mh_page_track'],(1).to_bytes(4,'big'))
-    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,2),(1,1,3),(1,1,4),(1,1,1),(1,0x7fffffff,1),(1,-1,4),(1,-0x80000000,0),(2,1,1),(2,0x7fffffff,2),(2,-1,1),(2,-0x80000000,0),(3,1,1),(3,-1,0)):
+    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,2),(1,1,3),(1,1,4),(1,1,1),(1,0x7fffffff,1),(1,-1,4),(1,-0x80000000,0),(2,1,1),(2,0x7fffffff,2),(2,-1,1),(2,-0x80000000,0),(3,1,1),(3,1,2),(3,1,3),(3,0x7fffffff,3),(3,-1,2),(3,-0x80000000,0)):
         args(slot,delta);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
-        assert m.call(('mh_get','mh_voic_get','mh_sprd_get','mh_omit_get')[slot],1)==want
+        assert m.call(('mh_get','mh_voic_get','mh_sprd_get','mh_root_get')[slot],1)==want
     for slot in range(4,7):
         before=bytes(u.mem_read(NV,10))
         args(slot,100);m.call('mh_page_encoder')
@@ -723,6 +776,7 @@ def main():
     voicing_gate()
     inversion_gate()
     omit_gate()
+    root_placement_gate()
     spread_gate()
     recorder_gate()
     controls_gate()

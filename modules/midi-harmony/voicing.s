@@ -211,13 +211,13 @@ mh_voice:
     clr.l 4(%a2)
 .voice_omit:
     move.l (%sp),%d0 /* original track, not the search scratch register */
-    jsr mh_omit_get
+    jsr mh_root_get
     tst.l %d0
     beq.s .voice_done
     moveq #0,%d1
     move.b 52(%sp),%d1 /* original harmonic root, before inversion */
     move.l %a4,%a0
-    bsr.w mh_omit_root
+    bsr.w mh_root_apply
     bra.s .voice_done
 .voice_reset:
     clr.l 4(%a2)
@@ -225,6 +225,70 @@ mh_voice:
     movem.l (%sp),%d0-%d7/%a0-%a4
     lea 88(%sp),%sp
     rts
+/* d0 ROOT mode, d1 original logical root, a0 voiced four-byte pool.
+ * Move the existing root, never add a voice. Anchor to the logical root,
+ * not its inverted/spread register. Below MIDI zero, omit that root.
+ * AUTO history deliberately remains the full upper voicing, as with OMIT.
+ */
+    .global mh_root_apply
+mh_root_apply:
+    tst.l %d0
+    beq.w .root_apply_done
+    lea -32(%sp),%sp
+    movem.l %d0-%d5/%a1,(%sp)
+    move.l %d1,%d5
+    cmpi.l #1,%d0
+    beq.s .root_apply_omit
+    subi.l #12,%d5
+    cmpi.l #3,%d0
+    bne.s .root_apply_omit
+    subi.l #12,%d5
+.root_apply_omit:
+    bsr.w mh_omit_root
+    cmpi.l #1,%d0
+    beq.s .root_apply_return
+    tst.l %d5
+    bmi.s .root_apply_return
+    lea 28(%sp),%a1
+    move.b %d5,(%a1)
+    moveq #1,%d3
+    moveq #0,%d2
+.root_apply_next:
+    moveq #0,%d4
+    move.b (%a0,%d2.l),%d4
+    cmpi.l #127,%d4
+    bhi.s .root_apply_skip
+    moveq #0,%d1
+.root_apply_duplicate:
+    moveq #0,%d0
+    move.b (%a1,%d1.l),%d0
+    cmp.l %d4,%d0
+    beq.s .root_apply_skip
+    addq.l #1,%d1
+    cmp.l %d3,%d1
+    blt.s .root_apply_duplicate
+    cmpi.l #4,%d3
+    bge.s .root_apply_skip
+    move.b %d4,(%a1,%d3.l)
+    addq.l #1,%d3
+.root_apply_skip:
+    addq.l #1,%d2
+    cmpi.l #4,%d2
+    blt.s .root_apply_next
+.root_apply_pad:
+    cmpi.l #4,%d3
+    bge.s .root_apply_copy
+    move.b %d5,(%a1,%d3.l)
+    addq.l #1,%d3
+    bra.s .root_apply_pad
+.root_apply_copy:
+    move.l (%a1),(%a0)
+.root_apply_return:
+    movem.l (%sp),%d0-%d5/%a1
+    lea 32(%sp),%sp
+.root_apply_done:
+    rts
+
 /* Remove the harmonic root pitch class from all four pool entries.
  * Fill unused slots by duplicating the lowest remaining tone for stock arp.
  * An empty result is all FF: sequence converts it to a safe muted pool;
