@@ -345,3 +345,8 @@ reproduced that failure through actual chromatic-key events. Repeat with
 7TH and other spacing choices, then C → F to retain smooth voice leading.
 The automated regressions live in the linked gate and full-firmware suite;
 a passing emulator run is not hardware acceptance of the corrected build.
+
+UI refinement: HARM and the detail-page choices use the stock encoder accumulator
+with four raw counts per selection and a one-choice cap per input report. Closing
+the detail window redraws NOTE SETUP from the current HARM value. Hardware feel
+still needs a physical check.

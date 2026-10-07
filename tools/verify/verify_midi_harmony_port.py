@@ -50,7 +50,27 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
     return work
 
 
+def choice_panel(text):
+    """Expand logical custom-control choices into four-count physical reports."""
+    lines=[]
+    for line in text.splitlines():
+        words=line.split()
+        if len(words)==4 and words[1]=='enc' and (int(words[2])<4 or words[:3]==['2300','enc','5']):
+            at,slot,steps=int(words[0]),int(words[2]),int(words[3])
+            lines.extend(f'{at+i*25} enc {slot} {4 if steps>0 else -4}' for i in range(abs(steps)))
+        elif words:lines.append(line)
+    return '\n'.join(sorted(lines,key=lambda l:int(l.split()[0])))+'\n'
+
+
 def run(work, name, extra=(), image=None, card=None):
+    extra=list(extra)
+    if '--live-script' in extra:
+        index=extra.index('--live-script')+1
+        original=pathlib.Path(extra[index])
+        physical=work/f'{name}-physical-panel.txt'
+        physical.write_text(choice_panel(original.read_text()))
+        extra[index]=physical
+
     cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image or ROOT/'out/mainos_bus.bin'),
          '--card',str(card or work/'card.img'),'--set','OCTABAM','--project','BASS',
          '--load-ms','90000','--mkii','--midi-out',str(work/f'{name}.midi'),

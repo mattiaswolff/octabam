@@ -713,14 +713,24 @@ def controls_gate():
         assert u.reg_read(UC_M68K_REG_A7)==m.stack-16
         assert int.from_bytes(u.mem_read(m.stack+4,4),'big')==slot
     u.mem_write(0x100b14cc,b'\x01')
-    for delta,want in [(1,1),(1,2),(100000,3),(-1,2),(-100000,0)]:
+    for delta,want in [(1,0),(1,0),(1,0),(1,1),(100000,2),(-4,1),(-4,0),(-100000,0)]:
         args(5,delta);m.call(entry,stop=0x40036548)
         assert m.call('mh_get',1)==want
         assert m.call('mh_get',0)==0
     u.mem_write(m.sym['mh_page_track'],(1).to_bytes(4,'big'))
-    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,2),(1,1,3),(1,1,4),(1,1,1),(1,0x7fffffff,1),(1,-1,4),(1,-0x80000000,0),(2,1,1),(2,0x7fffffff,2),(2,-1,1),(2,-0x80000000,0),(3,1,1),(3,1,2),(3,1,3),(3,0x7fffffff,3),(3,-1,2),(3,-0x80000000,0)):
-        args(slot,delta);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
-        assert m.call(('mh_get','mh_voic_get','mh_sprd_get','mh_root_get')[slot],1)==want
+    for slot,getter,values in ((0,'mh_get',[0,1,2,3]),
+                              (1,'mh_voic_get',[0,2,3,4,1]),
+                              (2,'mh_sprd_get',[0,1,2]),
+                              (3,'mh_root_get',[0,1,2,3])):
+        for want in values[1:]:
+            for tick in range(4):
+                args(slot,1);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
+            assert m.call(getter,1)==want,(slot,want)
+        args(slot,0x7fffffff);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
+        assert m.call(getter,1)==values[-1]
+        for want in reversed(values[:-1]):
+            args(slot,-0x80000000);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
+            assert m.call(getter,1)==want
     for slot in range(4,7):
         before=bytes(u.mem_read(NV,10))
         args(slot,100);m.call('mh_page_encoder')

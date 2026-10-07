@@ -45,7 +45,7 @@ mh_page_close:
     pea mh_page_layer
     jsr 0x4003146c
     addq.l #4,%sp
-    rts
+    jmp 0x40036548 /* redraw NOTE SETUP from current module values */
 
 mh_page_encoder:
     lea -12(%sp),%sp
@@ -54,6 +54,11 @@ mh_page_encoder:
     move.l 20(%sp),%d3 /* signed detents */
     cmpi.l #3,%d2
     bhi.w .page_encoder_done
+    move.l %d2,%d0
+    move.l %d3,%d1
+    jsr mh_ui_delta
+    move.l %d0,%d3
+    cmpi.l #3,%d2
     beq.w .page_omit
     move.l mh_page_track,%d4
     move.l %d4,%d0
