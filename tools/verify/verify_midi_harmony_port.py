@@ -74,7 +74,7 @@ def choice_panel(text):
     lines=[]
     for line in text.splitlines():
         words=line.split()
-        if len(words)==4 and words[1]=='enc' and (int(words[2])<4 or words[:3]==['2300','enc','5']):
+        if len(words)==4 and words[1]=='enc' and int(words[2])<4:
             at,slot,steps=int(words[0]),int(words[2]),int(words[3])
             lines.extend(f'{at+i*25} enc {slot} {4 if steps>0 else -4}' for i in range(abs(steps)))
         elif words:lines.append(line)
@@ -123,7 +123,7 @@ def sequence(source):
         # follower proves it inherits C major instead of its stored C# minor.
         work=fixture(source,name,{leader:2,1:3},arp,reverse)
         extra=['--sequencer','--internal-clock','--frames','7000']
-        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,{7 if reverse else 1}']
+        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4'] * (7 if reverse else 1)
         events=run(work,'patched',extra)
         balanced(events)
         leader_ch=13 if reverse else 1;follower_ch=5 if reverse else 2
@@ -156,7 +156,7 @@ def extended_scale(source):
     work=fixture(source,'dorian-output',{},key_raw=25,first_note=64)
     extra=['--sequencer','--internal-clock','--frames','7000']
     if 'bf_sources' in sym:
-        extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+        extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
     events=run(work,'patched',extra);balanced(events)
     lead=[e[2] for e in events if e[:2]==('on',1)]
     bass=[e[2] for e in events if e[:2]==('on',2)]
@@ -196,7 +196,7 @@ def note_rules(source):
         work=fixture(source,name,{leader:1,1:1},reverse=reverse,first_note=71,
                      tran={leader:7,1:1},locks={2:6,3:1,6:12,8:7})
         extra=['--sequencer','--internal-clock','--frames','7000']
-        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,{7 if reverse else 1}']
+        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4'] * (7 if reverse else 1)
         events=run(work,'patched',extra);balanced(events)
         lead=[e[2] for e in events if e[:2]==('on',13 if reverse else 1)]
         bass=[e[2] for e in events if e[:2]==('on',5 if reverse else 2)]
@@ -212,7 +212,7 @@ def note_rules(source):
         script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 2 down\n1800 key 2 up\n2200 key 1 down\n3000 key 1 up\n3700 quit\n')
         extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                '--step',f'-:poke:0x100b14cc={t}','--internal-clock','--live-script',script]
-        if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,1','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
+        if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,4','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
         events=run(work,'keys',extra);balanced(events)
         pitches=[e[2] for e in events if e[0]=='on']
         if arp:assert set(pitches)=={55,57},pitches
@@ -233,7 +233,7 @@ def chord_rules(source):
             work=fixture(source,name,{0:kind,1:kind},arp=arp,first_note=71,
                          tran={0:7,1:1},locks={2:6,3:1,6:12,8:7})
             extra=['--sequencer','--internal-clock','--frames','7000']
-            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
             events=run(work,'patched',extra);balanced(events)
             lead=[e[2] for e in events if e[:2]==('on',1)]
             bass=[e[2] for e in events if e[:2]==('on',2)]
@@ -254,7 +254,7 @@ def chord_rules(source):
             script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 2 down\n1800 key 2 up\n2200 key 1 down\n3000 key 1 up\n3700 quit\n')
             extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                    '--step',f'-:poke:0x100b14cc={t}','--internal-clock','--live-script',script]
-            if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,1','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
+            if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,4','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
             events=run(work,'keys',extra);balanced(events)
             pitches=[e[2] for e in events if e[0]=='on']
             want=chord(50,kind)+chord(48,kind)
@@ -355,7 +355,7 @@ def persistence(source,voic=1,omit=0):
     lines=[]
     def key(at,k,hold=100):lines.extend([f'{at} key {k:#x} down',f'{at+hold} key {k:#x} up'])
     key(100,0x31);key(600,0x35);key(1100,0x10)
-    lines.extend(['1600 key 0x2d down','1700 key 0x22 down','1850 key 0x22 up','1950 key 0x2d up','2300 enc 5 1'])
+    lines.extend(['1600 key 0x2d down','1700 key 0x22 down','1850 key 0x22 up','1950 key 0x2d up','2300 enc 5 4'])
     # Open Harmony with the physical F press. Edit all three controls and exercise
     # an unused encoder; the NOTE/ARP native staged lanes must stay intact.
     key(2400,0x3d,50)
@@ -414,7 +414,7 @@ def auto_voicing(source):
         work=fixture(source,'auto-sequence-'+('arp' if arp else 'chords'),{0:2,1:1},
                      arp=arp,first_note=60,auto=(0,))
         extra=['--sequencer','--internal-clock','--frames','7000']
-        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+        if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
         events=run(work,'play',extra);balanced(events)
         lead=[e[2] for e in events if e[:2]==('on',1)]
         bass=[e[2] for e in events if e[:2]==('on',2)]
@@ -479,7 +479,7 @@ def bypass_follow(source):
             script.write_text('100 key 0x31 down\n200 key 0x31 up\n1000 key 5 down\n1500 key 0x28 down\n1600 key 0x28 up\n5000 key 5 up\n6000 key 0x27 down\n6100 key 0x27 up\n6800 quit\n')
             events=run(work,'keys',['--step','-:poke:0x80000015=1',
                        '--step','-:poke:0x460d16f3=1','--step','-:poke:0x100b14cc=1',
-                       '--step',f'-:call:{sym["bf_encoder"]:#x},3,1',
+                       '--step',f'-:call:{sym["bf_encoder"]:#x},3,4',
                        '--step','-:poke:0x100b14cc=0','--internal-clock','--live-script',script,
                        '--mem-dump',f'{sym["bf_roots"]:#x},8={work}/roots.bin'])
             balanced(events)
@@ -536,7 +536,7 @@ def spread_output(source):
             work=fixture(source,name,{0:kind,1:1},arp=arp,first_note=60,
                          auto=(0,) if auto else (),spreads={0:spread})
             extra=['--sequencer','--internal-clock','--frames','7000']
-            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
             events=run(work,'play',extra);balanced(events)
             lead=[e[2] for e in events if e[:2]==('on',1)]
             bass=[e[2] for e in events if e[:2]==('on',2)]
@@ -569,7 +569,7 @@ def manual_inversions(source):
             work=fixture(source,f'manual-{kind}-{choice}'+(f'-root{omit}' if omit else '')+('-arp' if arp else ''),
                          {0:kind,1:1},arp=arp,first_note=60,voicings={0:choice},roots={0:omit})
             extra=['--sequencer','--internal-clock','--frames','7000']
-            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+            if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
             events=run(work,'play',extra);balanced(events)
             lead=[e[2] for e in events if e[:2]==('on',1)]
             bass=[e[2] for e in events if e[:2]==('on',2)]
@@ -582,7 +582,7 @@ def manual_inversions(source):
             print(f'  [ok] {work.name}: manual inversion before arp, original follower root, balanced notes',flush=True)
     work=fixture(source,'omit-empty-sequence',{0:2,1:1},first_note=127,omits={0:1})
     extra=['--sequencer','--internal-clock','--frames','7000']
-    if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+    if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
     events=run(work,'play',extra);balanced(events)
     lead=[e[2] for e in events if e[:2]==('on',1)]
     assert lead==[69,72,71,74],lead # empty first chord must not leak note zero
