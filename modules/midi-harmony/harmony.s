@@ -539,10 +539,12 @@ mh_prepare:
 mh_final:
     jmp mh_quant
 
-/* Harmony's arp pool already contains transposed, scale-built pitches.
- * Live pools contain the player's absolute pitches. Neither is transposed
- * again. OFF replays stock arithmetic; KEY OFF leaves pitches unsnapped. Invalid sequenced roots are
- * muted after safely initializing the arp; live keyboard pools remain usable.
+/* Sequenced pools already contain TRAN from chord generation; do not add it
+ * twice. Live pools contain absolute keyboard pitches, so their arp output
+ * uses stock TRAN/arranger arithmetic on every tick. Direct keyboard output
+ * never enters this hook and remains absolute, just like stock.
+ * OFF replays stock arithmetic; KEY OFF leaves pitches unsnapped. Invalid sequenced roots are muted
+ * after safely initializing the arp; live keyboard pools remain usable.
  */
     .global mh_transpose
 mh_transpose:
@@ -559,7 +561,7 @@ mh_transpose:
     add.l %d0,%d0
     move.b (%a0,%d0.l),%d0
     cmpi.b #1,%d0
-    beq.s .transpose_ready
+    beq.s .transpose_stock
     lea mh_muted,%a0
     tst.b (%a0,%d7.l)
     bne.s .transpose_muted

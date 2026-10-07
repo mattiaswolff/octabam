@@ -146,7 +146,7 @@ def final_note_gate():
         u.mem_write(0x46c7a124,b'\0')
         for live in (0,1):
             u.mem_write(0x46c77b1e,bytes((live,)))
-            m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+            m.call('mh_transpose',stop=0x4009fb40 if live else 0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         # Out-of-range sequenced root is muted, then a valid trig recovers.
         u.mem_write(0x46c77b1e,b'\0')
         u.mem_write(lane+0x22c,b'\0')
@@ -155,7 +155,7 @@ def final_note_gate():
         assert u.mem_read(m.sym['mh_muted'],1)==b'\x01'
         m.call('mh_transpose',stop=0x4009fd2a,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(0x46c77b1e,b'\x01')
-        m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(lane+0x22c,b'\x40');u.mem_write(m.scratch,bytes((60,0,0,0)))
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert u.mem_read(m.sym['mh_muted'],1)==b'\0'

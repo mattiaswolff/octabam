@@ -59,7 +59,9 @@ builds F–A–C (or F–A–C–E). Followers use their source's scale througho
 A chromatic keyboard press chooses the pitch directly, without adding track
 TRAN or replacing it with a followed root. Pressing D plays D, D minor or
 D minor 7 according to HARM, even with followed root F and TRAN +7. This
-also applies to live arp. The source supplies the keyboard's scale.
+does not transpose direct keyboard output. Live arp uses stock TRAN/arranger
+arithmetic on each tick, including with KEY OFF; scale correction is disabled
+when KEY is OFF. The source supplies the keyboard's scale.
 
 Generated notes enter the stock arp with TRAN already applied once. Its
 pitch offsets receive a final scale correction before MIDI transmission.
