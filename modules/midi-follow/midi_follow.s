@@ -259,9 +259,11 @@ bf_encoder:
     beq.s .encoder_follow
     jmp 0x4003a8e8 /* Native CHAN/BANK/PROG/SBNK, or Harmony's F wrapper. */
 .encoder_follow:
+    move.l 8(%sp),%d1
+    bsr.w bf_ui_delta
+    move.l %d0,%d1
     moveq #0,%d0
     move.b 0x100b14cc,%d0
-    move.l 8(%sp),%d1
     bsr.w bf_select
     jmp 0x40036548              /* stock NOTE SETUP redraw */
 
@@ -365,3 +367,23 @@ bf_roots:
 
     .global bf_pitches
 bf_pitches: .space 8,0xff /* absolute source roots, independently of receiver register */
+
+/* d0 physical encoder, d1 raw movement -> d0 choice delta.
+ * Stock fixed-point detent accumulator; four counts per choice, at most one
+ * choice per report. No push acceleration for these small enumerations. */
+    .global bf_ui_delta
+bf_ui_delta:
+    cmpi.l #4,%d1
+    ble.s .ui_delta_low
+    moveq #4,%d1
+.ui_delta_low:
+    cmpi.l #-4,%d1
+    bge.s .ui_delta_accumulate
+    moveq #-4,%d1
+.ui_delta_accumulate:
+    pea 1024
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr 0x40032510
+    lea 12(%sp),%sp
+    rts

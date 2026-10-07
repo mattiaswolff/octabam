@@ -1,4 +1,4 @@
-/* RFOL D press: receiver MODE and OCT. Native modal/input-layer pattern.
+/* RFOL D press: RFOL, MODE and OCT. Native modal/input-layer pattern.
  * Transport/chromatic keys pass through; settings affect subsequent trigs. */
     .text
     .global bf_page_open,bf_page_close,bf_page_noop,bf_page_encoder
@@ -39,18 +39,34 @@ bf_page_close:
     pea bf_page_layer
     jsr 0x4003146c
     addq.l #4,%sp
-    rts
+    jmp 0x40036548 /* refresh RFOL on the underlying NOTE SETUP */
 
 bf_page_encoder:
     lea -12(%sp),%sp
-    movem.l %d0-%d2,(%sp)
+    movem.l %d2-%d4,(%sp)
+    move.l 16(%sp),%d4
+    cmpi.l #2,%d4
+    bhi.s .encoder_done
+    move.l %d4,%d0
+    move.l 20(%sp),%d1
+    jsr bf_ui_delta
+    move.l %d0,%d2
     move.l bf_page_track,%d0
-    move.l 16(%sp),%d1
-    move.l 20(%sp),%d2
+    tst.l %d4
+    beq.s .encoder_source
+    move.l %d4,%d1
+    subq.l #1,%d1
     jsr bf_reg_change
-    movem.l (%sp),%d0-%d2
+    bra.s .encoder_draw
+.encoder_source:
+    move.l %d2,%d1
+    jsr bf_select
+.encoder_draw:
+    jsr bf_page_draw
+.encoder_done:
+    movem.l (%sp),%d2-%d4
     lea 12(%sp),%sp
-    bra.w bf_page_draw
+    rts
 
 bf_page_draw:
     lea -44(%sp),%sp
@@ -63,24 +79,13 @@ bf_page_draw:
     move.l %a5,-(%sp)
     jsr 0x40035624
     addq.l #4,%sp
-    moveq #12,%d0
-    moveq #52,%d1
-    lea .mode_label,%a0
-    bsr.w .page_text
-    moveq #51,%d0
-    moveq #52,%d1
-    lea .oct_label,%a0
-    bsr.w .page_text
     move.l bf_page_track,%d0
     jsr bf_mode_get
-    lea .fixed,%a0
-    tst.l %d0
-    beq.s .mode_text
-    lea .source,%a0
-.mode_text:
-    moveq #9,%d0
-    moveq #36,%d1
-    bsr.w .page_text
+    move.l %d0,%d1
+    moveq #49,%d0
+    lea bf_mode_format,%a0
+    lea 0x40046f10,%a1 /* native two-position selector */
+    bsr.w .page_selector
     move.l bf_page_track,%d0
     jsr bf_oct_get
     move.l %d0,-(%sp)
@@ -88,27 +93,31 @@ bf_page_draw:
     move.l %a2,-(%sp)
     jsr 0x40013a08
     lea 12(%sp),%sp
-    moveq #55,%d0
-    moveq #36,%d1
+    moveq #93,%d0
+    moveq #40,%d1
     move.l %a2,%a0
     bsr.w .page_text
-    /* Two control cells aligned with physical A/B, plus native footer. */
-    pea 1
-    pea 58
-    pea 38
-    pea 12
-    pea 38
-    move.l %a5,-(%sp)
-    jsr 0x40012254
-    lea 24(%sp),%sp
-    pea 1
-    pea 12
-    pea 115
-    pea 12
-    clr.l -(%sp)
-    move.l %a5,-(%sp)
-    jsr 0x40012254
-    lea 24(%sp),%sp
+    move.l bf_page_track,%d0
+    lea bf_sources,%a0
+    moveq #0,%d1
+    move.b (%a0,%d0.l),%d1
+    moveq #10,%d0
+    lea bf_format,%a0
+    lea 0x400467a4,%a1 /* stock numeric/text field, like NOTE SETUP RFOL */
+    bsr.w .page_selector
+    bsr.w .page_grid
+    moveq #51,%d0
+    moveq #52,%d1
+    lea .mode_label,%a0
+    bsr.w .page_text
+    moveq #89,%d0
+    moveq #52,%d1
+    lea .oct_label,%a0
+    bsr.w .page_text
+    moveq #12,%d0
+    moveq #52,%d1
+    lea .source_label,%a0
+    bsr.w .page_text
     move.l bf_page_track,%d0
     addq.l #1,%d0
     move.l %d0,-(%sp)
@@ -130,6 +139,52 @@ bf_page_draw:
     movem.l (%sp),%d2-%d3/%a2/%a5
     lea 44(%sp),%sp
     rts
+.page_grid: /* Stock line/box primitive; six cells above a shared footer. */
+    lea -8(%sp),%sp
+    movem.l %d2/%a2,(%sp)
+    moveq #4,%d2
+    lea .page_grid_lines,%a2
+.page_grid_line:
+    pea 1
+    move.l 12(%a2),-(%sp)
+    move.l 8(%a2),-(%sp)
+    move.l 4(%a2),-(%sp)
+    move.l (%a2),-(%sp)
+    move.l %a5,-(%sp)
+    jsr 0x40012254
+    lea 24(%sp),%sp
+    lea 16(%a2),%a2
+    subq.l #1,%d2
+    bne.s .page_grid_line
+    movem.l (%sp),%d2/%a2
+    lea 8(%sp),%sp
+    rts
+.page_selector_bottom:
+    moveq #13,%d2
+    bra.s .page_selector_y
+.page_selector: /* d0=x,d1=value,a0=formatter,a1=stock widget,a5=surface */
+    moveq #36,%d2
+.page_selector_y:
+    move.l %a5,-(%sp)
+    move.l %a0,-(%sp)
+    clr.l -(%sp) /* flags: full widget, no highlight */
+    move.l %d1,-(%sp)
+    clr.l -(%sp) /* slot is unused by these stock widgets */
+    move.l %d2,-(%sp)
+    move.l %d0,-(%sp)
+    jsr (%a1)
+    lea 28(%sp),%sp
+    rts
+bf_mode_format:
+    move.l 4(%sp),%a0
+    lea .fixed,%a1
+    tst.l 8(%sp)
+    beq.s .mode_copy
+    lea .source,%a1
+.mode_copy:
+    move.b (%a1)+,(%a0)+
+    bne.s .mode_copy
+    rts
 .page_text: /* d0=x,d1=y,a0=string,a5=surface; native C ABI */
     move.l %a0,-(%sp)
     pea -1
@@ -140,6 +195,7 @@ bf_page_draw:
     jsr 0x40012bd8
     lea 24(%sp),%sp
     rts
+.source_label: .asciz "RFOL"
 .mode_label: .asciz "MODE"
 .oct_label: .asciz "OCT"
 .fixed: .asciz "FIXED"
@@ -148,6 +204,11 @@ bf_page_draw:
 .title: .asciz "FOLLOW T%d"
 .back: .asciz "NO:BACK"
     .balign 4
+.page_grid_lines:
+    .long 38,12,38,58
+    .long 77,12,77,58
+    .long 0,35,115,35
+    .long 0,12,115,12
 bf_page_layer:
     .long 0,bf_page_keys,bf_page_encs,0,0,-1,-1
 bf_page_keys:
