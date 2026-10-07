@@ -231,3 +231,138 @@ ch_draw_track: .long -1
 ch_draw_notes: .long -1
 ch_draw_octave: .long -1
 ch_draw_identity: .word -1
+
+/* Full-width single-line pitches. Use the native font normally. Long lists
+ * retain native letters/digits, with a three-column sharp and narrow dashes.
+ * A negative-octave sign needs no trailing gap before its digit. Even four
+ * sharp notes in octave -1 fit in 57 pixels; never omit a voice or octave. */
+    .global ch_draw_note_line
+ch_draw_note_line: /* a0 text */
+    lea -12(%sp),%sp
+    movem.l %d2/%a2-%a3,(%sp)
+    move.l %a0,%a2
+    move.l %a0,-(%sp)
+    pea -1
+    pea 0x400ba876
+    jsr 0x40012f30
+    lea 12(%sp),%sp
+    cmpi.l #58,%d0
+    bhi.s .line_compact
+    move.l %a2,-(%sp)
+    pea -1
+    pea 25
+    pea 61
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40012bd8
+    lea 24(%sp),%sp
+    bra.w .line_done
+.line_compact:
+    moveq #61,%d2
+.line_character:
+    moveq #0,%d0
+    move.b (%a2),%d0
+    beq.w .line_done
+    cmpi.b #35,%d0
+    beq.s .line_sharp
+    cmpi.b #45,%d0
+    beq.s .line_dash
+    move.l %a2,-(%sp)
+    pea 1
+    pea 25
+    move.l %d2,-(%sp)
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40012bd8
+    lea 24(%sp),%sp
+    addq.l #4,%d2
+    bra.s .line_next
+.line_sharp:
+    lea .line_sharp_bitmap,%a3
+    moveq #25,%d0
+    bsr.s .line_bitmap
+    addq.l #4,%d2
+    bra.s .line_next
+.line_dash:
+    lea .line_dash_bitmap,%a3
+    moveq #27,%d0
+    bsr.s .line_bitmap
+    addq.l #1,%d2
+    move.b 1(%a2),%d0
+    cmpi.b #57,%d0 /* negative octave: next character is a digit */
+    bls.s .line_next
+    addq.l #1,%d2
+.line_next:
+    addq.l #1,%a2
+    bra.w .line_character
+.line_done:
+    movem.l (%sp),%d2/%a2-%a3
+    lea 12(%sp),%sp
+    rts
+.line_bitmap:
+    move.l %d0,-(%sp)
+    move.l %d2,-(%sp)
+    pea 0x400bf10a
+    move.l %a3,-(%sp)
+    jsr 0x400128a8
+    lea 16(%sp),%sp
+    rts
+    .balign 4
+.line_sharp_bitmap: .long 3,5,1,.line_sharp_pixels,.line_sharp_mask
+.line_sharp_pixels: .long 0xf8000000,0x50000000,0xf8000000
+.line_sharp_mask: .long 0xf8000000,0xf8000000,0xf8000000
+.line_dash_bitmap: .long 1,1,1,.line_dash_pixels,.line_dash_pixels
+.line_dash_pixels: .long 0x80000000
+
+/* Most names fit beside the octave box. A long extension, e.g.
+ * Ebdim(addb9), uses the second keyboard row instead of touching the border. */
+    .global ch_draw_chord_name
+ch_draw_chord_name:
+    lea -12(%sp),%sp
+    movem.l %d2/%a2-%a3,(%sp)
+    move.l %a0,%a2
+    move.l %a0,-(%sp)
+    pea -1
+    pea 0x400ba876
+    jsr 0x40012f30
+    lea 12(%sp),%sp
+    moveq #-1,%d2
+    suba.l %a3,%a3
+    cmpi.l #41,%d0
+    bls.s .chord_name_first
+    move.l %a2,%a3
+    moveq #0,%d2
+.chord_name_split:
+    move.b (%a3),%d0
+    beq.s .chord_name_unsplit
+    cmpi.b #40,%d0
+    beq.s .chord_name_first
+    addq.l #1,%a3
+    addq.l #1,%d2
+    bra.s .chord_name_split
+.chord_name_unsplit:
+    suba.l %a3,%a3
+    moveq #-1,%d2
+.chord_name_first:
+    moveq #17,%d0
+    bsr.s .chord_name_row
+    tst.l %a3
+    beq.s .chord_name_done
+    move.l %a3,%a2
+    moveq #-1,%d2
+    moveq #9,%d0
+    bsr.s .chord_name_row
+.chord_name_done:
+    movem.l (%sp),%d2/%a2-%a3
+    lea 12(%sp),%sp
+    rts
+.chord_name_row:
+    move.l %a2,-(%sp)
+    move.l %d2,-(%sp)
+    move.l %d0,-(%sp)
+    pea 78
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40012bd8
+    lea 24(%sp),%sp
+    rts

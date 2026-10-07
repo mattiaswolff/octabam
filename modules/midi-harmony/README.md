@@ -507,8 +507,9 @@ the detail window redraws NOTE SETUP from the current HARM value. Hardware feel
 still needs a physical check.
 
 CHORD PLAY's guide shows the currently sounding chord and its captured MIDI
-pitches, split across two rows to fit accidentals. The octave at the right uses
-native CHROMATIC PLAY numbering (MIDI 60 is C4). Released chords disappear;
+pitches on one line above the chord name. The octave uses the stock CHROMATIC
+PLAY box, position and numbering (MIDI 60 is C4). Long pitch lists use compact
+sharps and separators to keep all four notes visible. Released chords disappear;
 sequencer playback supplies its own root/CHRD identity and native active-note
 ownership. With overlapping live roots, the latest still-held root is shown;
 releasing it reveals another held root or the sequencer. The display reads

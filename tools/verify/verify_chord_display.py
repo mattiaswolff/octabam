@@ -24,7 +24,7 @@ def machine():
     u.mem_write(s['ch_live'],b'\x01')
     u.mem_write(s['mh_held']+60*4,bytes((48,64,79,255)))
     assert text()=='Cmaj7'
-    assert row(0,2)=='C3-E4' and row(2,4)=='G5'
+    assert row(0,4)=='C3-E4-G5'
     # Settings can change while notes sustain: retain the actual captured notes.
     m.call('mh_root_set',0,3);m.call('mh_sprd_set',0,2)
     assert text()=='Cmaj7' and row(0,2)=='C3-E4'
@@ -35,12 +35,33 @@ def machine():
     for i,n in enumerate((62,65,69,72)):
         u.mem_write(0x46c77a16+i*8,struct.pack('>ii',0x90,n))
     assert text()=='Dm7'
-    assert row(0,2)=='D4-F4' and row(2,4)=='A4-C5'
+    assert row(0,4)=='D4-F4-A4-C5'
     # Native note-off marks note=-1; stale root/quality must not keep the name.
     for i in range(4):u.mem_write(0x46c77a1a+i*8,b'\xff'*4)
     assert text()=='' and row(0,2)==''
     u.mem_write(s['ch_display_notes'],bytes((0,1,126,127)))
-    assert row(0,2)=='C-1-C#-1' and row(2,4)=='F#9-G9'
+    assert row(0,4)=='C-1-C#-1-F#9-G9'
+    # Execute native drawing too: wide accidentals and octave -1 remain on one
+    # line inside the guide, without changing pixels in adjacent controls.
+    plane=0x46c7e0ea
+    for line in ('C3-E3-G4', 'C#3-D#3-F#3-A#3',
+                 'C#-1-D#-1-F#-1-A#-1', 'C-1-C#-1-F#9-G9'):
+        u.mem_write(plane,bytes(1024))
+        u.mem_write(m.scratch,line.encode()+b'\0')
+        m.call('ch_draw_note_line',a0=m.scratch)
+        ink=bytes(u.mem_read(plane,1024))
+        lit=[(x,y) for x in range(128) for y in range(64)
+             if ink[x*8+y//8] & (0x80>>(y%8))]
+        assert lit and all(61<=x<=118 and 25<=y<=30 for x,y in lit),(line,lit)
+    for name in ('Cmaj7','Ddim(addb9)','Ebdim(addb9)','Gbsus#4b5'):
+        u.mem_write(plane,bytes(1024))
+        u.mem_write(m.scratch,name.encode()+b'\0')
+        m.call('ch_draw_chord_name',a0=m.scratch)
+        ink=bytes(u.mem_read(plane,1024))
+        lit=[(x,y) for x in range(128) for y in range(64)
+             if ink[x*8+y//8] & (0x80>>(y%8))]
+        assert lit and all(78<=x<=118 and 9<=y<=22 for x,y in lit),(name,lit)
+    print('[ok] single-line drawing: all four voices, sharps and negative octaves stay inside the guide',flush=True)
     # The UI seam must return the queued event unchanged to native dispatch.
     u.mem_map(0x460d0000,0x10000)
     u.mem_write(m.scratch,b'\x01')
@@ -66,6 +87,7 @@ def port(source, selected=None):
     (work/'card.img').write_bytes(card)
     cases={
         'held':(panel.PANEL+'1600 key 0 down\n2300 quit\n','Cm',[48,51,55]),
+        'ninth':(panel.PANEL+'1600 key 1 down\n1800 key 10 down\n2300 quit\n','Ddim(addb9)',[50,53,56,63]),
         'released':(panel.PANEL+'1600 key 0 down\n1900 key 0 up\n2300 quit\n','',[]),
         'octave':(panel.PANEL+panel.combo(1500,0x21)+'2000 key 0 down\n2400 quit\n','Cm',[60,63,67]),
         'sequence':(panel.PANEL+panel.key(1600,0x28)+'2100 quit\n',None,None),
@@ -99,6 +121,6 @@ def port(source, selected=None):
     (OUT/('receipt-'+ '-'.join(selected)+'.json' if selected else 'receipt.json')).write_text(json.dumps(dict(cases=results,image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
     machine()
     if args.project:port(args.project,args.selected)
