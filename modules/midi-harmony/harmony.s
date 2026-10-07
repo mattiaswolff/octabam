@@ -1,5 +1,5 @@
 /* MIDI Harmony for 1.40C. No stored note/chord lanes are rewritten.
- * TYPE/SPRD/manual inversion/OMIT share e2..e9; ea AUTO bits, eb version.
+ * TYPE/SPRD/manual inversion/ROOT share e2..e9; ea AUTO bits, eb version.
  * Native KEY/scale remains in the Part. Quantizer ec..ee are separate.
  */
     .text
@@ -10,16 +10,16 @@
     .global mh_get,mh_set,mh_source,mh_quant,mh_generate,mh_sequence
     .global mh_boot,mh_defaults,mh_load,mh_save,mh_arp_encoder,mh_note_encoder,mh_draw_type,mh_type_format,mh_keyboard
 
-/* One byte per track: bits 0..1 TYPE, bits 2..3 SPRD (0..2), bits 4..5 inversion (0..3), bit 6 OMIT ROOT. */
+/* One byte per track: bits 0..1 TYPE, bits 2..3 SPRD (0..2), bits 4..5 inversion (0..3), bits 6..7 ROOT (KEEP/OMIT/-1 OCT/-2 OCT). */
 mh_get:
     cmpi.l #7,%d0
     bhi.s .get_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4f,%d1
     bne.s .get_off
     lea MH_NV,%a0
     move.b (%a0,%d0.l),%d0
-    andi.l #143,%d0 /* ignore inversion; reject reserved bits */
+    andi.l #15,%d0 /* ignore inversion and ROOT; reject invalid spread */
     cmpi.l #11,%d0
     bhi.s .get_off
     andi.l #3,%d0
@@ -30,13 +30,13 @@ mh_get:
 mh_set:
     cmpi.l #7,%d0
     bhi.s .set_done
-    cmpi.l #3,%d1
+    cmpi.l #2,%d1
     bhi.s .set_done
     lea MH_NV,%a0
     move.l %d2,-(%sp)
     moveq #0,%d2
     move.b (%a0,%d0.l),%d2
-    andi.l #124,%d2
+    andi.l #252,%d2
     or.l %d2,%d1
     move.l (%sp)+,%d2
     cmp.b (%a0,%d0.l),%d1
@@ -55,11 +55,11 @@ mh_sprd_get:
     cmpi.l #7,%d0
     bhi.s .sprd_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4f,%d1
     bne.s .sprd_off
     lea MH_NV,%a0
     move.b (%a0,%d0.l),%d0
-    andi.l #143,%d0 /* ignore inversion; reject reserved bits */
+    andi.l #15,%d0 /* ignore inversion and ROOT; reject invalid spread */
     cmpi.l #11,%d0
     bhi.s .sprd_off
     lsr.l #2,%d0
@@ -76,7 +76,7 @@ mh_sprd_set:
     move.l %d2,-(%sp)
     moveq #0,%d2
     move.b (%a0,%d0.l),%d2
-    andi.l #115,%d2
+    andi.l #243,%d2
     lsl.l #2,%d1
     or.l %d2,%d1
     move.l (%sp)+,%d2
@@ -97,12 +97,12 @@ mh_voic_get:
     cmpi.l #7,%d0
     bhi.s .voic_off
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4f,%d1
     bne.s .voic_off
     lea MH_NV,%a0
     moveq #0,%d1
     move.b (%a0,%d0.l),%d1
-    andi.l #143,%d1
+    andi.l #15,%d1
     cmpi.l #11,%d1
     bhi.s .voic_off
     moveq #0,%d1
@@ -142,7 +142,7 @@ mh_voic_set:
     move.l %d2,-(%sp)
     moveq #0,%d2
     move.b (%a0,%d0.l),%d2
-    andi.l #79,%d2
+    andi.l #207,%d2
     or.l %d2,%d1
     move.b %d1,(%a0,%d0.l)
     move.l (%sp)+,%d2
@@ -152,45 +152,58 @@ mh_voic_set:
 .voic_set_done:
     rts
 
-/* OMIT OFF=0, ROOT=1. Same project/track lifetime as HARM. */
-    .global mh_omit_get,mh_omit_set
+/* ROOT KEEP=0, OMIT=1, -1 OCT=2, -2 OCT=3; packed in bits 6..7.
+ * Legacy OMIT entry points remain binary-valued for old project comments.
+ */
+    .global mh_root_get,mh_root_set,mh_omit_get,mh_omit_set
 mh_omit_get:
+    bsr.s mh_root_get
+    cmpi.l #1,%d0
+    bls.s .root_return
+    moveq #0,%d0
+.root_return:
+    rts
+mh_root_get:
     cmpi.l #7,%d0
-    bhi.s .omit_off
+    bhi.s .root_keep
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
-    bne.s .omit_off
+    cmpi.b #0x4f,%d1
+    bne.s .root_keep
     lea MH_NV,%a0
     moveq #0,%d1
     move.b (%a0,%d0.l),%d1
-    andi.l #143,%d1
+    andi.l #15,%d1
     cmpi.l #11,%d1
-    bhi.s .omit_off
-    move.b (%a0,%d0.l),%d0
+    bhi.s .root_keep
+    moveq #0,%d1
+    move.b (%a0,%d0.l),%d1
+    move.l %d1,%d0
     lsr.l #6,%d0
-    andi.l #1,%d0
     rts
-.omit_off:
+.root_keep:
     moveq #0,%d0
     rts
 mh_omit_set:
-    cmpi.l #7,%d0
-    bhi.s .omit_set_done
     cmpi.l #1,%d1
-    bhi.s .omit_set_done
+    bhi.s .root_set_done
+mh_root_set:
+    cmpi.l #7,%d0
+    bhi.s .root_set_done
+    cmpi.l #3,%d1
+    bhi.s .root_set_done
     lea MH_NV,%a0
-    lea (%a0,%d0.l),%a0
-    tst.l %d1
-    beq.s .omit_clear
-    bset #6,(%a0)
-    bra.s .omit_history
-.omit_clear:
-    bclr #6,(%a0)
-.omit_history:
+    move.l %d2,-(%sp)
+    moveq #0,%d2
+    move.b (%a0,%d0.l),%d2
+    andi.l #63,%d2
+    lsl.l #6,%d1
+    or.l %d2,%d1
+    move.l (%sp)+,%d2
+    move.b %d1,(%a0,%d0.l)
     lea mh_voice_history,%a0
     lsl.l #3,%d0
     clr.l 4(%a0,%d0.l)
-.omit_set_done:
+.root_set_done:
     rts
 
 /* Effective native KEY, decoded to key<<2 | mode<<6; -1 for OFF.
@@ -396,41 +409,23 @@ mh_direct:
     lsr.l #2,%d5
     andi.l #15,%d5
     /* d2 snapped root, d4 mask, d5 tonic. */
-    move.l %d2,%d7
     moveq #1,%d0
     cmpi.l #1,%d6
-    beq.s .gen_return
-    addq.l #1,%d6
-    move.l %d6,36(%sp)
-    moveq #1,%d6 /* voice index */
-.gen_voice:
-    moveq #2,%d3
-.gen_degree:
-    addq.l #1,%d7
-    move.l %d7,%d1
-    sub.l %d5,%d1
-    bpl.s .gen_mod
-    addi.l #12,%d1
-.gen_mod:
-    cmpi.l #12,%d1
-    blt.s .gen_test
-    subi.l #12,%d1
-    bra.s .gen_mod
-.gen_test:
-    btst %d1,%d4
-    beq.s .gen_degree
-    subq.l #1,%d3
-    bne.s .gen_degree
-    move.l %d7,%d1
-    cmpi.l #127,%d1
-    bhi.s .gen_end
-    move.b %d1,(%a1,%d6.l)
-    addq.l #1,%d6
-    cmp.l 36(%sp),%d6
-    blt.s .gen_voice
-.gen_end:
+    beq.w .gen_return
+    lea ch_current,%a0
+    moveq #0,%d1
+    move.b (%a0,%d7.l),%d1
+    cmpi.l #3,%d6 /* legacy seventh, until project migration */
+    bne.s .gen_quality
+    moveq #1,%d1
+.gen_quality:
+    move.l %d2,%d0
+    move.l %d4,%d2
+    move.l %d5,%d3
+    move.l %a1,%a0
+    jsr ch_build
     moveq #1,%d0
-    bra.s .gen_return
+    bra.w .gen_return
 .gen_invalid:
     clr.l (%a1) /* Safe bitmap input; sequence output is muted below. */
     moveq #-1,%d0
@@ -442,6 +437,8 @@ mh_direct:
 mh_sequence:
     lea -12(%sp),%sp
     movem.l %d0-%d1/%a0,(%sp)
+    move.l %d7,%d0
+    jsr ch_sequence_context
     moveq #0,%d1
     move.b 0x22c(%a5),%d1
     subi.l #64,%d1
@@ -511,7 +508,7 @@ mh_prepare:
 /* Final correction also keeps stock arp step offsets inside the scale. */
     .global mh_final,mh_output
 mh_final:
-    jmp mh_quant
+    jmp ch_final
 
 /* Harmony's arp pool already contains transposed, scale-built pitches.
  * Live pools contain the player's absolute pitches. Neither is transposed
@@ -559,7 +556,7 @@ mh_output:
     moveq #0,%d0
     move.b (%a2),%d0
     move.l %d7,%d1
-    bsr.w mh_final
+    jsr ch_output_final
     move.b %d0,(%a2)
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
@@ -571,11 +568,12 @@ mh_output:
     jmp 0x4009fb8c
 
 mh_reset:
+    clr.l ch_legacy7_mask
     lea MH_NV,%a0
     clr.l (%a0)
     clr.l 4(%a0)
     clr.b 8(%a0)
-    moveq #0x4d,%d0
+    moveq #0x4f,%d0
     move.b %d0,MH_VERSION
     jsr mh_voice_clear
     rts
@@ -588,11 +586,15 @@ mh_defaults:
     clr.l 0x100b14d8
     jmp 0x40025ace
 mh_boot:
+    jsr ch_lock_init
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
     move.b MH_VERSION,%d1
-    cmpi.b #0x4d,%d1
+    cmpi.b #0x4f,%d1
     beq.s .boot_valid
+    moveq #127,%d0 /* previous Harmony packing, including OMIT */
+    cmpi.b #0x4d,%d1
+    beq.s .boot_migrate_start
     moveq #59,%d0 /* 0x4c: manual inversions, add OMIT OFF. */
     cmpi.b #0x4c,%d1
     beq.s .boot_migrate_start
@@ -609,14 +611,19 @@ mh_boot:
     moveq #0,%d1
     move.b (%a0),%d1
     cmp.l %d0,%d1
+    bhi.s .boot_migrate_bad
+    andi.l #15,%d1
+    cmpi.l #11,%d1
     bls.s .boot_migrate_next
+.boot_migrate_bad:
     clr.b (%a0)
 .boot_migrate_next:
     addq.l #1,%a0
     subq.l #1,%d2
     bne.s .boot_migrate
-    moveq #0x4d,%d1
+    moveq #0x4f,%d1
     move.b %d1,MH_VERSION
+    jsr ch_migrate_settings
     bra.s .boot_valid
 .boot_reset:
     bsr.w mh_reset
@@ -626,9 +633,13 @@ mh_boot:
     move.l %d2,%d0
     lea MH_NV,%a0
     move.b (%a0,%d2.l),%d1
-    andi.l #143,%d1
+    andi.l #15,%d1
     cmpi.l #11,%d1
+    bhi.s .boot_track_bad
+    andi.l #3,%d1
+    cmpi.l #2,%d1
     bls.s .boot_next
+.boot_track_bad:
     clr.b (%a0,%d2.l)
 .boot_next:
     addq.l #1,%d2
@@ -649,7 +660,7 @@ mh_load:
     bne.w .load_stock
     lea -32(%sp),%sp
     movem.l %d0-%d3/%d5/%a0-%a1,(%sp)
-    clr.l 28(%sp) /* 0=TYPE comment, 1=VOIC comment, 2=SPRD, 3=OMIT */
+    clr.l 28(%sp) /* 0=TYPE, 1=VOIC, 2=SPRD, 3=legacy OMIT, 4=legacy seventh, 5=ROOT */
     move.l %d3,%a0
     lea mh_key,%a1
 .load_prefix:
@@ -662,9 +673,15 @@ mh_load:
 .load_other_prefix:
     addq.l #1,28(%sp)
     move.l 28(%sp),%d5
-    cmpi.l #3,%d5
+    cmpi.l #5,%d5
     bhi.w .load_done
     move.l %d3,%a0
+    lea mh_root_key,%a1
+    beq.s .load_prefix
+    cmpi.l #4,%d5
+    lea ch_legacy_key,%a1
+    beq.s .load_prefix
+    cmpi.l #3,%d5
     lea mh_omit_key,%a1
     beq.s .load_prefix
     cmpi.l #2,%d5
@@ -716,11 +733,18 @@ mh_load:
     tst.l 28(%sp)
     beq.s .load_type
     move.l 28(%sp),%d5
+    cmpi.l #5,%d5
+    beq.s .load_root
+    cmpi.l #4,%d5
+    beq.s .load_legacy
     cmpi.l #3,%d5
     beq.s .load_omit
     cmpi.l #2,%d5
     beq.s .load_sprd
     bsr.w mh_voic_set /* independently validates 0..4; 0/1 retain their meaning */
+    bra.s .load_done
+.load_root:
+    bsr.w mh_root_set
     bra.s .load_done
 .load_omit:
     bsr.w mh_omit_set
@@ -728,7 +752,16 @@ mh_load:
 .load_sprd:
     bsr.w mh_sprd_set /* independently validates 0..2 */
     bra.s .load_done
+.load_legacy:
+    jsr ch_legacy_set
+    bra.s .load_done
 .load_type:
+    cmpi.l #3,%d1
+    bne.s .load_type_new
+    moveq #1,%d1
+    jsr ch_legacy_set
+    moveq #2,%d1
+.load_type_new:
     bsr.w mh_set
 .load_done:
     movem.l (%sp),%d0-%d3/%d5/%a0-%a1
@@ -817,6 +850,43 @@ mh_save:
     lea 32(%sp),%sp
     tst.l %d0
     bmi.w .save_fail
+    move.l %d7,%d0
+    bsr.w mh_root_get
+    move.l %d0,-(%sp)
+    move.l %d7,%d0
+    addq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea mh_root_fmt
+    move.l %d2,-(%sp)
+    jsr (%a4)
+    move.l %d2,-(%sp)
+    jsr (%a3)
+    move.l %d0,-(%sp)
+    move.l %d2,-(%sp)
+    move.l %d3,-(%sp)
+    jsr (%a2)
+    lea 32(%sp),%sp
+    tst.l %d0
+    bmi.w .save_fail
+    move.l ch_legacy7_mask,%d0
+    lsr.l %d7,%d0
+    andi.l #1,%d0
+    move.l %d0,-(%sp)
+    move.l %d7,%d0
+    addq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea ch_legacy_fmt
+    move.l %d2,-(%sp)
+    jsr (%a4)
+    move.l %d2,-(%sp)
+    jsr (%a3)
+    move.l %d0,-(%sp)
+    move.l %d2,-(%sp)
+    move.l %d3,-(%sp)
+    jsr (%a2)
+    lea 32(%sp),%sp
+    tst.l %d0
+    bmi.w .save_fail
     addq.l #1,%d7
     cmpi.l #8,%d7
     bne.w .save_track
@@ -827,10 +897,14 @@ mh_save:
 .save_fail:
     move.l (%sp)+,%d7
     jmp 0x40089638
+ch_legacy_key: .asciz "#MIDI_HARMONY_LEGACY7_V1_T"
+ch_legacy_fmt: .asciz "#MIDI_HARMONY_LEGACY7_V1_T%d=%d\r\n"
 mh_key: .asciz "#MIDI_HARMONY_TYPE_V1_T"
 mh_fmt: .asciz "#MIDI_HARMONY_TYPE_V1_T%d=%d\r\n"
 mh_sprd_key: .asciz "#MIDI_HARMONY_SPRD_V1_T"
 mh_sprd_fmt: .asciz "#MIDI_HARMONY_SPRD_V1_T%d=%d\r\n"
+mh_root_key: .asciz "#MIDI_HARMONY_ROOT_V1_T"
+mh_root_fmt: .asciz "#MIDI_HARMONY_ROOT_V1_T%d=%d\r\n"
 mh_omit_key: .asciz "#MIDI_HARMONY_OMIT_V1_T"
 mh_omit_fmt: .asciz "#MIDI_HARMONY_OMIT_V1_T%d=%d\r\n"
 mh_voic_key: .asciz "#MIDI_HARMONY_VOIC_V1_T"
@@ -853,21 +927,21 @@ mh_note_encoder:
     move.l %d2,%d0
     bsr.w mh_get
     move.l 12(%sp),%d1
-    cmpi.l #3,%d1
+    cmpi.l #2,%d1
     ble.s .type_delta_low
-    moveq #3,%d1
+    moveq #2,%d1
 .type_delta_low:
-    cmpi.l #-3,%d1
+    cmpi.l #-2,%d1
     bge.s .type_add
-    moveq #-3,%d1
+    moveq #-2,%d1
 .type_add:
     add.l %d1,%d0
     bpl.s .type_max
     moveq #0,%d0
 .type_max:
-    cmpi.l #3,%d0
+    cmpi.l #2,%d0
     ble.s .type_set
-    moveq #3,%d0
+    moveq #2,%d0
 .type_set:
     move.l %d0,%d1
     move.l %d2,%d0
@@ -895,7 +969,7 @@ mh_draw_type:
 mh_type_format:
     move.l 4(%sp),%a0
     move.l 8(%sp),%d0
-    cmpi.l #3,%d0
+    cmpi.l #2,%d0
     bls.s .type_format_ok
     moveq #0,%d0
 .type_format_ok:
@@ -906,10 +980,10 @@ mh_type_format:
     bne.s .type_copy
     rts
     .balign 4
-mh_types: .long .off,.note,.triad,.seventh
+mh_types: .long .off,.note,.triad
 .off: .asciz "OFF"
 .note: .asciz "NOTE"
-.triad: .asciz "TRI"
+.triad: .asciz "CHORD"
 .seventh: .asciz "7TH"
     .balign 2
 
@@ -977,6 +1051,8 @@ mh_keyboard:
     move.l %d0,%d6
     tst.l %d4
     beq.w .keyboard_done
+    move.l %d2,%d0
+    jsr ch_live_context
     lea 40(%sp),%a2
     move.b %d3,(%a2)
     /* All keyboard modes choose an absolute root and inherit only scale. */

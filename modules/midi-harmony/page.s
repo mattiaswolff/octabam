@@ -1,9 +1,9 @@
 /* Harmony window: native window/input-layer pattern from the Tuner module.
- * NOTE SETUP F press opens it; A=HARM, B=VOIC, C=SPRD, D=OMIT. Native ARP KEY stays put.
+ * NOTE SETUP F press opens it; A=HARM, B=VOIC, C=SPRD, D=ROOT. Native ARP KEY stays put.
  * Track is fixed while open. Track/page keys close the window; a subsequent
  * press selects the track/page. Transport and chromatic keys pass through.
- * Six-cell layout: top row HARM/VOIC/SPRD, OMIT below HARM; track in footer.
- * Values use the stock PLAYBACK 4/5/3-position selector widgets.
+ * Six-cell layout: top row HARM/VOIC/SPRD, ROOT below HARM; track in footer.
+ * Values use the stock PLAYBACK 3/5/3/4-position selector widgets.
  * No UI-task/ISR hook: redraw only on open or an encoder edit.
  */
     .text
@@ -63,21 +63,21 @@ mh_page_encoder:
     bne.w .page_voic
     jsr mh_get
     /* Clamp delta before addition to prevent signed overflow. */
-    cmpi.l #3,%d3
+    cmpi.l #2,%d3
     ble.s .page_harm_low
-    moveq #3,%d3
+    moveq #2,%d3
 .page_harm_low:
-    cmpi.l #-3,%d3
+    cmpi.l #-2,%d3
     bge.s .page_harm_add
-    moveq #-3,%d3
+    moveq #-2,%d3
 .page_harm_add:
     add.l %d3,%d0
     bpl.s .page_harm_max
     moveq #0,%d0
 .page_harm_max:
-    cmpi.l #3,%d0
+    cmpi.l #2,%d0
     ble.s .page_harm_set
-    moveq #3,%d0
+    moveq #2,%d0
 .page_harm_set:
     move.l %d0,%d1
     move.l %d4,%d0
@@ -108,15 +108,26 @@ mh_page_encoder:
 .page_omit:
     move.l mh_page_track,%d4
     move.l %d4,%d0
-    tst.l %d3
-    beq.w .page_encoder_done
-    blt.s .page_omit_off
-    moveq #1,%d1
-    bra.s .page_omit_set
-.page_omit_off:
-    moveq #0,%d1
-.page_omit_set:
-    jsr mh_omit_set
+    jsr mh_root_get
+    cmpi.l #3,%d3
+    ble.s .page_root_low
+    moveq #3,%d3
+.page_root_low:
+    cmpi.l #-3,%d3
+    bge.s .page_root_add
+    moveq #-3,%d3
+.page_root_add:
+    add.l %d3,%d0
+    bpl.s .page_root_max
+    moveq #0,%d0
+.page_root_max:
+    cmpi.l #3,%d0
+    ble.s .page_root_set
+    moveq #3,%d0
+.page_root_set:
+    move.l %d0,%d1
+    move.l %d4,%d0
+    jsr mh_root_set
     bra.w .page_encoder_draw
 .page_voic:
     jsr mh_voic_get
@@ -186,7 +197,7 @@ mh_page_draw:
     move.l %d0,%d1
     moveq #10,%d0
     lea mh_type_format,%a0
-    lea 0x40046c28,%a1 /* four positions */
+    lea 0x40046d9c,%a1 /* three positions */
     bsr.w .page_selector
     move.l mh_page_track,%d0
     jsr mh_voic_get
@@ -204,11 +215,11 @@ mh_page_draw:
     lea 0x40046d9c,%a1 /* three positions */
     bsr.w .page_selector
     move.l mh_page_track,%d0
-    jsr mh_omit_get
+    jsr mh_root_get
     move.l %d0,%d1
     moveq #10,%d0
     lea mh_page_omit_format,%a0
-    lea 0x40046f10,%a1
+    lea 0x40046c28,%a1 /* four-position ROOT widget */
     bsr.w .page_selector_bottom
     bsr.w .page_grid
     move.l mh_page_track,%d0
@@ -287,7 +298,7 @@ mh_page_draw:
     .global mh_page_voic_format,mh_page_sprd_format
 mh_page_omit_format:
     lea .page_omits,%a1
-    moveq #1,%d1
+    moveq #3,%d1
     bra.s .page_value_format
 mh_page_voic_format:
     lea .page_voices,%a1
@@ -322,8 +333,11 @@ mh_page_sprd_format:
 .page_harm_label: .asciz "HARM"
 .page_voic_label: .asciz "VOIC"
 .page_sprd_label: .asciz "SPRD"
-.page_omit_label: .asciz "OMIT"
-.page_off: .asciz "OFF"
+.page_omit_label: .asciz "ROOT"
+.page_keep: .asciz "KEEP"
+.page_omit_value: .asciz "OMIT"
+.page_down1: .asciz "-1 OCT"
+.page_down2: .asciz "-2 OCT"
 .page_close: .asciz "CLOSE"
 .page_open: .asciz "OPEN"
 .page_wide: .asciz "WIDE"
@@ -339,7 +353,7 @@ mh_page_sprd_format:
     .long 77,12,77,58
     .long 0,35,115,35
     .long 0,12,115,12
-.page_omits: .long .page_off,.page_root
+.page_omits: .long .page_keep,.page_omit_value,.page_down1,.page_down2
 .page_voices: .long .page_root,.page_first,.page_second,.page_third,.page_auto
 .page_spreads: .long .page_close,.page_open,.page_wide
 mh_page_layer:

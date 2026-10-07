@@ -16,7 +16,7 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
     follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
@@ -27,6 +27,7 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
         raw+=b''.join(f'#MIDI_HARMONY_SPRD_V1_T{t+1}={v}\r\n'.encode() for t,v in (spreads or {}).items())
         raw+=b''.join(f'#MIDI_HARMONY_VOIC_V1_T{t+1}={v}\r\n'.encode() for t,v in (voicings or {}).items())
         raw+=b''.join(f'#MIDI_HARMONY_OMIT_V1_T{t+1}={v}\r\n'.encode() for t,v in (omits or {}).items())
+        raw+=b''.join(f'#MIDI_HARMONY_ROOT_V1_T{t+1}={v}\r\n'.encode() for t,v in (roots or {}).items())
         p.write_bytes(raw)
     for path in (work/'project').glob('bank*.work'):
         def mutate(data):
@@ -49,8 +50,27 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
     return work
 
 
+CANDIDATE_IMAGE = None
+
+
+def freeze_candidate(destination):
+    """Keep an image and its helper addresses together throughout a long run.
+
+    A later development build must not silently change a subsequent case.
+    Stock-comparison cases can still pass their explicit image.
+    """
+    global CANDIDATE_IMAGE
+    destination.mkdir(parents=True, exist_ok=True)
+    CANDIDATE_IMAGE = destination / 'candidate.bin'
+    CANDIDATE_IMAGE.write_bytes((ROOT/'out/mainos_bus.bin').read_bytes())
+    frozen_symbols = harmony.symbols()
+    harmony.symbols = lambda: frozen_symbols
+    (destination/'candidate-symbols.json').write_text(json.dumps(frozen_symbols,indent=2)+'\n')
+    return CANDIDATE_IMAGE
+
+
 def run(work, name, extra=(), image=None, card=None):
-    cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image or ROOT/'out/mainos_bus.bin'),
+    cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image or CANDIDATE_IMAGE or ROOT/'out/mainos_bus.bin'),
          '--card',str(card or work/'card.img'),'--set','OCTABAM','--project','BASS',
          '--load-ms','90000','--mkii','--midi-out',str(work/f'{name}.midi'),
          '--card-out',str(work/f'{name}-card.img')]+list(map(str,extra))
@@ -227,9 +247,9 @@ def chord_rules(source):
 
 def recording(source):
     results={}
-    for kind,voic,spread,omit in ((1,0,0,0),(2,0,0,0),(3,0,0,0),(2,1,0,0),(3,1,0,0),(2,1,1,0),(3,1,2,0),(2,2,1,0),(3,4,0,0),(2,2,1,1),(3,4,0,1),(2,1,0,1)):
-        name=f'live-record-{kind}'+(f'-voic{voic}' if voic>1 else '-auto' if voic else '')+(f'-spread{spread}' if spread else '')+('-omit' if omit else '')
-        work=fixture(source,name,{0:kind},spreads={0:spread},voicings={0:voic},omits={0:omit})
+    for kind,voic,spread,omit in ((1,0,0,0),(2,0,0,0),(3,0,0,0),(2,1,0,0),(3,1,0,0),(2,1,1,0),(3,1,2,0),(2,2,1,0),(3,4,0,0),(2,2,1,1),(3,4,0,1),(2,1,0,1),(2,0,0,2),(3,4,0,3),(2,1,0,2)):
+        name=f'live-record-{kind}'+(f'-voic{voic}' if voic>1 else '-auto' if voic else '')+(f'-spread{spread}' if spread else '')+(f'-root{omit}' if omit else '')
+        work=fixture(source,name,{0:kind},spreads={0:spread},voicings={0:voic},roots={0:omit})
         for path in (work/'project').glob('bank*.work'):
             def blank(data):
                 for pat in range(16):
@@ -263,14 +283,16 @@ def recording(source):
                       [59,60,64,67,60,62,65,69,64,65,69,72])
         if omit:
             count=kind+1
-            expected=[n for i,root in enumerate((48,50,53)) for n in expected[i*count:(i+1)*count] if n%12!=root%12]
+            expected=[n for i,root in enumerate((48,50,53)) for n in
+                      (([root-12*(omit-1)] if omit>1 else [])+
+                       [p for p in expected[i*count:(i+1)*count] if p%12!=root%12])]
         assert pitches==expected*2,(pitches,expected) # performed chord == replayed chord
         bank=(work/'bank-ram.bin').read_bytes()
         lanes=[bank[0x4900+step*32:0x4920+step*32] for step in range(64)]
         recorded=[lane for lane in lanes if lane[0]<128]
         assert [lane[0] for lane in recorded]==[49,50,53],recorded
         assert all(lane[3:6]==b'\xff'*3 for lane in recorded),recorded
-        assert (work/'harm.bin').read_bytes()==bytes((kind+4*spread+64*omit+(16*(voic-1) if voic>1 else 0),))
+        assert (work/'harm.bin').read_bytes()==bytes((min(kind,2)+4*spread+64*omit+(16*(voic-1) if voic>1 else 0),))
         assert (work/'key.bin').read_bytes()==b'\x01'
         results[name]=dict(notes=pitches,recorded_roots=[lane[0] for lane in recorded])
         print(f'  [ok] {name}: REC+PLAY -> chromatic C#/D/F -> physical keys recorded once -> identical chord playback',flush=True)
@@ -305,7 +327,7 @@ def empty_note_locks(source):
 
 def persistence(source,voic=1,omit=0):
     expected_key=25 if 'ms_decode' in harmony.symbols() else 2
-    name=('persistence' if voic==1 else f'persistence-voic{voic}')+('-omit' if omit else '')
+    name=('persistence' if voic==1 else f'persistence-voic{voic}')+(f'-root{omit}' if omit else '')
     work=fixture(source,name,{0:2,1:1})
     lines=[]
     def key(at,k,hold=100):lines.extend([f'{at} key {k:#x} down',f'{at+hold} key {k:#x} up'])
@@ -325,14 +347,14 @@ def persistence(source,voic=1,omit=0):
     extra=['--rtc','1800000000','--live-script',script,'--lcd',work/'save.lcd',
            '--mem-dump',f'0x10000000,0x100000={work}/saved-cs1.bin;0x100b14e2,10={work}/saved-state.bin']
     run(work,'save',extra)
-    expected=bytes((7+64*omit+(16*(voic-1) if voic>1 else 0),1,0,0,0,0,0,0,int(voic==1),0x4d))
+    expected=bytes((6+64*omit+(16*(voic-1) if voic>1 else 0),1,0,0,0,0,0,0,int(voic==1),0x4f))
     assert (work/'saved-state.bin').read_bytes()==expected
     files=emu_card.extract_image((work/'save-card.img').read_bytes())
     for name in ('project.work','project.strd'):
-        assert b'#MIDI_HARMONY_TYPE_V1_T1=3' in files['OCTABAM/BASS/'+name]
+        assert b'#MIDI_HARMONY_TYPE_V1_T1=2' in files['OCTABAM/BASS/'+name]
         assert f'#MIDI_HARMONY_VOIC_V1_T1={voic}'.encode() in files['OCTABAM/BASS/'+name]
         assert b'#MIDI_HARMONY_SPRD_V1_T1=1' in files['OCTABAM/BASS/'+name]
-        assert f'#MIDI_HARMONY_OMIT_V1_T1={omit}'.encode() in files['OCTABAM/BASS/'+name]
+        assert f'#MIDI_HARMONY_ROOT_V1_T1={omit}'.encode() in files['OCTABAM/BASS/'+name]
     # Added C Dorian when MIDI Scales is installed, otherwise stock C Minor.
     for name in ('bank01.work','bank01.strd'):
         data=files['OCTABAM/BASS/'+name]
@@ -354,11 +376,11 @@ def persistence(source,voic=1,omit=0):
     run(work,'migrate',['--rtc','1800000000','--no-post','--cs1-in',work/'legacy-cs1.bin',
                        '--live-script',quit_script,'--mem-dump',f'0x100b14e2,10={work}/migrate-state.bin'],
         card=work/'save-card.img')
-    assert (work/'migrate-state.bin').read_bytes()==bytes((3,1,0,0,0,0,0,0,1,0x4d))
+    assert (work/'migrate-state.bin').read_bytes()==bytes((2,1,0,0,0,0,0,0,1,0x4f))
     old=fixture(source,'old-project',{})
     run(old,'load',['--rtc','1800000000','--cs1-in',work/'saved-cs1.bin','--live-script',quit_script,
                     '--mem-dump',f'0x100b14e2,10={old}/state.bin'])
-    assert (old/'state.bin').read_bytes()==bytes(9)+b'M'
+    assert (old/'state.bin').read_bytes()==bytes(9)+b'O'
     print('  [ok] UART Harmony page, HARM/VOIC/SPRD/KEY controls, actual SAVE, disk reload, CS1 warm boot/migration and old-project defaults',flush=True)
     return {work.name:'pass'}
 
@@ -401,7 +423,7 @@ def auto_voicing(source):
     events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                     '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
                     '--mem-dump',f'0x100b14e2,10={work}/state.bin;{sym["mh_page_win"]:#x},4={work}/window.bin'])
-    assert (work/'state.bin').read_bytes()==bytes((6,0,0,0,0,0,0,0,1,0x4d))
+    assert (work/'state.bin').read_bytes()==bytes((6,0,0,0,0,0,0,0,1,0x4f))
     assert int.from_bytes((work/'window.bin').read_bytes(),'big')!=0
     balanced(events)
     assert [e[2] for e in events if e[0]=='on']==[48,55,64,48,57,65],events
@@ -515,14 +537,14 @@ def manual_inversions(source):
     examples={(2,2):[64,67,72,69,72,77,71,74,79],
               (2,3):[67,72,76,72,77,81,74,79,83],
               (3,4):[71,72,76,79,76,77,81,84,77,79,83,86]}
-    for kind,choice,omit in ((2,2,0),(2,3,0),(3,4,0),(2,2,1),(3,4,1)):
+    for kind,choice,omit in ((2,2,0),(2,3,0),(3,4,0),(2,2,1),(3,4,1),(2,2,2),(3,4,2),(3,4,3)):
         expected=examples[kind,choice]
         if omit:
             count=kind+1
-            expected=[n for i,root in enumerate((60,65,67)) for n in expected[i*count:(i+1)*count] if n%12!=root%12]
+            expected=[n for i,root in enumerate((60,65,67)) for n in (([root-12*(omit-1)] if omit>1 else [])+[p for p in expected[i*count:(i+1)*count] if p%12!=root%12])]
         for arp in ((False,True) if choice==4 else (False,)):
-            work=fixture(source,f'manual-{kind}-{choice}'+('-omit' if omit else '')+('-arp' if arp else ''),
-                         {0:kind,1:1},arp=arp,first_note=60,voicings={0:choice},omits={0:omit})
+            work=fixture(source,f'manual-{kind}-{choice}'+(f'-root{omit}' if omit else '')+('-arp' if arp else ''),
+                         {0:kind,1:1},arp=arp,first_note=60,voicings={0:choice},roots={0:omit})
             extra=['--sequencer','--internal-clock','--frames','7000']
             if has_follow:extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
             events=run(work,'play',extra);balanced(events)
@@ -552,7 +574,7 @@ def manual_inversions(source):
     events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                     '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
                     '--mem-dump',f'0x100b14e2,10={work}/state.bin'])
-    assert (work/'state.bin').read_bytes()==bytes((123,0,0,0,0,0,0,0,0,0x4d))
+    assert (work/'state.bin').read_bytes()==bytes((122,0,0,0,0,0,0,0,0,0x4f))
     balanced(events)
     assert [e[2] for e in events if e[0]=='on']==[59,76,79,64,81,84],events
     subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True)
@@ -561,9 +583,40 @@ def manual_inversions(source):
     return results
 
 
+def root_live(source):
+    results={}
+    for mode in (2,3):
+        drop=12*(mode-1)
+        for arp in (False,True):
+            work=fixture(source,f'root-live-{mode}-{int(arp)}',{0:3},arp=arp,roots={0:mode})
+            script=work/'keys.txt'
+            # C and E share two upper tones. Change ROOT while both are held;
+            # both releases must still own the exact pitches sounded earlier.
+            script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1100 key 0x3d down\n1200 key 0x3d up\n1500 key 0 down\n2300 key 4 down\n3100 enc 3 -3\n3300 key 0 up\n4100 key 4 up\n5000 quit\n')
+            events=run(work,'keys',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+                       '--step','-:poke:0x100b14cc=0','--internal-clock','--live-script',script])
+            balanced(events)
+            pitches=[e[2] for e in events if e[0]=='on']
+            want={48-drop,52-drop,52,55,59,62}
+            assert set(pitches)==want,(work.name,pitches,want)
+            results[work.name]=pitches
+        work=fixture(source,f'root-page-{mode}',{0:3})
+        script=work/'page.txt'
+        script.write_text(f'100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1100 key 0x3d down\n1200 key 0x3d up\n1400 enc 3 {mode}\n1600 key 0 down\n1800 key 0 up\n2100 quit\n')
+        events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
+                   '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd'])
+        balanced(events)
+        assert [e[2] for e in events if e[0]=='on']==[48-drop,52,55,59],events
+        subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True)
+        results[work.name]='pass'
+    print('  [ok] ROOT live: octave placement, shared-tone ownership, edits while held, arp and physical encoder/LCD',flush=True)
+    return results
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
+    ap.add_argument('--root-only',action='store_true',help='ROOT placement, arp, follower, recording, UI and persistence')
     ap.add_argument('--bypass-follow-only',action='store_true',help='live HARM OFF / KEY OFF source with rhythmic MIDI followers')
     ap.add_argument('--octave-only',action='store_true',help='live AUTO octave-jump regressions in C minor')
     ap.add_argument('--recording-only',action='store_true',help='run the recording and explicit-empty-lock regressions')
@@ -571,29 +624,35 @@ def main():
     ap.add_argument('--inversions-only',action='store_true',help='manual MIDI/arp/follow, recording and persistence')
     ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
+    freeze_candidate(OUT)
+    if a.root_only:
+        cases=manual_inversions(a.project);cases.update(recording(a.project));cases.update(root_live(a.project))
+        cases.update(persistence(a.project,4,2));cases.update(persistence(a.project,1,3))
+        (OUT/'result-root.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.bypass_follow_only:
         cases=bypass_follow(a.project)
-        (OUT/'result-bypass-follow.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        (OUT/'result-bypass-follow.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
         return
     if a.octave_only:
         cases=octave_output(a.project)
-        (OUT/'result-octave.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        (OUT/'result-octave.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
         return
     if a.inversions_only:
         cases=manual_inversions(a.project);cases.update(recording(a.project));cases.update(persistence(a.project,4,1))
-        (OUT/'result-inversions.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        (OUT/'result-inversions.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
         return
     if a.spread_only:
         cases=spread_output(a.project)
-        (OUT/'result-spread.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        (OUT/'result-spread.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
         return
     if a.voicing_only:
         cases=spread_output(a.project);cases.update(auto_voicing(a.project));cases.update(recording(a.project));cases.update(persistence(a.project))
-        (OUT/'result-voicing.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        (OUT/'result-voicing.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
         return
     if a.recording_only:
         cases=recording(a.project);cases.update(empty_note_locks(a.project))
-        (OUT/'result-recording.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        (OUT/'result-recording.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
         return
     cases=sequence(a.project)
     cases.update(extended_scale(a.project))
@@ -609,5 +668,8 @@ def main():
     cases.update(spread_output(a.project))
     cases.update(manual_inversions(a.project))
     cases.update(persistence(a.project,4,1))
-    (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256((ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+    cases.update(persistence(a.project,4,2))
+    cases.update(persistence(a.project,1,3))
+    cases.update(root_live(a.project))
+    (OUT/'result.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()
