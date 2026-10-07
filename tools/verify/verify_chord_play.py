@@ -27,6 +27,9 @@ def symbols():
 def extra_voicings(m):
     count = 0
     for mode in range(7):
+        # Without MIDI Scales, the native KEY selector exposes major/minor.
+        if 'ms_decode' not in m.sym and mode not in (0, 5):
+            continue
         for quality in range(8):
             m.setting(0,2,0,mode)
             m.uc.mem_write(m.sym['ch_current'],bytes((quality,)))
@@ -71,6 +74,8 @@ def extra_voicings(m):
 def root_qualities(m):
     count=0
     for scale in range(7):
+        if 'ms_decode' not in m.sym and scale not in (0, 5):
+            continue
         for quality in range(8):
             for voic in range(5):
                 for spread in range(3):
