@@ -89,5 +89,18 @@ def main():
     assert (lifecycle/'window.bin').read_bytes()==bytes(4)
     assert (lifecycle/'part-before.bin').read_bytes()==(lifecycle/'part-after.bin').read_bytes()
     print('[ok] close/reopen, independent receiver settings, native Part unchanged',flush=True)
+    # A on FOLLOW edits RFOL itself, then closing must redraw the parent.
+    sync=out/'source-sync';sync.mkdir(exist_ok=True)
+    (sync/'panel.txt').write_text(panel(setup)+'1500 enc 0 4\n1800 key 0x32 down\n1850 key 0x32 up\n2200 quit\n')
+    sync_cmd=[arg.replace(str(lifecycle)+'/',str(sync)+'/') for arg in cmd]
+    sync_cmd[-1]+=f';{sym["bf_sources"]:#x},8={sync}/sources.bin'
+    with (sync/'run.log').open('w') as log:
+        result=subprocess.run(sync_cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
+    assert result.returncode==0
+    assert (sync/'sources.bin').read_bytes()[1]==3 # skip the receiving T2
+    assert (sync/'window.bin').read_bytes()==bytes(4)
+    assert (sync/'part-before.bin').read_bytes()==(sync/'part-after.bin').read_bytes()
+    subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(sync/'screen.lcd'),'--png',str(sync/'screen.png')],check=True,stdout=subprocess.DEVNULL)
+    print('[ok] FOLLOW A selects RFOL T3 and closes to refreshed NOTE SETUP',flush=True)
     (out/'receipt.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(image.read_bytes()).hexdigest(),ui_lifecycle=True,harmony=a.harmony,build_root=str(a.build_root),emulator=str(ROOT/'out/emu/ot_emu'),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()
