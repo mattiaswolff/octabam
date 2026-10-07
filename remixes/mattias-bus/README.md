@@ -1,8 +1,8 @@
 # mattias-bus
 
 `mattias-bus` is a personal, bus-centred remix with a compact FX1 station
-bank. It is pending validation for this specific selection; any completed
-check for an earlier stock-FX1 selection does not apply.
+bank. Source and emulator verification for this selection is recorded below;
+physical hardware acceptance is still pending.
 
 ## Intended layout
 
@@ -51,9 +51,8 @@ post-FX1 dry input to the shared engines.
 
 ## Validation boundary
 
-The source selection has not yet completed full `make check` for this exact
-configuration. No real Octatrack, CompactFlash project, or firmware flash is
-part of the fork setup. Before any device use, back up the CompactFlash card
+The selection has the source/emulator verification recorded below. No real
+Octatrack, CompactFlash project, or firmware flash is part of this verification. Before any device use, back up the CompactFlash card
 and follow the recovery process in `docs/guide/BUILDING.md`.
 
 On 7 October 2026, the fork was organized on upstream `6f9e5bc9`. The three
@@ -64,6 +63,32 @@ combined Chord Play gate covered all seven modes. Registry documentation,
 test imports, and gate planning passed. Assembly sources were compared byte
 for byte with the preserved development/checkpoint branches. These are
 targeted development checks, not a full firmware or hardware acceptance run.
+
+### Muted-source MIDI Follow, 7 October 2026
+
+Follow now captures sequenced roots while the source is muted. The source's
+MIDI output remains muted; followers keep their own independent mute state.
+The firmware change removes only Follow's four-instruction mute check. No
+new hook, stored setting, DSP code, or note-output path is introduced.
+
+`make check REMIX=midi-follow` passed with a copied project. The combined
+`make check REMIX=mattias-bus` completed its planned gates with targeted
+retries after three local setup problems: an outdated shared DSP host lacked
+`-pword`, the original mixer fixture lacked the bus hosts, and accumulated
+virtual-card captures exhausted free disk space. An isolated matching DSP
+host, a copied rig fixture with scenes/LFO modulation disabled, and removal
+of this task's disposable card images resolved those problems. The corrected
+project/TEMPO BUS tests and the complete MIDI Follow gate then passed against
+the same combined image. The full command's earlier nonzero exit is retained
+in the local validation receipt; it is not described as a single clean run.
+
+The new UART suite passed 12 standalone and 28 combined cases: muted-start
+sources, muted followers, mute/unmute with held notes, both track orders,
+source arp, added scales, Harmony chords/arp and per-step chord choices.
+All notes had balanced releases. The other combined gates, including Harmony,
+Chord Play and storage, passed. Receipts and logs are in the integration
+worktree's ignored `out/muted-source-delivery.json` and referenced files.
+No flash package was made and no hardware was changed.
 
 ## Fork development
 
@@ -127,8 +152,10 @@ first; each module can then be reviewed separately. No PR is opened by this
 workflow setup.
 
 Build the emulator in each worktree with `make emu-cf`; never symlink
-`out/emu`. Local `.venv` and `vendor` links currently point to the preserved
-`mattias-bus` worktree's tools. Do not remove that worktree or rebuild shared
+`out/emu`. The original local `.venv` and `vendor` links point to the preserved
+`mattias-bus` worktree's tools. For muted-source validation, this integration
+worktree uses a private vendor overlay with a matching `dsp_host`; its source,
+binary and original vendor location are recorded in `out/mute-host/toolchain.json`. Do not remove that worktree or rebuild shared
 tools from a different revision while another task is using them. A change
 to toolchain patches or DSP host code requires an isolated, matching tool
 build, as described in `AGENTS.md`.
