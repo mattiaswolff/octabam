@@ -26,8 +26,9 @@ The other encoders are inactive, leaving room for future controls. Turning F on 
 
 Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
 Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales
-adds five modes in every key. **KEY OFF bypasses Harmony**, including chord
-generation. HARM defaults OFF.
+adds five modes in every key. **KEY OFF leaves roots unsnapped**: NOTE passes the pitch through and TRI/7TH
+build major-rooted intervals (C–E–G / C–E–G–B). HARM OFF restores stock behavior.
+Voicing, spread and ROOT still apply without a scale. HARM defaults OFF.
 
 For example, C Major with HARM TRI turns C, D and F into C major, D minor
 and F major. C Dorian gives C minor, D minor and F major. Chromatic trig keys
@@ -131,7 +132,7 @@ voice-omission behavior and resets history. Silence/STOP alone does not reset
 history; set VOIC ROOT then AUTO to deliberately reseed it. AUTO is dynamic:
 the same stored root can receive a different inversion after a different
 preceding chord. Held keys retain their original note-offs when settings change.
-VOIC and SPRD have no effect in HARM OFF/NOTE or with KEY OFF.
+VOIC and SPRD have no effect in HARM OFF/NOTE.
 
 ## Chord spacing
 

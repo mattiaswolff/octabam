@@ -86,8 +86,20 @@ def machine_gate():
         print('  [ok] optional Follow inheritance, chains, cycle fallback and independent TYPE')
     m.setting(0,2)
     u.mem_write(0x46c76df1,b'\0')
-    assert m.chord(0,61)==[61,11,12,13], 'KEY OFF must bypass Harmony'
-    print('  [ok] TYPE persistence, TYPE/KEY OFF identity, invalid state and warm-boot sanitizer')
+    assert m.chord(0,61)==[61,65,68,61], 'KEY OFF builds major on the unsnapped root'
+    for kind in (1,2,3):
+        m.setting(0,kind);u.mem_write(0x46c76df1,b'\0')
+        for pitch in range(128):
+            assert m.call('mh_quant',pitch,0)==pitch
+            for offset in (-12,0,12):
+                root=(pitch+offset)&255
+                want=[root]*4 if root<128 else [0]*4
+                if kind>1 and root<128:
+                    for slot,interval in enumerate((4,7,11)[:kind],1):
+                        if root+interval<128:want[slot]=root+interval
+                assert m.chord(0,pitch,offset)==want,(kind,pitch,offset)
+    print('  [ok] KEY OFF: unsnapped roots, major triads/sevenths, NOTE identity, TRAN and MIDI bounds')
+    print('  [ok] TYPE persistence, TYPE OFF identity and KEY OFF major fallback, invalid state and warm-boot sanitizer')
 
 
 def final_note_gate():
@@ -166,9 +178,11 @@ def final_note_gate():
         if kind:u.mem_write(0x46c76df1,b'\0')
         assert m.call('mh_final',66,0)==66
         u.mem_write(lane+0x22c,b'\x47')
-        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0,UC_M68K_REG_D1:50})
-        assert u.reg_read(UC_M68K_REG_D0)&255==71
-        assert u.reg_read(UC_M68K_REG_A1)==50
+        u.mem_write(0x46c77b1e,b'\0') # sequenced pool has already received TRAN
+        m.call('mh_transpose',stop=0x4009fb40 if kind==0 else 0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0,UC_M68K_REG_D1:50})
+        if kind==0:
+            assert u.reg_read(UC_M68K_REG_D0)&255==71
+            assert u.reg_read(UC_M68K_REG_A1)==50
     print('  [ok] every HARM mode: TRAN before root snap/chord, final arp snap, bounds, OFF identity and source latch')
 
 
@@ -239,10 +253,10 @@ def keyboard_gate():
     m.setting(0,0)
     assert key(48,0)==[(48,0),(52,0),(55,0)]
     m.setting(0,2);u.mem_write(0x46c76df1,b'\0')
-    assert key(61,100)==[(61,100)]
+    assert key(61,100)==[(61,100),(65,100),(68,100)]
     if 'bf_roots' in m.sym:assert u.mem_read(m.sym['bf_roots'],1)==bytes((37,)), 'KEY OFF must still publish live root'
     m.setting(0,2)
-    assert key(61,0)==[(61,0)] # KEY OFF-to-on has the same ownership rule
+    assert key(61,0)==[(61,0),(65,0),(68,0)] # Release captured no-scale voices after selecting a key
     m.setting(0,1)
     u.mem_write(0x46c76fec,b'\x47') # TRAN +7 must not shift chromatic input
     if 'bf_sources' in m.sym:
@@ -472,12 +486,13 @@ def spread_gate():
     u.mem_write(NV,bytes((11,10,9,8,7,6,255,12,0xa5,0x4b)))
     m.call('mh_boot',stop=0x4001022a)
     assert bytes(u.mem_read(NV,10))==bytes((11,10,9,8,7,6,0,0,0xa5,0x4e))
-    # OFF/NOTE/KEY OFF ignore spread; toggling spacing reseeds AUTO.
+    # OFF/NOTE ignore spread; toggling spacing reseeds AUTO.
     for kind in (0,1):
         m.setting(0,kind);m.call('mh_sprd_set',0,2)
         raw=m.chord(0,48);assert voice(0,raw)==raw
     m.setting(0,2);u.mem_write(0x46c76df1,b'\0')
-    raw=m.chord(0,48);assert voice(0,raw)==raw
+    m.call('mh_voic_set',0,0);m.call('mh_sprd_set',0,1)
+    raw=m.chord(0,49);assert voice(0,raw)==[49,56,65,49]
     m.setting(0,2);m.call('mh_voic_set',0,1);m.call('mh_sprd_set',0,0)
     voice(0,m.chord(0,48));voice(0,m.chord(0,53))
     m.call('mh_sprd_set',0,1)

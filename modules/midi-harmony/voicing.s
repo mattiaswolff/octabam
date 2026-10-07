@@ -49,6 +49,10 @@ mh_voice:
     addq.l #1,%d6 /* 3 or 4 voices */
     move.l %d7,%d0
     jsr mh_scale_record
+    tst.l %d0
+    bpl.s .voice_scale_token
+    move.l #0x3ff,%d0 /* distinct no-scale context, below source/count bits */
+.voice_scale_token:
     move.l %d0,%d5
     move.l %d7,%d0
     jsr mh_source

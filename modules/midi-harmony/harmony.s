@@ -239,21 +239,29 @@ mh_scale_record:
     rts
 .endif
 mh_active:
-    lea -8(%sp),%sp
-    movem.l %d2-%d3,(%sp)
-    move.l %d0,%d2
-    bsr.w mh_get
-    move.l %d0,%d3
-    beq.s .active_done
-    move.l %d2,%d0
+    /* KEY OFF disables snapping, not the selected Harmony operation. */
+    bra.w mh_get
+
+/* d0 track, d1 root -> effective chord scale record.
+ * With KEY OFF, use major intervals rooted at this exact unsnapped pitch.
+ * Keep mh_scale_record's OFF sentinel for quantization and voice history. */
+    .global mh_chord_scale
+mh_chord_scale:
+    move.l %d2,-(%sp)
+    move.l %d1,%d2
     bsr.w mh_scale_record
     tst.l %d0
-    bpl.s .active_done
-    moveq #0,%d3
-.active_done:
-    move.l %d3,%d0
-    movem.l (%sp),%d2-%d3
-    lea 8(%sp),%sp
+    bpl.s .chord_scale_done
+    move.l %d2,%d0
+.chord_scale_pc:
+    cmpi.l #12,%d0
+    bcs.s .chord_scale_major
+    subi.l #12,%d0
+    bra.s .chord_scale_pc
+.chord_scale_major:
+    lsl.l #2,%d0
+.chord_scale_done:
+    move.l (%sp)+,%d2
     rts
 
 /* d0 track -> ultimate source, or original track on invalid/cyclic data.
@@ -298,6 +306,8 @@ mh_quant:
     move.l %d1,%d0  /* d1 was clobbered by getter; reload input track */
     move.l (%sp),%d0
     bsr.w mh_scale_record
+    tst.l %d0
+    bmi.w .quant_done
     move.l %d0,%d3
     lsr.l #2,%d3
     andi.l #15,%d3
@@ -402,7 +412,8 @@ mh_direct:
     move.b %d2,2(%a1)
     move.b %d2,3(%a1)
     move.l %d7,%d0
-    bsr.w mh_scale_record
+    move.l %d2,%d1
+    bsr.w mh_chord_scale
     move.l %d0,%d5
     lsr.l #6,%d0
     lea mh_masks,%a0
@@ -530,7 +541,7 @@ mh_final:
 
 /* Harmony's arp pool already contains transposed, scale-built pitches.
  * Live pools contain the player's absolute pitches. Neither is transposed
- * again. OFF/KEY OFF replay stock arithmetic. Invalid sequenced roots are
+ * again. OFF replays stock arithmetic; KEY OFF leaves pitches unsnapped. Invalid sequenced roots are
  * muted after safely initializing the arp; live keyboard pools remain usable.
  */
     .global mh_transpose
