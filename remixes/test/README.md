@@ -17,8 +17,11 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`kyoti-mute-jump`](kyoti-mute-jump/README.md) | stock effects with MUTE_MODES and DIRECT_JUMP_KYOTI together. | `make check` |
 | [`kyoti-mute-sidechain`](kyoti-mute-sidechain/README.md) | stock effects with MUTE_MODES and SIDECHAIN_COMPRESSOR together: a muted KEY track keeps feeding the compressor (SC_KEY). | `make check` |
 | [`lofi-amf-fix`](lofi-amf-fix/README.md) | Reference minimal build: the LO-FI AMF mpysu->mpyuu fix, alone. | `make check` |
+| [`mattias-midi-follow`](mattias-midi-follow/README.md) | Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and Modulation on FX1; Mode Defaults, RLEN PLEN, Tuner and Root Follow. | port-gated: local OCTABAM2 compatibility candidate; not flashed |
+| [`mattias-midi-harmony`](mattias-midi-harmony/README.md) | Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and Modulation on FX1; Mode Defaults, RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony. | port-gated: local OCTABAM2 compatibility candidate; not flashed |
 | [`midi-follow`](midi-follow/README.md) | Per-track RFOL source selection on MIDI NOTE SETUP; RAM-only bass following. | port-gated: verify_midi_follow: stock/patched MIDI capture; not flashed |
 | [`midi-harmony`](midi-harmony/README.md) | Per-track HARM on MIDI NOTE SETUP; scale notes and chords before the stock arp. | port-gated: verify_midi_harmony: emulator verification; not flashed |
+| [`midi-harmony-follow`](midi-harmony-follow/README.md) | MIDI Harmony, Scales and Follow together with all stock effects. | port-gated: verify_midi_harmony_port: emulator verification; not flashed |
 | [`midi-scales`](midi-scales/README.md) | All twelve keys and seven modes in the native ARP SETUP KEY control. | port-gated: verify_midi_scales: emulator verification; not flashed |
 | [`midi-scenes`](midi-scenes/README.md) | Reference minimal build: the MIDI SCENES ColdFire patch, alone. | `make check`: on hardware inside `ok-ms` |
 | [`miniverb`](miniverb/README.md) | Minimal allocator-owned FDN reverb. | local render: `make verify-miniverb` |
