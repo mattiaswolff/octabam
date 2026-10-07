@@ -165,7 +165,12 @@ ms_encoder:
 .encoder_off:
     moveq #0,%d0
 .encoder_delta:
+    move.l %d0,-(%sp)
+    moveq #5,%d0
     move.l %d5,%d1
+    bsr.w ms_ui_delta
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
     cmpi.l #84,%d1
     ble.s .encoder_delta_min
     moveq #84,%d1
@@ -294,3 +299,22 @@ ms_format:
 ms_masks: .word 0xab5,0x6ad,0x5ab,0xad5,0x6b5,0x5ad,0x56b
 ms_keys: .ascii "C\0C#D\0D#E\0F\0F#G\0G#A\0A#B\0"
 ms_names: .ascii "MAJ\0DOR\0PHR\0LYD\0MIX\0MIN\0LOC\0"
+/* d0 physical encoder, d1 raw movement -> d0 choice delta.
+ * Stock fixed-point detent accumulator; four counts per choice, at most one
+ * choice per report. No push acceleration for these small enumerations. */
+    .global ms_ui_delta
+ms_ui_delta:
+    cmpi.l #4,%d1
+    ble.s .ui_delta_low
+    moveq #4,%d1
+.ui_delta_low:
+    cmpi.l #-4,%d1
+    bge.s .ui_delta_accumulate
+    moveq #-4,%d1
+.ui_delta_accumulate:
+    pea 1024
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr 0x40032510
+    lea 12(%sp),%sp
+    rts

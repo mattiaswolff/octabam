@@ -24,3 +24,7 @@ Verification: `make check REMIX=midi-scales`; the linked-code gate executes
 all 84 combinations over all 128 MIDI notes and checks the formatter bounds.
 Full MIDI/UI/project integration is shared with MIDI Harmony's reusable gate.
 Hardware testing remains pending.
+
+The extended KEY selector uses the stock movement accumulator at four raw
+counts per choice, capped to one choice per report. This keeps nearby scale
+choices selectable without changing their saved IDs. Physical feel is untested.
