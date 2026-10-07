@@ -8,6 +8,15 @@ from hw import ot_project as otp
 import emu_card
 ROOT=f.ROOT
 
+def panel(text):
+    # Logical choices use four raw UART counts; never skip a choice per report.
+    def expand(m):
+        t,knob,steps=map(int,m.groups())
+        if knob in (0,1):knob+=1 # RFOL now occupies A; MODE/OCT are B/C.
+        return ''.join(f'{t+i*35} enc {knob} {4 if steps>0 else -4}\n' for i in range(abs(steps)))
+    return re.sub(r'(?m)^(\d+) enc (\d+) (-?\d+)\n',expand,text)
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--project',type=Path,required=True)
@@ -44,7 +53,7 @@ def main():
     cases={}
     for mode,octave in [(0,3),(0,4),(1,0),(1,-2),(1,2)]:
         name=f'mode{mode}-oct{octave}';work=out/name;work.mkdir(exist_ok=True)
-        script=work/'panel.txt';script.write_text(setup+f'1500 enc 0 {mode}\n1700 enc 1 {octave-(3 if mode==0 else 0)}\n1900 key 0x28 down\n1950 key 0x28 up\n5200 key 0x27 down\n5250 key 0x27 up\n5600 quit\n')
+        script=work/'panel.txt';script.write_text(panel(setup+f'1500 enc 0 {mode}\n1700 enc 1 {octave-(3 if mode==0 else 0)}\n1900 key 0x28 down\n1950 key 0x28 up\n5200 key 0x27 down\n5250 key 0x27 up\n5600 quit\n'))
         dump=f'{sym["bf_reg_modes"]:#x},24={work}/settings.bin;{sym["bf_pitches"]:#x},8={work}/pitches.bin;{sym["bf_page_win"]:#x},4={work}/window.bin;0x100a4ed0,25288={work}/part-after.bin'
         cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(out/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi'),'--lcd',str(work/'screen.lcd'),'--step',f'-:dump:0x100a4ed0,25288={work}/part-before.bin','--mem-dump',dump]
         with (work/'run.log').open('w') as log:r=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
@@ -70,7 +79,7 @@ def main():
     # Close, switch tracks, edit independently, reopen, and restore native UI.
     lifecycle=out/'lifecycle';lifecycle.mkdir(exist_ok=True)
     script=lifecycle/'panel.txt'
-    script.write_text(setup+'1500 enc 0 1\n1700 enc 1 2\n1900 key 0x32 down\n1950 key 0x32 up\n2100 key 0x12 down\n2150 key 0x12 up\n2300 key 0x3b down\n2350 key 0x3b up\n2500 enc 1 1\n2700 key 0x32 down\n2750 key 0x32 up\n2900 key 0x11 down\n2950 key 0x11 up\n3100 key 0x3b down\n3150 key 0x3b up\n3300 key 0x32 down\n3350 key 0x32 up\n3500 quit\n')
+    script.write_text(panel(setup+'1500 enc 0 1\n1700 enc 1 2\n1900 key 0x32 down\n1950 key 0x32 up\n2100 key 0x12 down\n2150 key 0x12 up\n2300 key 0x3b down\n2350 key 0x3b up\n2500 enc 1 1\n2700 key 0x32 down\n2750 key 0x32 up\n2900 key 0x11 down\n2950 key 0x11 up\n3100 key 0x3b down\n3150 key 0x3b up\n3300 key 0x32 down\n3350 key 0x32 up\n3500 quit\n'))
     cmd=[arg.replace(str(work)+'/',str(lifecycle)+'/') for arg in cmd]
     with (lifecycle/'run.log').open('w') as log:
         result=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
@@ -80,5 +89,18 @@ def main():
     assert (lifecycle/'window.bin').read_bytes()==bytes(4)
     assert (lifecycle/'part-before.bin').read_bytes()==(lifecycle/'part-after.bin').read_bytes()
     print('[ok] close/reopen, independent receiver settings, native Part unchanged',flush=True)
+    # A on FOLLOW edits RFOL itself, then closing must redraw the parent.
+    sync=out/'source-sync';sync.mkdir(exist_ok=True)
+    (sync/'panel.txt').write_text(panel(setup)+'1500 enc 0 4\n1800 key 0x32 down\n1850 key 0x32 up\n2200 quit\n')
+    sync_cmd=[arg.replace(str(lifecycle)+'/',str(sync)+'/') for arg in cmd]
+    sync_cmd[-1]+=f';{sym["bf_sources"]:#x},8={sync}/sources.bin'
+    with (sync/'run.log').open('w') as log:
+        result=subprocess.run(sync_cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
+    assert result.returncode==0
+    assert (sync/'sources.bin').read_bytes()[1]==3 # skip the receiving T2
+    assert (sync/'window.bin').read_bytes()==bytes(4)
+    assert (sync/'part-before.bin').read_bytes()==(sync/'part-after.bin').read_bytes()
+    subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(sync/'screen.lcd'),'--png',str(sync/'screen.png')],check=True,stdout=subprocess.DEVNULL)
+    print('[ok] FOLLOW A selects RFOL T3 and closes to refreshed NOTE SETUP',flush=True)
     (out/'receipt.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(image.read_bytes()).hexdigest(),ui_lifecycle=True,harmony=a.harmony,build_root=str(a.build_root),emulator=str(ROOT/'out/emu/ot_emu'),hardware_tested=False),indent=2)+'\n')
 if __name__=='__main__':main()

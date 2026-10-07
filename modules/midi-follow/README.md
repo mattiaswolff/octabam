@@ -8,7 +8,7 @@ offset after its register choice. Scale Quantizer is not required.
 ## Register choice
 
 On the receiving track, press **knob D (RFOL) on NOTE SETUP** to open FOLLOW.
-Knob **A: MODE** selects FIXED or SOURCE. Knob **B: OCT** sets the register:
+Knob **B: MODE** selects FIXED or SOURCE. Knob **C: OCT** sets the register:
 
 | MODE | OCT | Effect |
 | --- | --- | --- |
@@ -276,3 +276,8 @@ Captures, frozen candidate bytes, logs and `result.json` stay under the remix's
 `out/*midi-follow/mute/` directory. These are emulator checks, not hardware proof.
 
 Register verification: `tools/verify/verify_midi_follow_register.py` covers full MIDI range, both register modes, every octave choice, TRAN, chains, invalid roots and bounded writes. `tools/verify/verify_midi_follow_register_port.py --project DIR` exercises physical RFOL/window encoders, source octave changes, MIDI release balance and unchanged native Part bytes on a disposable virtual card.
+
+FOLLOW uses the same six-cell grid as Harmony: **A RFOL, B MODE, C OCT**.
+RFOL and MODE use stock fields/selectors; OCT stays a numeric octave value.
+Custom selectors accumulate four raw encoder counts per choice and cap each
+report to one choice. Closing FOLLOW redraws RFOL on NOTE SETUP.
