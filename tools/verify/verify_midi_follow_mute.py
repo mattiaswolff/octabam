@@ -42,7 +42,7 @@ def port_gate(image, project, out):
     if 'mh_sequence' in sym:
         modes.extend([('harmony', 0, False), ('harmony-arp', 0, True)])
     if 'ch_lock_table' in sym:
-        modes.append(('chord-locks', 0, False))
+        modes.insert(0, ('chord-locks', 0, False))
     cases = {}
     for mode, leader, arp in modes:
         work = out/mode
@@ -70,7 +70,7 @@ def port_gate(image, project, out):
                     at = 0x492e + leader*0x8b9 + 0x39
                     data[at+2*32] = 64
                     data[at+4*32] = 66
-                    data[at+8*32] = 68
+                    data[at+8*32] = 69
             otp._bank_write(work/'project', int(path.stem[4:]), setup, guard=False)
         card, _ = emu_card.stage_project(work/'project', 'OCTABAM', 'BASS', tree=work/'tree')
         (work/'card.img').write_bytes(card)
