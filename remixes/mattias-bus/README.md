@@ -51,10 +51,19 @@ post-FX1 dry input to the shared engines.
 
 ## Validation boundary
 
-The source selection has not yet completed its local check for this exact
+The source selection has not yet completed full `make check` for this exact
 configuration. No real Octatrack, CompactFlash project, or firmware flash is
-part of that check. Before any device use, back up the CompactFlash card and
-follow the recovery process in `docs/guide/BUILDING.md`.
+part of the fork setup. Before any device use, back up the CompactFlash card
+and follow the recovery process in `docs/guide/BUILDING.md`.
+
+On 7 October 2026, the fork was organized on upstream `6f9e5bc9`. The three
+standalone module images and the combined bus image built. Linked machine-code
+gates passed for Follow, Scales, Harmony, Chord Play, and chord storage, both
+in their applicable standalone selections and together in this remix. The
+combined Chord Play gate covered all seven modes. Registry documentation,
+test imports, and gate planning passed. Assembly sources were compared byte
+for byte with the preserved development/checkpoint branches. These are
+targeted development checks, not a full firmware or hardware acceptance run.
 
 ## Fork development
 
