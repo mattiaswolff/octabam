@@ -104,7 +104,7 @@ def run_transition(image, card, name, label, enabled=True):
     sym = bf.symbols()
     steps = []
     if enabled:
-        steps += ['-:poke:0x100b14cc=1', f'-:call:{sym["bf_encoder"]:#x},3,1']
+        steps += ['-:poke:0x100b14cc=1', f'-:call:{sym["bf_encoder"]:#x},3,4']
     frames = 7000
     if name == 'held-boundary':
         frames = 1500
@@ -265,7 +265,7 @@ def soak(image, seconds, enabled, source):
          '--sequencer','--internal-clock','--frames','0','--midi-out',work/'out.midi']
     if enabled:
         for t in range(1,8):
-            cmd += ['--step',f'-:poke:0x100b14cc={t}', '--step',f'-:call:{sym["bf_encoder"]:#x},3,1']
+            cmd += ['--step',f'-:poke:0x100b14cc={t}', '--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
     (work/'command.json').write_text(json.dumps(list(map(str,cmd)),indent=2))
     port=PortProc(cmd,work/'stderr.log')
     transcript=(work/'commands.log').open('w')
