@@ -400,7 +400,7 @@ def panel_gate(image):
                           f'{time+100} key 0x22 up', f'{time+150} key 0x2d up']
                 time += 400
             else:
-                lines += [f'{time} enc 3 {value}']
+                lines += [f'{time} enc 3 {4*value}']
                 time += 250
         return '\n'.join(lines + [f'{time+300} quit'])+'\n'
     open_t2 = [('key', '0x35'), ('key', '0x11'), ('setup', None)]
