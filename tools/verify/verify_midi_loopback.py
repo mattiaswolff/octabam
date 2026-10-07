@@ -28,7 +28,7 @@ REGS = [UC_M68K_REG_D0, UC_M68K_REG_D1, UC_M68K_REG_D2,
 
 def symbols():
     nm = subprocess.check_output(["m68k-elf-nm", str(ROOT / "out/platform/runtime/runtime.elf")], text=True)
-    return {n: int(a, 16) for a, n in re.findall(r"^([0-9a-f]+) [Tt] (lb_\w+)$", nm, re.M)}
+    return {n: int(a, 16) for a, n in re.findall(r"^([0-9a-f]+) [Tt] ((?:lb|usbmidi)_\w+)$", nm, re.M)}
 
 
 class Machine:
@@ -43,9 +43,12 @@ class Machine:
         u.mem_write(0x40000400, image)
         layout = json.loads((ROOT / "out/platform/layout.json").read_text())
         u.mem_write(layout["base"], (ROOT / "out/platform/runtime/runtime.bin").read_bytes())
-        for site, symbol in ((0x40010bd0, "lb_send"), (0x40005558, "lb_receive"),
+        for site, symbol in ((0x4009f794, "lb_tick"), (0x40005558, "lb_receive"),
                              (0x4009f22a, "lb_live_cached"), (0x4009f25e, "lb_live_tail")):
             assert u.mem_read(site, 6) == b"\x4e\xf9" + self.sym[symbol].to_bytes(4, "big")
+        for site in (0x4009fbae, 0x4009fcf6, 0x4009feee, 0x4009ffba,
+                     0x4009f8be, 0x4009fc50, 0x4009fcd4, 0x4009f328, 0x400a0020):
+            assert int.from_bytes(u.mem_read(site, 4), "big") == self.sym["lb_send"]
         self.stops = {DONE}
         self.arrived = None
         u.hook_add(UC_HOOK_CODE, self.stop)
@@ -80,13 +83,13 @@ class Machine:
             self.put(STACK + 4 + i * 4, value)
         for reg, value in (regs or {}).items():
             u.reg_write(reg, value)
-        u.emu_start(self.sym.get(at, at), 0, count=100000)
+        u.emu_start(self.sym.get(at, at), 0, count=1000000)
         assert self.arrived == stop, (at, hex(u.reg_read(UC_M68K_REG_PC)))
         return u.reg_read(UC_M68K_REG_D0)
 
     def capture(self, msg, source=0x4009fbb2, track=0):
         self.u.mem_write(MSG, bytes(msg))
-        self.call("lb_capture", regs={UC_M68K_REG_D0: source,
+        return self.call("lb_capture", regs={UC_M68K_REG_D0: source,
                   UC_M68K_REG_D1: track, UC_M68K_REG_D2: len(msg), UC_M68K_REG_A0: MSG})
 
     def next(self):
@@ -109,31 +112,33 @@ class Machine:
 
 def machine_gate():
     m = Machine()
-    assert m.get("lb_enabled", 1) == 0
+    assert m.get("lb_routes", 1) == 0
     m.capture((0x90, 84, 100))
     assert m.get("lb_accepted") == 0
-    m.put("lb_enabled", 1, 1)
+    m.capture((0x80, 84, 0), 0x4009f8c2)
+    m.put("lb_routes", 2, 1)
     for msg, pc, track in [((0x90, 84, 100), 0x4000e11a, 0),
-                           ((0x90, 84, 100), 0x4009fbb2, 1),
-                           ((0x91, 84, 100), 0x4009fbb2, 0),
+                           ((0x90, 83, 100), 0x4009fbb2, 1),
+                           ((0xe0, 84, 100), 0x4009fbb2, 0),
                            ((0xb0, 46, 70), 0x40040aa4, 0),
                            ((0xf8,), 0x4009fbb2, 0),
                            ((0x90, 128, 100), 0x4009fbb2, 0)]:
         m.capture(msg, pc, track)
     assert m.get("lb_accepted") == 0
+    m.capture((0x80, 83, 0), 0x4009f8c2)
     m.capture((0x90, 84, 100))
     m.capture((0xb0, 46, 70), 0x4009fef2)
     assert m.get(Q + 4) == 1, "only one wake token"
     assert m.next() == bytes((0x90, 84, 100))
     assert m.next() == bytes((0xb0, 46, 70))
-    m.put("lb_enabled", 0, 1)
+    m.put("lb_routes", 0, 1)
     m.capture((0x90, 84, 0), 0x4009f8c2)
     assert m.next() == bytes((0x90, 84, 0)), "OFF must still release owned notes"
-    assert bytes(m.u.mem_read(m.sym["lb_owned"], 128)) == bytes(128)
+    assert bytes(m.u.mem_read(m.sym["lb_owned"], 2048)) == bytes(2048)
     print("  [ok] source/track/channel filters, wake coalescing, OFF and note ownership")
 
     # Execute real stock queue receive, alternating external and internal.
-    m = Machine(); m.put("lb_enabled", 1, 1)
+    m = Machine(); m.put("lb_routes", 2, 1)
     m.u.mem_write(MSG + 16, bytes((0x91, 60, 90)))
     m.call(0x40000c3c, (Q, MSG + 16))
     m.capture((0xb0, 46, 20), 0x4009fef2)
@@ -143,7 +148,7 @@ def machine_gate():
     assert m.next() == bytes((0xb0, 46, 30))
     print("  [ok] native/internal fairness and complete-message ordering")
 
-    m = Machine(); m.put("lb_enabled", 1, 1)
+    m = Machine(); m.put("lb_routes", 2, 1)
     m.put(0x46100b70, 0x91)  # DIN running status and half-message state
     m.put(0x46100b74, 60)
     for _ in range(256):
@@ -154,7 +159,7 @@ def machine_gate():
     assert m.get(0x46100b70) == 0x91 and m.get(0x46100b74) == 60
     print("  [ok] full native queue is not overrun; DIN framing state stays untouched")
 
-    m = Machine(); m.put("lb_enabled", 1, 1)
+    m = Machine(); m.put("lb_routes", 2, 1)
     for note in range(127):
         m.capture((0x90, note, 100))
     m.capture((0xb0, 46, 70), 0x4009fef2)
@@ -172,19 +177,13 @@ def machine_gate():
     assert m.get("lb_accepted") == m.get("lb_delivered") == 554
     print("  [ok] saturation reserves releases, whole-message drop, ring wrap and recovery")
 
-    # Run installed sender detour, not only its helper. Caller is a proven
+    # Run the sender wrapper, not only its helper. Caller is a proven
     # stock send site; stop at return before the sequencer continues.
-    m = Machine(); m.put("lb_enabled", 1, 1)
+    m = Machine(); m.put("lb_routes", 2, 1)
     m.u.mem_write(MSG, bytes((0x90, 84, 100)))
     regs = {reg: 0x12340000 + i for i, reg in enumerate(REGS)}
     regs[UC_M68K_REG_D7] = 0
-    m.put(STACK, 0x4009fbb2)
-    # call() installs DONE; a tiny entry hook replaces only the test return PC.
-    def caller(u, pc, size, data):
-        m.put(STACK, 0x4009fbb2)
-    hook = m.u.hook_add(UC_HOOK_CODE, caller, begin=0x40010bc8, end=0x40010bc8)
-    m.call(0x40010bc8, (3, MSG), regs, stop=0x4009fbb2)
-    m.u.hook_del(hook)
+    m.call("lb_send", (3, MSG), regs, stop=0x4009fbb2, return_pc=0x4009fbb2)
     for reg in REGS[2:8] + REGS[10:]:
         assert m.u.reg_read(reg) == regs[reg], reg
     assert m.get("lb_accepted") == 1
@@ -197,7 +196,7 @@ def machine_gate():
     direct, internal = Machine(), Machine()
     for machine in (direct, internal):
         machine.receiver_setup()
-    internal.put("lb_enabled", 1, 1)
+    internal.put("lb_routes", 2, 1)
     for msg, pc in [((0xb0, 46, 70), 0x4009fef2),
                     ((0x90, 84, 100), 0x4009fbb2),
                     ((0x80, 84, 0), 0x4009f8c2)]:
@@ -218,35 +217,139 @@ def machine_gate():
     # Run the stock live CC producer through both installed branches. The
     # parent return PC distinguishes the panel from the generic MIDI setter.
     for tail, param in ((tail, param) for tail in (False, True) for param in range(20, 30)):
-        cases = [(0x4005542c, 1, 0, 1)]
-        if param == 20:  # shared provenance filter, independent of CC slot
-            cases += [(0x40054f74, 1, 0, 0), (0x40043b0e, 1, 0, 0),
-                      (0x4005542c, 0, 0, 0), (0x4005542c, 1, 1, 0)]
-        for parent, enabled, track, admitted in cases:
-            m = Machine(); m.put("lb_enabled", enabled, 1)
+        cases = [(0x4005542c, 2, 0, 1)]
+        if param == 20:
+            cases = [(0x4005542c, route, track, int(route != 0))
+                     for route in range(3) for track in range(8)]
+            cases += [(0x40054f74, 2, 0, 0), (0x40043b0e, 2, 0, 0)]
+        for parent, route, track, admitted in cases:
+            m = Machine(); m.put(m.sym["lb_routes"] + track, route, 1)
             flag_byte, flag_bit = (0, param-18) if param < 24 else (1, param-24)
-            for t in range(2):
-                m.put(0x40171442 + 36*t, 1, 1)  # channel 1
+            for t in range(8):
+                m.put(0x40171442 + 36*t, 1, 1)
                 m.put(0x40171360 + 32*t + flag_byte, 1 << flag_bit, 1)
                 m.put(0x46c76dc0 + 68*t + 30 + flag_byte, 1 << flag_bit, 1)
                 m.put(0x46c76dc0 + 68*t + 32, 1, 1)
                 m.put(0x46c76dc0 + 68*t + 52 + param-20, 34, 1)
-            # Make the other track the active channel/CC owner for tail send.
-            m.put(0x8000000c, (1 << (8+track)) if tail else (1 << (8+1-track)))
+            other = (track + 1) % 8
+            m.put(0x8000000c, (255 ^ (1 << (other if tail else track))) << 8)
+            usb = "usbmidi_up" in m.sym
+            if usb:
+                m.put("usbmidi_up", 1, 1)
+                m.put("usbmidi_tx_busy", 1, 1)
             visited = []
             hook = m.u.hook_add(UC_HOOK_CODE, lambda u, pc, n, data:
                                visited.append(pc) if pc in (0x4009f22a, 0x4009f25e) else None)
             m.call(0x4009eec8, (track, param, 80, 0), stop=parent, return_pc=parent)
             m.u.hook_del(hook)
             assert visited == [0x4009f25e if tail else 0x4009f22a], visited
-            assert m.get("lb_accepted") == admitted, (tail, parent, enabled, track)
-            assert m.get(0x400b967c) == 3  # exactly one external message
+            assert m.get("lb_accepted") == admitted, (tail, parent, route, track)
+            external = 0 if route == 1 and admitted else 3
+            assert m.get(0x400b967c) == external
+            if usb:
+                assert m.get("usbmidi_tx_acc_len", 2) == external
             if admitted:
                 assert m.next() == bytes((0xb0, 34, 80))
-    print("  [ok] CC1-10 cached/tail panel paths, OFF/M2 exclusion and generic-setter feedback exclusion")
+    print("  [ok] CC1-10 cached/tail panel paths, all-track routing and generic-setter feedback exclusion")
 
 
-def fixture(source, dest, length=6, control=None):
+def routing_machine_gate():
+    # Exercise every track/channel/route through the installed producer target,
+    # including the USB entry mirror when present in the composed image.
+    m = Machine()
+    for track in range(8):
+        for channel in range(16):
+            for route in range(3):
+                m.put(m.sym["lb_routes"] + track, route, 1)
+                before = m.get("lb_accepted")
+                tx = m.get(0x400b967c)
+                usb = "usbmidi_up" in m.sym
+                if usb:
+                    m.put("usbmidi_up", 1, 1)
+                    m.put("usbmidi_tx_busy", 1, 1)
+                    m.put("usbmidi_tx_acc_len", 0, 2)
+                events = [(0x90 | channel, 84, 100), (0xb0 | channel, 34, 70),
+                          (0x80 | channel, 84, 0)]
+                for msg, pc, operand in zip(events,
+                        (0x4009fbb2, 0x4009fef2, 0x4009f8c2),
+                        (0x4009fbae, 0x4009feee, 0x4009f8be)):
+                    m.u.mem_write(MSG, bytes(msg))
+                    m.call(m.get(operand), (3, MSG), {UC_M68K_REG_D7: track}, stop=pc, return_pc=pc)
+                assert m.get("lb_accepted") - before == (3 if route else 0), (track, channel, route)
+                assert m.get(0x400b967c) - tx == (0 if route == 1 else 9), (track, channel, route)
+                if usb:
+                    assert m.get("usbmidi_tx_acc_len", 2) == (0 if route == 1 else 9)
+                    if route != 1:
+                        assert bytes(m.u.mem_read(m.sym["usbmidi_tx_acc"], 9)) == bytes(sum((list(x) for x in events), []))
+                if route:
+                    assert [m.next() for _ in events] == [bytes(x) for x in events]
+                assert m.get("lb_internal_held") == 0
+    print("  [ok] M1-M8, channels 1-16, EXT/INT/BOTH notes/CCs and DIN" + ("/USB suppression" if usb else ""))
+
+    m = Machine(); m.put("lb_routes", 1, 1)
+    for note in range(128):
+        assert m.capture((0x90, note, 100)) == 0
+        assert m.next() == bytes((0x90, note, 100))
+    assert m.get("lb_internal_held") == 128
+    assert m.capture((0x91, 0, 100)) == 0
+    assert m.get("lb_dropped") == 1
+    assert m.capture((0x81, 0, 0), 0x4009f8c2) == 0
+    assert m.get("lb_internal_held") == 128
+    m.call("lb_set_route", (0, 0))
+    assert m.get("lb_internal_held") == 0
+    for note in range(128):
+        assert m.next() == bytes((0x80, note, 0))
+    assert m.get("lb_accepted") == m.get("lb_delivered") == 256
+    print("  [ok] cross-channel held-note cap, INT drop tombstone and complete cleanup")
+
+    # Setter cleanup follows the original route and channel. The old stock
+    # release is consumed once; another track's held note is untouched.
+    for old in range(3):
+        for new in range(3):
+            if old == new:
+                continue
+            m = Machine()
+            m.call("lb_sync")
+            if "usbmidi_up" in m.sym:
+                m.put("usbmidi_up", 1, 1)
+                m.put("usbmidi_tx_busy", 1, 1)
+            m.call("lb_set_route", (0, old))
+            m.put(m.sym["lb_routes"] + 7, 1, 1)
+            m.capture((0x9f, 84, 100))
+            m.capture((0x97, 85, 100), track=7)
+            if old:
+                assert m.next() == bytes((0x9f, 84, 100))
+            assert m.next() == bytes((0x97, 85, 100))
+            m.call("lb_set_route", (0, new))
+            assert m.get("lb_internal_held") == 1
+            assert m.get(0x400b967c) == (0 if old == 1 else 3)
+            if "usbmidi_up" in m.sym:
+                assert m.get("usbmidi_tx_acc_len", 2) == (0 if old == 1 else 3)
+            if old:
+                assert m.next() == bytes((0x8f, 84, 0))
+            before = m.get("lb_accepted")
+            assert m.capture((0x9f, 84, 0), 0x4009f8c2) == 0
+            assert m.get("lb_accepted") == before
+            m.capture((0x87, 85, 0), 0x4009f8c2)
+            assert m.next() == bytes((0x87, 85, 0))
+            assert m.get("lb_internal_held") == 0
+    for channel in (0, 2, 16):
+        m = Machine()
+        m.put(0x46c76de0, 1, 1)
+        m.call("lb_sync")
+        m.call("lb_set_route", (0, 1))
+        m.capture((0x90, 84, 100))
+        assert m.next() == bytes((0x90, 84, 100))
+        m.put(0x46c76de0, channel, 1)
+        m.call("lb_sync")
+        assert m.next() == bytes((0x80, 84, 0))
+        assert m.get("lb_internal_held") == 0
+        assert m.capture((0x90, 84, 0), 0x4009f8c2) == 0
+        assert m.get(0x400b967c) == 0
+    print("  [ok] all route transitions, channel changes/OFF, original-destination release and late-release suppression")
+
+
+def fixture(source, dest, length=6, control=None, all_tracks=False):
     import ab_fixture
     from hw import ot_project as otp
     ab_fixture.prepare(source, dest)
@@ -261,7 +364,7 @@ def fixture(source, dest, length=6, control=None):
                         "00 06 40 00 46 00 00 40 00 00 00 00 00 00 04 00")
                     data[at+2] = length
                     setup = base + 0x4e2 + 36 * t
-                    data[setup] = 1 if t == 0 else 0
+                    data[setup] = t + 1 if all_tracks else (1 if t == 0 else 0)
                     data[setup + 2] = 128  # PROG OFF
                     data[setup + 20] = 46  # CTRL1 CC1 setup, runtime +0x34
                     if control:
@@ -288,7 +391,7 @@ def fixture(source, dest, length=6, control=None):
                     data[at+9:at+33] = bytes(24)
                     data[at+0x39:at+0x839] = b"\xff" * 2048
                     data[at+0x31:at+0x33] = bytes((16, 2))
-                    if p == 0 and t == 0:
+                    if p == 0 and (t == 0 or all_tracks):
                         data[at+9:at+17] = (1).to_bytes(8, "big")
                         data[at+0x39:at+0x3c] = bytes((84, 100, length))
                         data[at+0x39+20] = 70
@@ -342,7 +445,7 @@ def port_gate(source, remix):
     (out / "card.img").write_bytes(card)
     sym = symbols()
     outcomes = {}
-    for label in ("off", "internal", "uart", "disable", "stop"):
+    for label in ("off", "internal", "int-only", "uart", "disable", "channel", "channel-off", "stop"):
         log, capture = out / f"{label}.log", out / f"{label}.midi"
         dumps = {key: out / f"{label}-{key}.bin" for key in ("level", "note", "held", "stats")}
         cmd = [str(ROOT / "out/emu/ot_emu"), "--image", str(ROOT / "out/mainos_bus.bin"),
@@ -351,11 +454,18 @@ def port_gate(source, remix):
                "--midi-out", str(capture), "--watch-mem", "0x400d64c2,1;0x80000c50,1",
                "--mem-dump", f"0x80000c50,16={dumps['level']};0x400d64c2,8={dumps['note']};"
                f"0x46c7fe4c,64={dumps['held']};{sym['lb_head']:#x},24={dumps['stats']}"]
-        if label in ("internal", "disable", "stop"):
-            cmd += ["--step", f"-:poke:{sym['lb_enabled']:#x}=1"]
+        if label in ("internal", "int-only", "disable", "channel", "channel-off", "stop"):
+            cmd += ["--step", f"-:poke:{sym['lb_routes']:#x}=2"]
+        if label == "int-only":
+            cmd += ["--step", f"-:poke:{sym['lb_routes']:#x}=1"]
+        if label in ("channel", "channel-off"):
+            channel = 2 if label == "channel" else 0
+            cmd += ["--step", f"4:dump:0x400d64c2,1={out / (label + '-before.bin')}",
+                    "--step", f"5:poke:0x40171442={channel}",
+                    "--step", f"5:poke:0x46c76de0={channel}"]
         if label == "disable":
             cmd += ["--step", f"4:dump:0x400d64c2,1={out / 'before-disable.bin'}",
-                    "--step", f"5:poke:{sym['lb_enabled']:#x}=0"]
+                    "--step", f"5:poke:{sym['lb_routes']:#x}=0"]
         if label == "stop":
             fixture(source, out / "held-project", length=127)
             held_card, _ = emu_card.stage_project(out / "held-project", "OCTABAM", "LOOPBACK", tree=out / "held-tree")
@@ -382,6 +492,16 @@ def port_gate(source, remix):
     assert internal["note"] == uart["note"] == "ff" * 8
     assert internal["held"] == uart["held"] == "00" * 64
     assert internal["midi"] == off["midi"], "internal mirror changed external MIDI"
+    assert outcomes["int-only"]["level"] == internal["level"]
+    assert outcomes["int-only"]["note"] == internal["note"]
+    assert outcomes["int-only"]["held"] == internal["held"]
+    assert outcomes["int-only"]["midi"] == [], outcomes["int-only"]
+    for label in ("channel", "channel-off"):
+        assert (out / (label + "-before.bin")).read_bytes() == bytes((84,))
+        assert outcomes[label]["note"] == "ff" * 8
+        assert outcomes[label]["held"] == "00" * 64
+        assert [0x80, 84, 0] in outcomes[label]["midi"], outcomes[label]
+        assert [0x90, 84, 0] not in outcomes[label]["midi"], "late release duplicated cleanup"
     assert [0x90, 84, 100] in internal["midi"]
     assert [0xb0, 46, 70] in internal["midi"]
     assert outcomes["disable"]["note"] == outcomes["stop"]["note"] == "ff" * 8
@@ -399,6 +519,50 @@ def port_gate(source, remix):
     print("  [ok] real sequencer -> internal queue -> MIDI task -> audio state matches UART input")
 
 
+def routing_port_gate(source, remix):
+    """Eight simultaneous stock sequencer sources using mixed destinations."""
+    import hashlib
+    import emu_card
+    assert re.fullmatch(r"[a-z0-9-]+", remix), remix
+    out = ROOT / "out" / remix / "routing"
+    out.mkdir(parents=True, exist_ok=True)
+    fixture(source, out / "project", all_tracks=True)
+    card, _ = emu_card.stage_project(out / "project", "OCTABAM", "LOOPBACK", tree=out / "tree")
+    (out / "card.img").write_bytes(card)
+    sym = symbols()
+    routes = (0, 1, 2, 0, 1, 2, 0, 1)
+    dumps = {k: out / (k + ".bin") for k in ("level", "note", "held", "stats")}
+    cmd = [str(ROOT / "out/emu/ot_emu"), "--image", str(ROOT / "out/mainos_bus.bin"),
+           "--card", str(out / "card.img"), "--set", "OCTABAM", "--project", "LOOPBACK",
+           "--sequencer", "--internal-clock", "--frames", "1200", "--load-ms", "90000",
+           "--midi-out", str(out / "wire.midi"), "--mem-dump",
+           f"0x80000c50,16={dumps['level']};0x400d64c2,8={dumps['note']};"
+           f"0x46c7fe4c,64={dumps['held']};{sym['lb_head']:#x},24={dumps['stats']}"]
+    for track, route in enumerate(routes):
+        cmd += ["--step", f"-:poke:{sym['lb_routes'] + track:#x}={route}"]
+    with (out / "run.log").open("w") as log:
+        result = subprocess.run(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=180)
+    text = (out / "run.log").read_text()
+    assert result.returncode == 0 and "run ended REACHED" in text
+    assert "load run ended: LOAD PROJECT handled" in text
+    midi = decode((out / "wire.midi").read_bytes())
+    for track, route in enumerate(routes):
+        events = [msg for msg in midi if msg[0] & 15 == track]
+        expected = [[0x90 | track, 84, 100], [0xb0 | track, 46, 70], [0x90 | track, 84, 0]]
+        assert events == ([] if route == 1 else expected), (track, route, events)
+        assert dumps["level"].read_bytes()[track * 2] == (70 if route else 127), (track, route)
+    assert dumps["note"].read_bytes() == bytes([255] * 8)
+    assert dumps["held"].read_bytes() == bytes(64)
+    stats = dumps["stats"].read_bytes()
+    counts = [int.from_bytes(stats[i:i+4], "big") for i in range(0, 24, 4)]
+    assert counts[:4] == [15] * 4 and counts[4] == 0, counts
+    receipt = dict(image_sha256=hashlib.sha256((ROOT / "out/mainos_bus.bin").read_bytes()).hexdigest(),
+                   routes=routes, midi=midi, levels=list(dumps["level"].read_bytes()[::2]), stats=counts,
+                   scope="eight-track ColdFire RTOS routing; no rendered audio or hardware proof")
+    (out / "result.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    print("  [ok] eight simultaneous tracks: exact mixed-route wire events, audio levels and clean note release", flush=True)
+
+
 def controls_gate(source, remix, only=None):
     """Real MIDI locks/LFO and the panel's encoder routine into T1 FILTER BASE."""
     import hashlib
@@ -413,8 +577,8 @@ def controls_gate(source, remix, only=None):
         card, _ = emu_card.stage_project(out / f"{kind}-project", "OCTABAM", "LOOPBACK", tree=out / f"{kind}-tree")
         card_path = out / f"{kind}-card.img"
         card_path.write_bytes(card)
-        modes = {"locks": ("off", "on"), "lfo": ("off", "on", "receive-off"),
-                 "knob": ("off", "on", "incoming", "direct")}[kind]
+        modes = {"locks": ("off", "on", "int"), "lfo": ("off", "on", "int", "receive-off"),
+                 "knob": ("off", "on", "int", "incoming", "direct")}[kind]
         for mode in modes:
             label = f"{kind}-{mode}"
             log, capture = out / f"{label}.log", out / f"{label}.midi"
@@ -425,7 +589,9 @@ def controls_gate(source, remix, only=None):
                    "--midi-out", str(capture), "--watch-mem", "0x80000822,1",
                    "--mem-dump", f"0x80000822,1={state};{sym['lb_head']:#x},24={stats}"]
             if mode != "off":
-                cmd += ["--step", f"-:poke:{sym['lb_enabled']:#x}=1"]
+                cmd += ["--step", f"-:poke:{sym['lb_routes']:#x}=2"]
+            if mode == "int":
+                cmd += ["--step", f"-:poke:{sym['lb_routes']:#x}=1"]
             if mode == "receive-off":
                 cmd += ["--step", "-:poke:0x80000049=0"]
             if kind == "knob":
@@ -453,7 +619,8 @@ def controls_gate(source, remix, only=None):
             # frame refresh stores. Compare every value, in order, with the wire.
             writes = [int(value, 16) for value in re.findall(
                 r"\[0x80000822\] <- (0x[0-9a-f]+|0) \(1\) at pc 0x40054e22", text)]
-            assert writes == (ccs if mode == "on" else []), (label, writes, ccs)
+            expected = outcomes[f"{kind}-on"]["cc_values"] if mode == "int" else (ccs if mode == "on" else [])
+            assert writes == expected, (label, writes, expected)
             outcomes[label] = dict(filter=state.read_bytes()[0], stats=counts, midi=midi, cc_values=ccs, filter_writes=writes)
             print(f"  [controls] {label}: filter={outcomes[label]['filter']}, CC34={ccs}, stats={counts}", flush=True)
         off, on = outcomes[f"{kind}-off"], outcomes[f"{kind}-on"]
@@ -462,6 +629,9 @@ def controls_gate(source, remix, only=None):
         assert on["midi"] == off["midi"], f"{kind}: external MIDI changed"
         assert on["stats"][2] == on["stats"][3] > 0 and on["stats"][4] == 0, on
         assert off["stats"][2] == 0, off
+        internal = outcomes[f"{kind}-int"]
+        assert internal["midi"] == [] and internal["filter"] == on["filter"], internal
+        assert internal["stats"][2:5] == on["stats"][2:5], internal
         if kind == "locks":
             assert on["cc_values"] == [32, 96], on
             assert 32 in on["filter_writes"] and 96 in on["filter_writes"], on
@@ -490,16 +660,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("remix", nargs="?", default="midi-loopback")
     parser.add_argument("--project", type=pathlib.Path)
+    parser.add_argument("--routing", action="store_true", help="run the simultaneous eight-track project scenario")
     parser.add_argument("--controls", action="store_true", help="run filter-control project scenarios instead of note lifecycle scenarios")
     parser.add_argument("--control-kind", choices=("locks", "lfo", "knob"), help="rerun one control group; requires --controls")
     args = parser.parse_args()
+    if args.routing and (not args.project or args.controls):
+        parser.error("--routing requires --project and cannot combine with --controls")
     if args.controls and not args.project:
         parser.error("--controls requires --project DIR")
     if args.control_kind and not args.controls:
         parser.error("--control-kind requires --controls")
     machine_gate()
+    routing_machine_gate()
     if args.project:
-        if args.controls:
+        if args.routing:
+            routing_port_gate(args.project, args.remix)
+        elif args.controls:
             controls_gate(args.project, args.remix, args.control_kind)
         else:
             port_gate(args.project, args.remix)

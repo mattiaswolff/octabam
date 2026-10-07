@@ -1,11 +1,11 @@
 # MIDI Loopback module sketch
 
 Draft, 7 October 2026, based on local `origin/main` commit `6f9e5bc9`.
-The first [prototype](README.md) implements a bounded subset. The per-track
-destination controls and persistence below remain proposals; there is no
-hardware proof.
-The 8 October extension proves MIDI CC locks/LFO and panel CC knobs for
-M1/channel 1. It stays on the separate experimental module branch.
+The first [prototype](README.md) implements a bounded subset. Volatile per-track
+EXT/INT/BOTH now covers proven notes and CC producers on M1–M8/channels 1–16,
+with route/output-channel cleanup. Panel controls, persistence and the wider
+contract below remain proposals. There is no hardware proof; development
+stays on the separate experimental module branch.
 
 MIDI Loopback lets selected MIDI tracks control the Octatrack's own audio
 side through its existing MIDI receive behaviour. A MIDI track becomes an
@@ -197,8 +197,9 @@ module's verifier.
   [memory placement](../../docs/contributing/PLACEMENT.md).
 - [Shared settings proposal](../../docs/proposals/OTX_PROJECT_PROPOSAL.md).
 
-Next implementation decision: extend the proven producer boundaries to
-per-track routing, including internal-only suppression before DIN and USB,
-while retaining the origin checks and note-release ownership. Live notes,
-remaining message families and transition cleanup still need their own
-evidence before the full routing contract above is implemented.
+Next implementation decision: complete the remaining producer families and
+global panic handling before adding the panel destination setting. The volatile
+router now suppresses proven INT events before DIN/USB and owns releases across
+route/output-channel edits. Live notes, shared-channel interactions and
+Part/project transitions still need evidence before the full contract above
+is implemented.
