@@ -1,9 +1,40 @@
 # MIDI Follow (experimental)
 
 Each MIDI track can follow another MIDI track's chord root while keeping its
-own rhythm, velocity and note length. At TRAN=0, the bass uses MIDI notes 36–47:
+own rhythm, velocity and note length. By default, FIXED octave 3 with TRAN=0 uses MIDI notes 36–47:
 C → F → G gives 36 → 41 → 43. The follower's TRAN adds a signed semitone
-offset to that root. Scale Quantizer is not required.
+offset after its register choice. Scale Quantizer is not required.
+
+## Register choice
+
+On the receiving track, press **knob D (RFOL) on NOTE SETUP** to open FOLLOW.
+Knob **A: MODE** selects FIXED or SOURCE. Knob **B: OCT** sets the register:
+
+| MODE | OCT | Effect |
+| --- | --- | --- |
+| FIXED (default) | 0–10; default 3 | Keep the source pitch class in this octave, regardless of its original octave |
+| SOURCE | -2, -1, 0, +1, +2; default 0 | Follow the source's complete root pitch, shifted by this many octaves |
+
+For source notes C3 then C5 (MIDI 36 then 60): FIXED 3 produces C3 then C3;
+SOURCE 0 produces C3 then C5; SOURCE -1 produces C2 then C4.
+Octave names here use C0 = MIDI 0. Octave 10 is partial: only C–G fit MIDI.
+Each mode remembers its own OCT value when switching modes.
+
+The receiver applies register choice first, then its native TRAN/P-lock offset.
+With Harmony active, root snapping and chord generation follow those steps.
+Out-of-range final roots are silent, never wrapped or clamped. Settings affect
+the next receiver note trig; already-held notes keep their original releases.
+A chain uses the ultimate source's root and the final receiver's register and
+TRAN; intermediate receiver offsets do not accumulate.
+
+Source register refers to the harmonic root before inversion, spread and root
+omission/placement, not whichever generated or arpeggiated note is lowest.
+Source sequence TRAN/scale and live key root selection still happen before capture.
+
+The new settings share RFOL's existing lifetime: per-track module RAM, reset on
+reboot; not saved in Parts/projects or parameter locked. Existing stock controls
+and the source selector remain in place. NO/YES/D or a track/page key closes the
+window; transport and chromatic playing continue through it.
 
 ## On the Octatrack
 
@@ -31,7 +62,7 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 - A configured follower is monophonic once its source has a known root:
   NOTE2–4 are suppressed. Before the first eligible source trigger it passes
   through unchanged.
-- The next follower trig uses the selected source's latest root. A held bass
+- The next follower trig uses the selected source's latest root and the receiver's register choice. A held bass
   keeps its original note-off, including when RFOL changes or switches OFF.
 - The follower's NOTE does not set an interval: use TRAN. Its live value,
   including parameter locks, is added after root selection without an additional
@@ -40,7 +71,7 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
   Pitches outside MIDI 0–127 are suppressed instead of wrapped. Existing stock
   absent/invalid-note gates still apply before the follower replacement.
 - A dependency chain uses the ultimate source root plus the final follower's
-  own TRAN; intermediate followers' offsets do not accumulate.
+  own register choice and TRAN; intermediate followers' offsets do not accumulate.
 - Ordinary same-tick source trigs are captured before any track emits, so
   **T2 following T8** sees the new root on that tick. Earlier microtimed bass
   trigs still use the previous root.
@@ -83,7 +114,11 @@ stock NOTE descriptor, drawer and encoder dispatch. No DSP code is added.
   staged Part value is never replaced or sent through the stock setter.
 
 `bf_sources[8]` holds OFF=0 or source=1…8. `bf_roots[8]` holds the source's bass
-pitch or 0xff (unknown). These initialized bytes belong to the linked runtime;
+pitch or 0xff (unknown). `bf_pitches[8]` retains full MIDI root pitches.
+`bf_reg_modes`, `bf_reg_fixed` and `bf_reg_offsets` hold the receiver's register
+choices. Harmony calls `bf_register` before applying the receiver's TRAN; its
+matching adapter also publishes live keyboard root octaves into `bf_pitches`.
+These initialized bytes belong to the linked runtime;
 there is no persistence format or save/load hook. The generic MIDI sender is
 not hooked. The existing DRAM platform reserves about 10 MB of sample RAM;
 this small module shares that reserve when composed with other DRAM modules.
@@ -102,6 +137,22 @@ The last command reads the project as a template and creates disposable virtual
 cards under `out/midi-follow/`. It does not edit the template or a device card.
 The module gate also accepts `OT_PROJECT`; without one, the full-port checks
 explicitly skip and the controlled machine-code gate still runs.
+
+The register gate executes 12,288 combinations of source pitch, FIXED/SOURCE
+register, receiver TRAN and direct/chained routing. When Harmony is linked it
+also checks register selection before scale snapping, live root capture and
+out-of-range suppression. The panel/MIDI register runner is:
+
+```sh
+.venv/bin/python3 tools/verify/verify_midi_follow_register_port.py --project /path/to/local/project
+# Optional: combined image/symbols, using this checkout's emulator:
+.venv/bin/python3 tools/verify/verify_midi_follow_register_port.py --project /path/to/local/project --harmony --build-root /path/to/combined/worktree
+```
+
+It captures FIXED 3/4 and SOURCE 0/-2/+2, checks MIDI releases and unchanged
+Part data, and saves LCD images with an image-hash receipt. The Harmony fixture
+uses source CHORD/ROOT -2 OCT and receiver NOTE to check that root placement
+does not alter the captured source register.
 
 The controlled gate executes the actual linked bytes: all 56 source/follower
 pairs, OFF, chains/cycles, 128 root notes, all 128 follower TRAN values for
@@ -223,3 +274,5 @@ checks; Chord Play quality locks are exercised alongside source scale changes.
 Use `--mute-only` to run this focused suite plus the linked machine-code gate.
 Captures, frozen candidate bytes, logs and `result.json` stay under the remix's
 `out/*midi-follow/mute/` directory. These are emulator checks, not hardware proof.
+
+Register verification: `tools/verify/verify_midi_follow_register.py` covers full MIDI range, both register modes, every octave choice, TRAN, chains, invalid roots and bounded writes. `tools/verify/verify_midi_follow_register_port.py --project DIR` exercises physical RFOL/window encoders, source octave changes, MIDI release balance and unchanged native Part bytes on a disposable virtual card.
