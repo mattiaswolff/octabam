@@ -195,10 +195,10 @@ def note_rules(source):
         if has_follow:extra+=['--step',f'-:call:{sym["bf_encoder"]:#x},3,1','--step',f'-:poke:{sym["bf_roots"]:#x}=41']
         events=run(work,'keys',extra);balanced(events)
         pitches=[e[2] for e in events if e[0]=='on']
-        if arp:assert set(pitches)=={48,50},pitches
+        if arp:assert set(pitches)=={55,57},pitches
         else:assert pitches==[50,48],pitches
         results[name]=pitches
-        print(f'  [ok] {name}: played D remains D with TRAN +7 and followed F; C# snaps to C',flush=True)
+        print(f'  [ok] {name}: absolute keyboard root; live arp applies TRAN +7, direct keys ignore it',flush=True)
     return results
 
 
@@ -238,10 +238,13 @@ def chord_rules(source):
             events=run(work,'keys',extra);balanced(events)
             pitches=[e[2] for e in events if e[0]=='on']
             want=chord(50,kind)+chord(48,kind)
-            if arp:assert set(pitches)==set(want),pitches
+            if arp:
+                valid=[n for n in range(128) if n%12 in harmony.MODES[0]]
+                shifted={min(valid,key=lambda n:(abs(n-(pitch+7)),n)) for pitch in want}
+                assert set(pitches)==shifted,pitches
             else:assert pitches==want,pitches
             results[name]=pitches
-            print(f'  [ok] {name}: D minor and C major despite TRAN +7/followed F; inherited scale',flush=True)
+            print(f'  [ok] {name}: absolute D/C chord roots, inherited scale, stock live-arp TRAN +7',flush=True)
     return results
 
 
@@ -613,9 +616,87 @@ def root_live(source):
     return results
 
 
+def live_transpose(source):
+    """Physical TRAN edits during live keys/arp; record exact release ownership."""
+    import verify_chord_play_port as chord
+    results={}
+    qualities=((36,39,43),(36,39,43,46),(36,39,43,50),(36,38,43),
+               (36,41,43),(36,40,43),(36,39,43),(36,40,43,46))
+    # mode, HARM, quality, arp, offset, octave, voicing, spread, ROOT
+    cases=[('chromatic',kind,1,arp,7,3,0,0,0) for kind in (1,2) for arp in (False,True)]
+    cases += [('chord-play',2,1,False,7,3,0,0,0)]
+    cases += [('chord-play',2,q,True,7,3,0,0,0) for q in range(8)]
+    cases += [('chord-play',2,1,True,d,3,0,0,0) for d in (-12,1,12)]
+    cases += [('chord-play',2,1,True,7,3,2,1,2),
+              ('chord-play',2,1,True,12,9,0,0,0),
+              ('chord-play',2,1,True,-12,0,0,0,0)]
+    for mode,kind,q,arp,delta,octave,voic,spread,root in cases:
+        name=f'transpose-{mode}-h{kind}-q{q}-a{int(arp)}-d{delta}-o{octave}-v{voic}-s{spread}-r{root}'
+        work=fixture(source,name,{0:kind},key_raw=2,arp=arp,voicings={0:voic},spreads={0:spread},roots={0:root})
+        sym=harmony.symbols()
+        extra=['--step',f'-:poke:0x400beba5={octave}']
+        if mode=='chord-play':
+            script=chord.PANEL+f'1700 key {8+q} down\n2000 key 0 down\n'+chord.key(2400,0x23)
+        else:
+            extra+=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1','--step','-:poke:0x100b14cc=0','--step',f'-:poke:{sym["ch_live"]:#x}={q}']
+            script=chord.key(100,0x31)+chord.key(500,0x23)+'2000 key 0 down\n'
+        script+=f'3000 enc 0 {delta}\n5000 key 0 up\n'
+        if not arp:script+='5500 key 0 down\n6500 key 0 up\n'
+        if mode=='chord-play':script+=f'6700 key {8+q} up\n'
+        script+='7100 quit\n'
+        path=work/'keys.txt';path.write_text(script)
+        events=run(work,'keys',extra+['--rtc','1800000000','--internal-clock','--live-script',path,'--lcd',work/'screen.lcd','--mem-dump',f'0x46c76fec,1={work}/tran.bin'])
+        balanced(events)
+        assert (work/'tran.bin').read_bytes()==bytes((64+delta,))
+        notes=[e[2] for e in events if e[:2]==('on',1)]
+        before=[36] if kind==1 else list(qualities[q])
+        before=[n+12*(octave-3) for n in before]
+        if voic:before=[24,39,46,55] # 1ST + OPEN + ROOT -1 OCT, all before TRAN
+        shifted=[]
+        for note in before:
+            value=note+delta
+            if 0<=value<=127:
+                if kind==1 or q<5:
+                    value=min((n for n in range(128) if n%12 in harmony.MODES[5]),key=lambda n:(abs(n-value),n))
+                shifted.append(value)
+        if arp:assert set(notes)==set(before+shifted),(name,notes,before,shifted)
+        else:assert notes==before*2,(name,notes,before)
+        results[name]=dict(before=before,transposed=shifted if arp else before,actual=notes)
+        print(f'  [ok] {name}: {before} -> {shifted if arp else before}; balanced releases',flush=True)
+        # Preserve scripts/UART/LCD and project fixtures; discard generated card copies.
+        for file in work.glob('*.img'):file.unlink()
+        import shutil
+        shutil.rmtree(work/'tree')
+    return results
+
+
+def live_transpose_cleanup(source):
+    """Leaving CHORD PLAY releases transposed arp notes with keys still held."""
+    import shutil
+    import verify_chord_play_port as chord
+    results={}
+    for name,end in (
+        ('grid',chord.key(3500,0x29)),
+        ('mode','3500 key 0x2d down\n3600 key 0x20 down\n3650 key 0x20 up\n3800 key 0x20 down\n3850 key 0x20 up\n4000 key 0x2d up\n'),
+    ):
+        work=fixture(source,f'transpose-leave-{name}',{0:2},key_raw=2,arp=True)
+        script=work/'keys.txt'
+        script.write_text(chord.PANEL+'1700 key 9 down\n2000 key 0 down\n'+chord.key(2400,0x23)+'3000 enc 0 7\n'+end+'4500 quit\n')
+        events=run(work,'keys',['--rtc','1800000000','--internal-clock','--live-script',script])
+        balanced(events)
+        notes=[e[2] for e in events if e[:2]==('on',1)]
+        assert {48,51,55,58}<=set(notes) and set(notes)&{62,65},notes
+        results[f'transpose-leave-{name}']=dict(actual=notes,balanced_with_keys_held=True)
+        print(f'  [ok] transpose-leave-{name}: transposed arp releases before physical key-up',flush=True)
+        for card in work.glob('*.img'):card.unlink()
+        shutil.rmtree(work/'tree')
+    return results
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
+    ap.add_argument('--live-transpose-only',action='store_true',help='stock-compatible live arp TRAN, direct-key identity, qualities and releases')
     ap.add_argument('--root-only',action='store_true',help='ROOT placement, arp, follower, recording, UI and persistence')
     ap.add_argument('--bypass-follow-only',action='store_true',help='live HARM OFF / KEY OFF source with rhythmic MIDI followers')
     ap.add_argument('--octave-only',action='store_true',help='live AUTO octave-jump regressions in C minor')
@@ -625,6 +706,11 @@ def main():
     ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
     freeze_candidate(OUT)
+    if a.live_transpose_only:
+        cases=live_transpose(a.project)
+        cases.update(live_transpose_cleanup(a.project))
+        (OUT/'result-live-transpose.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.root_only:
         cases=manual_inversions(a.project);cases.update(recording(a.project));cases.update(root_live(a.project))
         cases.update(persistence(a.project,4,2));cases.update(persistence(a.project,1,3))
@@ -659,6 +745,8 @@ def main():
     cases.update(keyboard(a.project))
     cases.update(note_rules(a.project))
     cases.update(chord_rules(a.project))
+    cases.update(live_transpose(a.project))
+    cases.update(live_transpose_cleanup(a.project))
     cases.update(recording(a.project))
     cases.update(empty_note_locks(a.project))
     cases.update(persistence(a.project))

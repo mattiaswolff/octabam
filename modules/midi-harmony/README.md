@@ -50,12 +50,15 @@ from that snapped scale degree. In C Major, C +2 gives D–F–A (or D–F–A�
 not a chromatically shifted C-major chord. B +7 snaps F♯ down to F, then
 builds F–A–C (or F–A–C–E). Followers use their source's scale throughout.
 
-A chromatic keyboard press chooses the pitch directly, without adding track
-TRAN or replacing it with a followed root. Pressing D plays D, D minor or
-D minor 7 according to HARM and CHRD, even with followed root F and TRAN +7. This
-also applies to live arp. The source supplies the keyboard's scale.
+A chromatic keyboard press chooses the pitch directly, without replacing it
+with a followed root. With the arp OFF, TRAN does not affect these live notes,
+matching stock. With the arp ON, its outgoing notes use the current stock
+TRAN and arranger offset on every tick. Turning TRAN changes subsequent arp
+notes without another key press. This applies to chromatic keys and CHORD PLAY.
+The source supplies the keyboard's scale. Scale-derived qualities receive
+final scale correction after transposition; explicit MAJ/MIN/DOM7 do not.
 
-Generated notes enter the stock arp with TRAN already applied once. Its
+Sequenced generated notes enter the stock arp with TRAN already applied once. Its
 pitch offsets receive a final scale correction before MIDI transmission for
 scale-derived choices. Explicit MAJ, MIN and DOM7 preserve their chromatic
 chord tones through the arp.
@@ -400,6 +403,11 @@ muting/recovery and final arp scale correction. Live-recording cases use
 REC+PLAY, play C♯/D/F, exit REC and compare the next loop with live output;
 they inspect recorded NOTE bytes and explicitly disabled NOT2–4 locks.
 Use `--recording-only` with the port script for these focused cases.
+Use `--live-transpose-only` for physical TRAN edits during held chromatic and
+CHORD PLAY notes: stock direct/arp behaviour, all eight qualities, scale
+correction, combined voicing/spread/ROOT placement, MIDI bounds and releases.
+The machine gate also compares the live transpose path with native stock
+instructions across every MIDI pitch, signed TRAN offsets and arranger offsets.
 Use `--voicing-only` for AUTO sequence/keyboard/arp, recorded physical roots,
 SPRD variants, Harmony-page controls, and actual save/reload/warm-resume checks. These also
 produce the Harmony window screenshot at `out/harmony-port-suite/harmony-page/page.png`.
