@@ -43,6 +43,8 @@ class Machine:
         u.reg_write(UC_M68K_REG_D0,d0);u.reg_write(UC_M68K_REG_D1,d1)
         if a0 is not None:u.reg_write(UC_M68K_REG_A0,a0)
         for r,v in (regs or {}).items():u.reg_write(r,v)
-        u.emu_start(self.sym[name],0,count=20000)
+        u.emu_start(self.sym[name],0,count=self.instruction_limit(name))
         assert self.arrival in self.stops,(name,hex(u.reg_read(UC_M68K_REG_PC)))
         return u.reg_read(UC_M68K_REG_D0)
+    def instruction_limit(self, name):
+        return 20000
