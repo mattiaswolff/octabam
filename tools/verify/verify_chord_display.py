@@ -73,10 +73,32 @@ def machine():
         ink=bytes(u.mem_read(plane,1024))
         lit=[(x,y) for x in range(128) for y in range(64)
              if ink[x*8+y//8] & (0x80>>(y%8))]
-        assert lit and all(78<=x<=118 and 9<=y<=22 for x,y in lit),(name,lit)
+        assert lit and all(78<=x<=118 and 16<=y<=22 for x,y in lit),(name,lit)
     print('[ok] single-line drawing: all four voices, sharps and negative octaves stay inside the guide',flush=True)
+    for voic,v in enumerate(('V:R','V:A','V:1','V:2','V:3')):
+        for spread,sp in enumerate(('S:C','S:O','S:W')):
+            for root,r in enumerate(('R:K','R:O','R:-1','R:-2')):
+                m.call('mh_voic_set',0,voic);m.call('mh_sprd_set',0,spread);m.call('mh_root_set',0,root)
+                m.call('ch_settings_text',0)
+                actual=bytes(u.mem_read(u.reg_read(UC_M68K_REG_A0),16)).split(b'\0')[0].decode()
+                assert actual==f'{v} {sp} {r}',actual
+                u.mem_write(plane,bytes(1024));m.call('ch_draw_settings',0)
+                ink=bytes(u.mem_read(plane,1024))
+                lit=[(x,y) for x in range(128) for y in range(64) if ink[x*8+y//8] & (0x80>>(y%8))]
+                assert lit and all(78<=x<=118 and 9<=y<=14 for x,y in lit),(actual,lit)
+    print('[ok] all 60 V/S/R summaries fit below the chord name without touching the octave box',flush=True)
     # The UI seam must return the queued event unchanged to native dispatch.
     u.mem_map(0x460d0000,0x10000)
+    u.mem_write(0x460d16f0,(6).to_bytes(4,'big'));u.mem_write(0x80000012,(1).to_bytes(4,'big'))
+    for setter in ('mh_voic_set','mh_sprd_set','mh_root_set'):m.call(setter,0,0)
+    m.call('ch_display_poll',stop=s['ch_play_guide'])
+    m.call('ch_display_poll') # unchanged settings must not redraw
+    for setter in ('mh_voic_set','mh_sprd_set','mh_root_set'):
+        m.call(setter,0,1)
+        m.call('ch_display_poll',stop=s['ch_play_guide'])
+        m.call('ch_display_poll')
+    u.mem_write(0x460d16f0,bytes(4))
+    print('[ok] settings changes including AUTO trigger one redraw; unchanged values do not',flush=True)
     u.mem_write(m.scratch,b'\x01')
     preserved={r:0x12340000+i for i,r in enumerate((UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A1,UC_M68K_REG_A2,UC_M68K_REG_A3,UC_M68K_REG_A4,UC_M68K_REG_A5,UC_M68K_REG_A6))}
     m.call('ch_display_tick',m.scratch,0x1357,stop=0x40056c82,regs=preserved)
@@ -102,6 +124,7 @@ def port(source, selected=None):
         'held':(panel.PANEL+'1600 key 0 down\n2300 quit\n','Cm',[48,51,55]),
         'accidentals':(panel.PANEL+'1600 key 0 down\n1800 key 9 down\n2300 quit\n','D#m7',[51,54,58,61]),
         'ninth':(panel.PANEL+'1600 key 1 down\n1800 key 10 down\n2300 quit\n','Ddim(addb9)',[50,53,56,63]),
+        'settings':(panel.PANEL+'2300 quit\n','',[]),
         'no-scale':(panel.PANEL+'1600 key 1 down\n2300 quit\n','D',[50,54,57]),
         'no-scale-minor':(panel.PANEL+'1600 key 1 down\n1800 key 14 down\n2300 quit\n','Dm',[50,53,57]),
         'no-scale-sequence':(panel.PANEL+panel.key(1600,0x28)+'2100 quit\n',None,None),
@@ -117,6 +140,7 @@ def port(source, selected=None):
         if selected and name not in selected:continue
         # Configure the Part too, so native KEY caches agree with the UI.
         work=p.fixture(source,'accidentals',{0:2},key_raw=8) if name=='accidentals' else p.fixture(source,name,{0:2},key_raw=0) if name.startswith('no-scale') else panel_work
+        if name=='settings':work=p.fixture(source,name,{0:2},key_raw=2,voicings={0:2},spreads={0:1},roots={0:2})
         if name=='no-scale-sequence':
             for bank in (work/'project').glob('bank*.work'):
                 p.otp._bank_write(work/'project',int(bank.stem[4:]),sustain,guard=False)
@@ -124,6 +148,7 @@ def port(source, selected=None):
             (work/'card.img').write_bytes(card)
         path=work/f'{name}.txt';path.write_text(script)
         dump=f'{sym["ch_name_text"]:#x},32={work}/{name}-name.bin;{sym["ch_display_notes"]:#x},4={work}/{name}-notes.bin;0x400beba2,4={work}/{name}-octave.bin;0x46c77a16,32={work}/{name}-native.bin'
+        dump+=f';{sym["ch_settings_buffer"]:#x},16={work}/{name}-settings.bin'
         events=p.run(work,name,['--rtc','1800000000','--live-script',path,'--internal-clock','--lcd',work/f'{name}.lcd','--mem-dump',dump])
         actual=(work/f'{name}-name.bin').read_bytes().split(b'\0')[0].decode()
         notes=[n for n in (work/f'{name}-notes.bin').read_bytes() if n<128]
@@ -146,11 +171,13 @@ def port(source, selected=None):
         def bit(x,y):return bool(plane[x*8+y//8] & (0x80>>(y%8)))
         assert all(bit(x,31) for x in range(60,119)),name
         assert all(bit(60,y) for y in range(25,32)),name
-        results[name]=dict(name=actual,notes=notes,title_bar=True)
+        summary=(work/f'{name}-settings.bin').read_bytes().split(b'\0')[0].decode()
+        assert summary==('V:1 S:O R:-1' if name=='settings' else 'V:R S:C R:K'),(name,summary)
+        results[name]=dict(name=actual,notes=notes,title_bar=True,settings=summary)
         print('[ok]',name,actual,notes,flush=True)
     (OUT/('receipt-'+ '-'.join(selected)+'.json' if selected else 'receipt.json')).write_text(json.dumps(dict(cases=results,image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','accidentals','no-scale','no-scale-minor','no-scale-sequence','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('settings','held','accidentals','no-scale','no-scale-minor','no-scale-sequence','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
     machine()
     if args.project:port(args.project,args.selected)

@@ -103,6 +103,11 @@ recording, trigs 1–8 play the selected scale from tonic through the next octav
 With KEY OFF they use C–D–E–F–G–A–B–C as roots; each TRI is major.
 The stock-style inverted title bar reads CHORD PLAY when idle and shows the
 actual MIDI notes while sounding. Chord names and note names both use sharps.
+A compact line below the chord name always shows VOIC, SPRD and ROOT:
+`V:1 S:O R:-1` means first inversion, OPEN spread, root down one octave.
+VOIC uses R/A/1/2/3 (ROOT/AUTO/inversions), SPRD C/O/W, and ROOT
+K/O/-1/-2 (KEEP/OMIT/octave drops). Long add9 names omit parentheses here
+to leave this settings line visible.
 FUNC + LEFT/RIGHT uses the chromatic octave controls. Trigs 9–16 temporarily
 select these choices, in fixed positions:
 
