@@ -1,5 +1,5 @@
 /* Derive the displayed name from the unvoiced chord intervals, before
- * global inversion/spread/OMIT. Flat pitch spellings are enharmonic labels.
+ * global inversion/spread/OMIT. Sharp pitch spellings match the native MIDI note labels.
  * UI-only scratch; the audio/recording path never calls this routine.
  */
     .text
@@ -32,7 +32,8 @@ ch_chord_name: /* d0 track -> a0 name; d0/d1/a1 volatile */
     cmpi.l #2,%d0
     bcs.w .name_done
     move.l %d7,%d0
-    jsr mh_scale_record
+    move.l %d2,%d1
+    jsr mh_chord_scale
     move.l %d0,%d3
     lsr.l #2,%d3
     andi.l #15,%d3
@@ -146,20 +147,20 @@ ch_chord_name: /* d0 track -> a0 name; d0/d1/a1 volatile */
 .append_done:
     rts
     .balign 4
-.pitch_names: .long .c,.db,.d,.eb,.e,.f,.gb,.g,.ab,.a,.bb,.b
+.pitch_names: .long .c,.cs,.d,.ds,.e,.f,.fs,.g,.gs,.a,.as,.b
 .triad_names: .long .major,.minor,.dim
 .name_masks: .word 0xab5,0x6ad,0x5ab,0xad5,0x6b5,0x5ad,0x56b
 .c: .asciz "C"
-.db: .asciz "Db"
+.cs: .asciz "C#"
 .d: .asciz "D"
-.eb: .asciz "Eb"
+.ds: .asciz "D#"
 .e: .asciz "E"
 .f: .asciz "F"
-.gb: .asciz "Gb"
+.fs: .asciz "F#"
 .g: .asciz "G"
-.ab: .asciz "Ab"
+.gs: .asciz "G#"
 .a: .asciz "A"
-.bb: .asciz "Bb"
+.as: .asciz "A#"
 .b: .asciz "B"
 .major: .asciz ""
 .minor: .asciz "m"

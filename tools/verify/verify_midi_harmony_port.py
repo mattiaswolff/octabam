@@ -455,11 +455,12 @@ def auto_voicing(source):
     return results
 
 
-def bypass_follow(source):
-    """A live source publishes its root even when Harmony/KEY is bypassed."""
+def bypass_follow(source, key_off_only=False):
+    """Live roots drive followers with HARM OFF or no selected scale."""
     sym=harmony.symbols();results={}
     if 'bf_sources' not in sym:return results
-    for source_type,key_raw,dest_type in ((0,1,0),(0,1,1),(0,1,2),(2,0,0),(1,1,1)):
+    for source_type,key_raw,dest_type in ((0,1,0),(0,1,1),(0,1,2),(2,0,0),(2,0,2),(1,1,1)):
+        if key_off_only and key_raw:continue
         for arp in (False,True):
             name=f'bypass-follow-{source_type}-{key_raw}-{dest_type}-{int(arp)}'
             work=fixture(source,name,{0:source_type,1:dest_type},arp=arp,key_raw=key_raw)
@@ -488,7 +489,8 @@ def bypass_follow(source):
             assert bass and set(bass)==want,(name,bass,want)
             assert (work/'roots.bin').read_bytes()[0]==41,(name,'lost live F root')
             lead=[e[2] for e in events if e[:2]==('on',1)]
-            assert lead and set(lead)=={53},(name,lead)
+            expected_lead={53,57,60} if source_type==2 and key_raw==0 else {53}
+            assert lead and set(lead)==expected_lead,(name,lead)
             results[name]=dict(leader=lead,follower=bass)
             print(f'  [ok] {name}: live F drives rhythmic follower, including source arp ticks',flush=True)
     return results
