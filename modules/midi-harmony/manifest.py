@@ -16,6 +16,7 @@ MODULE = Module(
             Linked('harmonyvoice', 'modules/midi-harmony/voicing.s', dram=True),
             Linked('harmonypage', 'modules/midi-harmony/page.s', dram=True),
             Linked('harmonychords', 'modules/midi-harmony/chords.s', dram=True),
+            Linked('chorddisplay', 'modules/midi-harmony/chord-display.s', dram=True),
             Linked('chordname', 'modules/midi-harmony/chord-name.s', dram=True),
             Linked('chordmigration', 'modules/midi-harmony/chord-migration.s', dram=True),
             Linked('chordoperations', 'modules/midi-harmony/chord-operations.s', dram=True),
@@ -41,6 +42,7 @@ MODULE = Module(
     ),
     claims=Claims(sram=((0x100f8600, 8224, 'CHRD dense current bank mirror'),)),
     detours=(
+        Detour(0x40056c7c, bytes.fromhex("2040588f7110"), "chorddisplay", "ch_display_tick", "UI task refresh of changed sounding chords after queue receive"),
         Detour(0x4004878a, bytes.fromhex("41f94007e998"), "harmonyplay", "ch_grid_toggle", "release CHORD PLAY notes before entering grid"),
         Detour(0x40062aac, bytes.fromhex('4eb940041784'), 'chordrecord', 'ch_record_off', 'record release on captured physical track', kind='jsr'),
         Detour(0x40062a82, bytes.fromhex('4eb94004ef54'), 'chordrecord', 'ch_record_grid_off', 'grid release on captured physical track', kind='jsr'),
@@ -123,5 +125,6 @@ MODULE = Module(
     ),
     gates=(Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_play.py', stage='image', venv=True),
+           Gate('tools/verify/verify_chord_display.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_storage.py', stage='image', venv=True)),
 )

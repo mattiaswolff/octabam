@@ -123,12 +123,16 @@ ch_encoder:
     bne.s .edit_done
     lea -16(%sp),%sp
     movem.l %d2-%d3/%a2-%a3,(%sp)
+    moveq #3,%d0
+    move.l 24(%sp),%d1
+    jsr mh_ui_delta
+    move.l %d0,%d3
     moveq #0,%d2
     move.b 0x100b14cc,%d2
     lea ch_base,%a2
     moveq #0,%d0
     move.b (%a2,%d2.l),%d0
-    move.l 24(%sp),%d1
+    move.l %d3,%d1
     bsr.w ch_clamp_delta
     move.b %d0,(%a2,%d2.l)
     move.l %d2,%d1
@@ -153,6 +157,15 @@ ch_step_encoder:
     bne.s .edit_done
     lea -32(%sp),%sp
     movem.l %d2-%d7/%a2-%a3,(%sp)
+    moveq #3,%d0
+    move.l 40(%sp),%d1
+    jsr mh_ui_delta
+    move.l %d0,%d7
+    tst.l ch_toggle_active
+    bne.s .steps_edit
+    tst.l %d7
+    beq.w .steps_no_change
+.steps_edit:
     jsr ch_lock_init
     moveq #0,%d2
     move.b 0x100b14cc,%d2
@@ -188,7 +201,7 @@ ch_step_encoder:
     bls.s .step_value
     moveq #0,%d0
 .step_value:
-    move.l 40(%sp),%d1
+    move.l %d7,%d1
     bsr.w ch_clamp_delta
  .step_store:
     move.b %d0,(%a2)
@@ -211,6 +224,11 @@ ch_step_encoder:
     lea -80(%sp),%sp
     movem.l %d2-%d7/%a2-%fp,(%sp)
     jmp 0x40050ec2
+
+.steps_no_change:
+    movem.l (%sp),%d2-%d7/%a2-%a3
+    lea 32(%sp),%sp
+    rts
 
 /* d1 = NOTE-page slot. */
 ch_ui_owned:

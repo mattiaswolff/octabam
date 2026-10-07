@@ -320,11 +320,11 @@ ch_play_guide:
     bne.w .guide_stock
     tst.l 0x460d1aec
     bne.w .guide_done
-    /* Chord name below the mode title, above the native footer (y=0..7).
-     * Leave the footer's text, mode icon and separator to the stock UI. */
+    /* Reuse the native guide's three rows. Name (or idle mode title) and
+     * native-numbered octave above two rows of captured output pitches. */
     clr.l -(%sp)
-    pea 23
-    pea 116
+    pea 31
+    pea 118
     pea 9
     pea 60
     pea 0x400bf10a
@@ -333,27 +333,62 @@ ch_play_guide:
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     jsr ch_chord_name
+    tst.b (%a0)
+    bne.s .guide_title_ready
+    lea ch_play_title,%a0
+.guide_title_ready:
+    moveq #25,%d0
+    bsr.w .guide_text
+    move.l 0x400beba2,%d0
+    subq.l #1,%d0 /* native CHROMATIC PLAY shows base octave minus one */
+    move.l %d0,-(%sp)
+    pea 0x400b465d /* stock %d */
+    pea 0x400b527d /* stock octave width template: -1 */
+    clr.l -(%sp)
+    pea 1
+    pea 25
+    pea 110
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40013904
+    lea 36(%sp),%sp
+    moveq #0,%d0
+    moveq #2,%d1
+    jsr ch_note_text
+    moveq #17,%d0
+    bsr.w .guide_text
+    moveq #2,%d0
+    moveq #4,%d1
+    jsr ch_note_text
+    moveq #9,%d0
+    bsr.w .guide_text
+    /* Preserve the companion-file diagnostic in place of the first note row. */
     moveq #0,%d0
     move.b 0x80000002,%d0
     lea ch_lock_status,%a1
     move.b (%a1,%d0.l),%d0
     cmpi.b #2,%d0
-    bcs.s .guide_name
+    bcs.s .guide_flush
     lea .guide_bad,%a0
-    beq.s .guide_name
+    beq.s .guide_diagnostic
     lea .guide_mismatch,%a0
     cmpi.b #3,%d0
-    beq.s .guide_name
+    beq.s .guide_diagnostic
     lea .guide_save_error,%a0
-.guide_name:
+.guide_diagnostic:
     move.l %a0,-(%sp)
-    pea -1
-    pea 17
-    pea 61
+    clr.l -(%sp)
+    pea 23
+    pea 118
+    pea 9
+    pea 60
     pea 0x400bf10a
-    pea 0x400ba876
-    jsr 0x40012bd8
+    jsr 0x40012254
     lea 24(%sp),%sp
+    move.l (%sp)+,%a0
+    moveq #17,%d0
+    bsr.s .guide_text
+.guide_flush:
     moveq #1,%d0
     move.l %d0,0x46c7c72c
 .guide_done:
@@ -362,6 +397,16 @@ ch_play_guide:
     lea -44(%sp),%sp
     movem.l %d2-%d7/%a2-%fp,(%sp)
     jmp 0x40044928
+.guide_text: /* a0 text, d0 baseline */
+    move.l %a0,-(%sp)
+    pea -1
+    move.l %d0,-(%sp)
+    pea 61
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40012bd8
+    lea 24(%sp),%sp
+    rts
 .guide_bad: .asciz "CHRD FILE BAD"
 .guide_mismatch: .asciz "CHRD MISMATCH"
 .guide_save_error: .asciz "CHRD SAVE ERR"

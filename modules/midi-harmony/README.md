@@ -505,3 +505,16 @@ UI refinement: HARM and the detail-page choices use the stock encoder accumulato
 with four raw counts per selection and a one-choice cap per input report. Closing
 the detail window redraws NOTE SETUP from the current HARM value. Hardware feel
 still needs a physical check.
+
+CHORD PLAY's guide shows the currently sounding chord and its captured MIDI
+pitches, split across two rows to fit accidentals. The octave at the right uses
+native CHROMATIC PLAY numbering (MIDI 60 is C4). Released chords disappear;
+sequencer playback supplies its own root/CHRD identity and native active-note
+ownership. With overlapping live roots, the latest still-held root is shown;
+releasing it reveals another held root or the sequencer. The display reads
+captured voices rather than rerunning AUTO. Live and held-step CHRD selection
+uses the same four-count stock accumulator as Harmony's other new controls.
+
+`tools/verify/verify_chord_display.py --project DIR` checks captured pitches,
+release/STOP clearing, native octave changes and sequencer UART agreement on a
+copied virtual card. These remain emulator checks, not hardware acceptance.

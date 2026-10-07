@@ -451,6 +451,10 @@ mh_sequence:
     move.l %d7,%d0
     lea -4(%fp),%a0
     bsr.w mh_generate
+    lea ch_sequence_root,%a0
+    move.b -4(%fp),%d1
+    move.b %d1,(%a0,%d7.l)
+    lea -4(%fp),%a0
     tst.l %d0
     ble.s .sequence_not_voiced
     move.l %d0,-(%sp)
@@ -1268,6 +1272,7 @@ mh_release:
     rts
     .balign 4
 mh_muted: .space 8,0
+    .global mh_held
 mh_held: .space 4096,255
 mh_refs: .space 1024,0
 
