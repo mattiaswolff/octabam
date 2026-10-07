@@ -1,7 +1,9 @@
 # MIDI Loopback module sketch
 
-Draft, 7 October 2026. Design only, based on local `origin/main` commit
-`6f9e5bc9`. No runtime, manifest, firmware build or hardware proof exists yet.
+Draft, 7 October 2026, based on local `origin/main` commit `6f9e5bc9`.
+The first [prototype](README.md) implements a bounded subset. The per-track
+destination controls and persistence below remain proposals; there is no
+hardware proof.
 
 MIDI Loopback lets selected MIDI tracks control the Octatrack's own audio
 side through its existing MIDI receive behaviour. A MIDI track becomes an
