@@ -93,10 +93,9 @@ bf_page_draw:
     move.l %a2,-(%sp)
     jsr 0x40013a08
     lea 12(%sp),%sp
-    moveq #93,%d0
     moveq #40,%d1
     move.l %a2,%a0
-    bsr.w .page_text
+    bsr.w .page_oct_center
     move.l bf_page_track,%d0
     lea bf_sources,%a0
     moveq #0,%d1
@@ -110,24 +109,12 @@ bf_page_draw:
     moveq #52,%d1
     lea .mode_label,%a0
     bsr.w .page_text
-    moveq #89,%d0
     moveq #52,%d1
     lea .oct_label,%a0
-    bsr.w .page_text
+    bsr.w .page_oct_center
     moveq #12,%d0
     moveq #52,%d1
     lea .source_label,%a0
-    bsr.w .page_text
-    move.l bf_page_track,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea .title
-    move.l %a2,-(%sp)
-    jsr 0x40013a08
-    lea 12(%sp),%sp
-    moveq #4,%d0
-    moveq #4,%d1
-    move.l %a2,%a0
     bsr.w .page_text
     moveq #85,%d0
     moveq #4,%d1
@@ -185,6 +172,26 @@ bf_mode_format:
     move.b (%a1)+,(%a0)+
     bne.s .mode_copy
     rts
+.page_oct_center: /* Center OCT label/value in cell bounded by x=77 and x=115. */
+    lea -8(%sp),%sp
+    movem.l %d2/%a2,(%sp)
+    move.l %d1,%d2
+    move.l %a0,%a2
+    move.l %a0,-(%sp)
+    pea -1
+    pea 0x400ba876
+    jsr 0x40012f30
+    lea 12(%sp),%sp
+    lsr.l #1,%d0
+    moveq #96,%d1
+    sub.l %d0,%d1
+    move.l %d1,%d0
+    move.l %d2,%d1
+    move.l %a2,%a0
+    bsr.s .page_text
+    movem.l (%sp),%d2/%a2
+    lea 8(%sp),%sp
+    rts
 .page_text: /* d0=x,d1=y,a0=string,a5=surface; native C ABI */
     move.l %a0,-(%sp)
     pea -1
@@ -201,7 +208,6 @@ bf_mode_format:
 .fixed: .asciz "FIXED"
 .source: .asciz "SOURCE"
 .number: .asciz "%d"
-.title: .asciz "FOLLOW T%d"
 .back: .asciz "NO:BACK"
     .balign 4
 .page_grid_lines:

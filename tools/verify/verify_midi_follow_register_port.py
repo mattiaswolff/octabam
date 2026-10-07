@@ -53,7 +53,7 @@ def main():
     cases={}
     for mode,octave in [(0,3),(0,4),(1,0),(1,-2),(1,2)]:
         name=f'mode{mode}-oct{octave}';work=out/name;work.mkdir(exist_ok=True)
-        script=work/'panel.txt';script.write_text(panel(setup+f'1500 enc 0 {mode}\n1700 enc 1 {octave-(3 if mode==0 else 0)}\n1900 key 0x28 down\n1950 key 0x28 up\n5200 key 0x27 down\n5250 key 0x27 up\n5600 quit\n'))
+        script=work/'panel.txt';script.write_text(panel(setup+f'1500 enc 0 {mode}\n1600 enc 0 {1 if mode else -1}\n1700 enc 1 {octave-(3 if mode==0 else 0)}\n1900 key 0x28 down\n1950 key 0x28 up\n5200 key 0x27 down\n5250 key 0x27 up\n5600 quit\n'))
         dump=f'{sym["bf_reg_modes"]:#x},24={work}/settings.bin;{sym["bf_pitches"]:#x},8={work}/pitches.bin;{sym["bf_page_win"]:#x},4={work}/window.bin;0x100a4ed0,25288={work}/part-after.bin'
         cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(out/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi'),'--lcd',str(work/'screen.lcd'),'--step',f'-:dump:0x100a4ed0,25288={work}/part-before.bin','--mem-dump',dump]
         with (work/'run.log').open('w') as log:r=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
@@ -67,6 +67,8 @@ def main():
         assert received==wanted,(name,received,wanted)
         state=(work/'settings.bin').read_bytes();assert state[1]==mode
         assert state[(16 if mode else 8)+1]==octave&255,state
+        assert state[(8 if mode else 16)+1]==(3 if mode else 0), 'B/C touched the other mode octave'
+        assert all(state[t]==0 and state[8+t]==3 and state[16+t]==0 for t in range(8) if t!=1)
         assert (work/'window.bin').read_bytes()!=bytes(4)
         assert (work/'part-before.bin').read_bytes()==(work/'part-after.bin').read_bytes()
         held=set()

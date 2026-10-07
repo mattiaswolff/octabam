@@ -281,3 +281,8 @@ FOLLOW uses the same six-cell grid as Harmony: **A RFOL, B MODE, C OCT**.
 RFOL and MODE use stock fields/selectors; OCT stays a numeric octave value.
 Custom selectors accumulate four raw encoder counts per choice and cap each
 report to one choice. Closing FOLLOW redraws RFOL on NOTE SETUP.
+
+The detail page has A=RFOL, B=MODE, C=OCT. Only C edits octave values.
+FIXED remembers an absolute octave; SOURCE remembers a relative octave offset.
+Changing MODE recalls that mode's own OCT value without editing either value.
+The OCT label/value are centered in cell C; the footer shows only NO:BACK.
