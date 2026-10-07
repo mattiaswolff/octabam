@@ -9,9 +9,13 @@ MODULE = Module(
     name="midi-follow", key="MIDI FOLLOW", kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author="Mattias Wolff", author_url="https://github.com/mattiaswolff/octabam",
     proof=Proof.PORT, proof_note="verify_midi_follow: stock/patched MIDI capture; not flashed",
-    doc="NOTE SETUP RFOL selects a source track; bass roots 36-47 plus follower TRAN/P-locks.",
-    linked=(Linked("bassfollow", "modules/midi-follow/midi_follow.s", dram=True, include=harmony_inc),),
+    doc="RFOL selects a source; press D for fixed or source-relative octave, then follower TRAN/P-locks.",
+    linked=(Linked("bassfollow", "modules/midi-follow/midi_follow.s", dram=True, include=harmony_inc),
+            Linked("followregister", "modules/midi-follow/register.s", dram=True),
+            Linked("followpage", "modules/midi-follow/page.s", dram=True)),
     symbol_refs=(
+        SymbolRef(0x400bc5a4, 0x4004ae08, "followpage", "bf_page_open", "RFOL D press opens register settings"),
+        SymbolRef(0x400bc5a8, 0x4004ae08, "followpage", "bf_page_noop", "RFOL D release leaves settings open"),
         SymbolRef(0x400BC64E, 0x4003A8E8, "bassfollow", "bf_encoder", "NOTE SETUP D encoder"),
         SymbolRef(0x400D3F2C, 0, "bassfollow", "bf_format", "RFOL OFF/T1-T8 formatter"),
     ),
@@ -31,5 +35,6 @@ MODULE = Module(
              Detour(0x4009FB80, bytes.fromhex("12126d0001a6"),
                    "bassfollow", "bf_note",
                    "resolve root before the sequencer records the emitted note"),),
-    gates=(Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),),
+    gates=(Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),
+           Gate("tools/verify/verify_midi_follow_register.py", stage="image", venv=True)),
 )

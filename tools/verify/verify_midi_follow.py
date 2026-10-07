@@ -62,7 +62,7 @@ def machine_gate(image):
         written_addresses.add(address)
         # Only module state, scratch output, the displaced stock write and
         # a bounded stack frame may change during these machine-code calls.
-        allowed = ((root, root + 8), (sources, sources + 8),
+        allowed = ((root, root + 8), (sym["bf_pitches"], sym["bf_pitches"] + 8), (sources, sources + 8),
                    (pitch, pitch + 4), (stack - stack_budget, stack),
                    (0x47004000 - 43, 0x47004000 - 42))
         if not any(lo <= address and address + size <= hi for lo, hi in allowed):

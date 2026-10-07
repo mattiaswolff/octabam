@@ -172,9 +172,11 @@ bf_latch:
     .ifdef HAVE_HARMONY
     move.l %d1,-(%sp)
     move.l %d7,%d1
-    jsr mh_final /* Latch the actual scale-constrained Harmony root. */
+    jsr mh_quant /* Root snap is independent of the selected chord quality. */
     move.l (%sp)+,%d1
     .endif
+    lea bf_pitches,%a0
+    move.b %d0,(%a0,%d7.l) /* retain octave before the legacy bass reduction */
 .root_reduce:
     cmpi.l #12,%d0
     blt.s .latch
@@ -219,9 +221,10 @@ bf_note:
     bne.s .resolve
     bra.s .restore
 .resolved:
-    lea bf_roots,%a0
-    move.b (%a0,%d0.l),%d0
-    bmi.s .restore
+    move.l %d7,%d1
+    jsr bf_register
+    cmpi.l #256,%d0
+    beq.s .restore
     tst.l %d4
     bne.s .follower_extra
     /* TRAN is the follower's signed semitone offset (including step locks).
@@ -359,3 +362,6 @@ bf_sources:
     .space 8,0                 /* OFF at every reboot; not stored in a Part */
 bf_roots:
     .space 8,0xff              /* no eligible source yet: pass through */
+
+    .global bf_pitches
+bf_pitches: .space 8,0xff /* absolute source roots, independently of receiver register */
