@@ -206,18 +206,20 @@ def machine_gate(image):
     # Real pre-loop hook: T8's root arrives before T2's same-tick note.
     uc.mem_write(sources, bytes((0, 8, 0, 0, 0, 0, 0, 0)))
     frame = 0x47004000
-    def pre_capture(mask=128, mute=0, channel=8, velocity=90, note_value=65, disabled=False):
+    def pre_capture(mask=128, mute=0, channel=8, velocity=90, note_value=65, disabled=False, track=7):
         uc.mem_write(frame - 42, mask.to_bytes(4, 'big'))
         uc.mem_write(frame - 37, bytes((mute,)))
-        uc.mem_write(0x80006676, bytes(7) + bytes((255 if disabled else 0,)))
+        enabled = bytearray(8)
+        enabled[track] = 255 if disabled else 0
+        uc.mem_write(0x80006676, bytes(enabled))
         uc.mem_write(0x8000666e, bytes(8))
-        setup = 0x46c76dc0 + 7 * 68
-        lane = 0x46c76dc0 + 7 * 32
+        setup = 0x46c76dc0 + track * 68
+        lane = 0x46c76dc0 + track * 32
         uc.mem_write(setup + 32, bytes((channel,)))
         uc.mem_write(setup + 49, bytes((0,)))
         uc.mem_write(lane + 0x220, bytes((note_value, velocity)))
         uc.mem_write(lane + 0x22c, bytes((64,)))
-        uc.mem_write(0x46c7a12b, bytes((0,)))
+        uc.mem_write(0x46c7a124 + track, bytes((0,)))
         uc.reg_write(UC_M68K_REG_A6, frame)
         uc.reg_write(UC_M68K_REG_A7, stack)
         arrivals.clear()
@@ -226,18 +228,27 @@ def machine_gate(image):
         before[8] = 0x80006676  # displaced lea
         assert [uc.reg_read(r) for r in REGS] == before
         assert arrivals == [0x4009f98c]
-        return uc.mem_read(root + 7, 1)[0]
+        return uc.mem_read(root + track, 1)[0]
     uc.mem_write(root + 7, b'\xff')
     assert pre_capture(disabled=True) == 255
     assert pre_capture(mask=0) == 255
-    assert pre_capture(mute=128) == 255
+    assert pre_capture(mute=128, mask=0) == 255
+    assert pre_capture(mute=128, disabled=True) == 255
     assert pre_capture(channel=0) == 255
     assert pre_capture(velocity=0) == 255
     assert pre_capture(note_value=255) == 255
-    assert pre_capture() == 41
+    assert pre_capture(mute=128) == 41  # even the first source trig may be muted
     assert note(1, 0, 48) == 41
-    assert pre_capture(note_value=67) == 43
+    assert pre_capture(mute=128, note_value=67) == 43
     assert note(1, 0, 48) == 43
+    assert pre_capture(mute=128, mask=0, note_value=60) == 43  # rests still latch
+    assert pre_capture(note_value=60) == 36  # unmute does not reset the source
+    assert note(1, 0, 48) == 36
+    # Every source position uses the same mute-independent root path.
+    for track in range(8):
+        uc.mem_write(root + track, b'\xff')
+        assert pre_capture(track=track, mask=1 << track, mute=255, note_value=65) == 41
+        assert pre_capture(track=track, mask=1 << track, mute=255, velocity=0) == 41
 
     uc.mem_write(sources, bytes((2, 1, 0, 0, 0, 0, 0, 0)))
     assert note(1, 0, 48) == 48  # bounded even for corrupt cyclic RAM
@@ -255,7 +266,7 @@ def machine_gate(image):
         assert bytes(uc.mem_read(pitch, len(expected)+1)) == expected.encode()+b'\0'
     assert {root, sources + 1, pitch} <= written_addresses, 'memory-write hook did not observe known writes'
     assert not unexpected_writes, ('out-of-contract memory writes', unexpected_writes[:10])
-    print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, all follower TRAN offsets, arp isolation, same-tick T8 source, gates, note-offs path, formatters, registers, bounded memory writes')
+    print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, all follower TRAN offsets, arp isolation, same-tick muted T8 source, all eight muted sources, gates, note-offs path, formatters, registers, bounded memory writes')
 
 
 from midi_fixture import fixture, notes
@@ -442,6 +453,8 @@ def port_gate(image, project):
     cases['offsets-reverse'] = port_case(image, project, leader=7, offsets=offsets)
     cases['offsets-off'] = port_case(image, project, enabled=False, offsets=offsets)
     panel_gate(image)
+    from verify_midi_follow_mute import port_gate as mute_gate
+    cases['mute'] = mute_gate(image, project, OUT/'mute')
     (OUT/'result.json').write_text(json.dumps(dict(status='pass', cases=cases,
                                                   hardware_tested=False), indent=2)+'\n')
 
@@ -450,6 +463,7 @@ def main():
     global OUT
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('remix', nargs='?', default='midi-follow')
+    ap.add_argument('--mute-only', action='store_true', help='run only linked checks and mute UART regressions')
     ap.add_argument('--project', default=os.environ.get('OT_PROJECT') or None)
     a = ap.parse_args()
     if a.remix != 'midi-follow':
@@ -458,7 +472,11 @@ def main():
     image = ROOT/'out/mainos_bus.bin'
     machine_gate(image)
     if a.project:
-        port_gate(image, pathlib.Path(a.project).expanduser())
+        if a.mute_only:
+            from verify_midi_follow_mute import port_gate as mute_gate
+            mute_gate(image, pathlib.Path(a.project).expanduser(), OUT/'mute')
+        else:
+            port_gate(image, pathlib.Path(a.project).expanduser())
     else:
         print('  [SKIP] port project test: supply --project DIR or OT_PROJECT (source is only read)')
     return 0

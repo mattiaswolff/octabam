@@ -8,6 +8,8 @@
  * tracks, so a low-numbered follower sees a high-numbered source this tick.
  * Arp-only ticks are still captured at bf_capture after stock's arp gates.
  * The original NOTE lanes have already received this tick's parameter locks.
+ * A muted source still supplies roots. Only the stock output loop applies
+ * track mute: capturing a root neither transmits nor owns a MIDI note.
  */
 bf_pre_capture:
     lea -36(%sp),%sp
@@ -19,10 +21,6 @@ bf_pre_capture:
     move.l -42(%fp),%d0
     btst %d7,%d0
     beq.s .pre_next
-    moveq #0,%d0
-    move.b -37(%fp),%d0
-    btst %d7,%d0
-    bne.s .pre_next
     lea 0x80006676,%a0
     move.b (%a0,%d7.l),%d0
     cmpi.b #0xff,%d0

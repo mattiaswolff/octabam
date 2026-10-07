@@ -47,9 +47,14 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 - Roots latch through rests and transport stops. Configuration and roots are
   **RAM-only**: they survive pattern/Part/project changes in the running session
   and reset on reboot. They are not saved or copied with a Part/project.
-- Disabled, muted and zero-velocity ordinary source triggers leave the previous
-  root in place. The controlled machine-code gate covers these gates; unusual
-  mute/plays-free modes still need broader on-device testing.
+- **Muting a source silences its sequenced MIDI output but keeps its root
+  progression available to followers**, including when playback starts muted.
+  Muting a follower independently silences that follower. Mute/unmute does not
+  reset the remembered root or change the ownership of already sounding notes.
+- Disabled tracks, CHAN OFF, zero velocity, invalid notes and rests still leave
+  the previous root in place. Ordinary track mute is covered in linked and
+  full-firmware emulator tests; unusual mute/plays-free modes remain untested
+  on hardware.
 
 On its own, MIDI Follow supplies bass-root following. MIDI Harmony optionally
 adds live keyboard chords and follower chords/arp, as described below. Audio
@@ -62,8 +67,9 @@ The module uses the linked ColdFire pattern from `modules/repitch` and the
 stock NOTE descriptor, drawer and encoder dispatch. No DSP code is added.
 
 - `0x4009f986`: before the output loop, capture eligible ordinary chord roots
-  for all tracks. Uses the stock trigger/mute mask, enabled-track checks,
-  output channel and velocity. Original NOTE lanes already contain the locks.
+  for all tracks. Uses the stock trigger mask, enabled-track checks,
+  output channel and velocity. The mute mask is intentionally left to stock
+  output handling. Original NOTE lanes already contain the locks.
 - `0x4009fb00`: capture each eligible source event, including arp ticks, from
   the original NOTE lane, not the arp's scratch output. Apply the stock
   transpose and scale correction.
@@ -207,3 +213,13 @@ Run `verify_midi_harmony_port.py --bypass-follow-only --project /path/to/templat
 for live-source/follower UART regressions with source arp on/off and KEY OFF.
 The keyboard linked-code gate also checks bypass recording arguments, root
 retention on release, and protection from stale stored NOTE during live arp.
+
+### Muted-source regression
+
+With a copied local project, `verify_midi_follow.py --project DIR` also tests
+muted sources and followers, both track orders, source arp, and mute/unmute
+while a bass note is held. When installed, Scales and Harmony receive the same
+checks; Chord Play quality locks are exercised alongside source scale changes.
+Use `--mute-only` to run this focused suite plus the linked machine-code gate.
+Captures, frozen candidate bytes, logs and `result.json` stay under the remix's
+`out/*midi-follow/mute/` directory. These are emulator checks, not hardware proof.
