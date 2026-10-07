@@ -45,11 +45,20 @@ mh_voice:
     jsr mh_active
     cmpi.l #2,%d0
     blt.w .voice_reset
+    lea ch_current,%a0
+    moveq #0,%d0
+    move.b (%a0,%d7.l),%d0
+    jsr ch_count
     move.l %d0,%d6
-    addq.l #1,%d6 /* 3 or 4 voices */
     move.l %d7,%d0
     jsr mh_scale_record
     move.l %d0,%d5
+    lea ch_current,%a0
+    moveq #0,%d0
+    move.b (%a0,%d7.l),%d0
+    lsl.l #8,%d0
+    lsl.l #5,%d0
+    or.l %d0,%d5
     move.l %d7,%d0
     jsr mh_source
     lsl.l #8,%d0
@@ -138,6 +147,23 @@ mh_voice:
     moveq #0,%d7
     move.b (%a3,%d1.l),%d7
     add.l %d7,%d0
+    tst.l %d3
+    beq.s .candidate_range
+    moveq #0,%d7
+    move.b 60(%sp),%d7
+.candidate_raise:
+    cmp.l %d7,%d0
+    bge.s .candidate_reduce
+    addi.l #12,%d0
+    bra.s .candidate_raise
+.candidate_reduce:
+    addi.l #12,%d7
+.candidate_lower:
+    cmp.l %d7,%d0
+    blt.s .candidate_range
+    subi.l #12,%d0
+    bra.s .candidate_lower
+.candidate_range:
     cmpi.l #127,%d0
     bhi.w .voice_next_octave /* unsigned comparison rejects negatives too */
     tst.l %d3
@@ -155,6 +181,7 @@ mh_voice:
     addq.l #1,%d3
     cmp.l %d6,%d3
     blt.s .voice_pitch
+    bsr.w mh_sort_chord
     move.l 76(%sp),%d0
     bsr.w mh_spread
     tst.l %d0
@@ -345,7 +372,8 @@ mh_omit_root:
 
 /* Manual inversion: d0=1..3, d6=count, a0=sorted complete root chord.
  * Clamp to count-1 (3RD on a triad uses 2ND). Raise each rotated note by
- * one octave. Atomic fallback to root position if any pitch exceeds 127.
+ * enough octaves to sit above the chosen bass, then sort. This preserves
+ * the selected inversion for an ADD9 whose ninth crosses the octave. Atomic fallback to root position if any pitch exceeds 127.
  * Registers preserved. Spread is applied afterward by the caller.
  */
     .global mh_invert
@@ -372,6 +400,21 @@ mh_invert:
     moveq #0,%d4
     move.b (%a0,%d1.l),%d4
     add.l %d4,%d3
+    moveq #0,%d4
+    move.b (%a0,%d0.l),%d4 /* requested bass */
+.invert_raise:
+    cmp.l %d4,%d3
+    bge.s .invert_reduce
+    addi.l #12,%d3
+    bra.s .invert_raise
+.invert_reduce:
+    addi.l #12,%d4
+.invert_lower:
+    cmp.l %d4,%d3
+    blt.s .invert_range
+    subi.l #12,%d3
+    bra.s .invert_lower
+.invert_range:
     cmpi.l #127,%d3
     bhi.s .invert_done
     move.b %d3,(%a1,%d2.l)
@@ -379,6 +422,7 @@ mh_invert:
     cmp.l %d6,%d2
     blt.s .invert_pitch
     move.l (%a1),(%a0)
+    bsr.w mh_sort_chord
 .invert_done:
     movem.l (%sp),%d0-%d4/%a1
     lea 28(%sp),%sp
@@ -437,3 +481,31 @@ mh_spread:
     rts
     .balign 4
 mh_voice_history: .space 64,0
+
+/* Sort only the sounding voices; triad padding is handled by the caller.
+ * d6 count, a0 four pitches. Preserve all registers. */
+    .text
+mh_sort_chord:
+    lea -20(%sp),%sp
+    movem.l %d0-%d4,(%sp)
+    move.l %d6,%d4
+.sort_pass:
+    moveq #1,%d2
+.sort_pair:
+    moveq #0,%d0
+    moveq #0,%d1
+    move.b -1(%a0,%d2.l),%d0
+    move.b (%a0,%d2.l),%d1
+    cmp.l %d1,%d0
+    bls.s .sort_next
+    move.b %d1,-1(%a0,%d2.l)
+    move.b %d0,(%a0,%d2.l)
+.sort_next:
+    addq.l #1,%d2
+    cmp.l %d6,%d2
+    blt.s .sort_pair
+    subq.l #1,%d4
+    bne.s .sort_pass
+    movem.l (%sp),%d0-%d4
+    lea 20(%sp),%sp
+    rts

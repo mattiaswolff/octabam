@@ -3,7 +3,7 @@
  * Track is fixed while open. Track/page keys close the window; a subsequent
  * press selects the track/page. Transport and chromatic keys pass through.
  * Six-cell layout: top row HARM/VOIC/SPRD, ROOT below HARM; track in footer.
- * Values use the stock PLAYBACK 4/5/3-position selector widgets.
+ * Values use the stock PLAYBACK 3/5/3/4-position selector widgets.
  * No UI-task/ISR hook: redraw only on open or an encoder edit.
  */
     .text
@@ -63,21 +63,21 @@ mh_page_encoder:
     bne.w .page_voic
     jsr mh_get
     /* Clamp delta before addition to prevent signed overflow. */
-    cmpi.l #3,%d3
+    cmpi.l #2,%d3
     ble.s .page_harm_low
-    moveq #3,%d3
+    moveq #2,%d3
 .page_harm_low:
-    cmpi.l #-3,%d3
+    cmpi.l #-2,%d3
     bge.s .page_harm_add
-    moveq #-3,%d3
+    moveq #-2,%d3
 .page_harm_add:
     add.l %d3,%d0
     bpl.s .page_harm_max
     moveq #0,%d0
 .page_harm_max:
-    cmpi.l #3,%d0
+    cmpi.l #2,%d0
     ble.s .page_harm_set
-    moveq #3,%d0
+    moveq #2,%d0
 .page_harm_set:
     move.l %d0,%d1
     move.l %d4,%d0
@@ -197,7 +197,7 @@ mh_page_draw:
     move.l %d0,%d1
     moveq #10,%d0
     lea mh_type_format,%a0
-    lea 0x40046c28,%a1 /* four positions */
+    lea 0x40046d9c,%a1 /* three positions */
     bsr.w .page_selector
     move.l mh_page_track,%d0
     jsr mh_voic_get
@@ -219,7 +219,7 @@ mh_page_draw:
     move.l %d0,%d1
     moveq #10,%d0
     lea mh_page_omit_format,%a0
-    lea 0x40046c28,%a1 /* same four-position widget as HARM */
+    lea 0x40046c28,%a1 /* four-position ROOT widget */
     bsr.w .page_selector_bottom
     bsr.w .page_grid
     move.l mh_page_track,%d0
