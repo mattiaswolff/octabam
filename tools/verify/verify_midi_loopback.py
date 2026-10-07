@@ -43,7 +43,8 @@ class Machine:
         u.mem_write(0x40000400, image)
         layout = json.loads((ROOT / "out/platform/layout.json").read_text())
         u.mem_write(layout["base"], (ROOT / "out/platform/runtime/runtime.bin").read_bytes())
-        for site, symbol in ((0x40010bd0, "lb_send"), (0x40005558, "lb_receive")):
+        for site, symbol in ((0x40010bd0, "lb_send"), (0x40005558, "lb_receive"),
+                             (0x4009f22a, "lb_live_cached"), (0x4009f25e, "lb_live_tail")):
             assert u.mem_read(site, 6) == b"\x4e\xf9" + self.sym[symbol].to_bytes(4, "big")
         self.stops = {DONE}
         self.arrived = None
@@ -69,12 +70,12 @@ class Machine:
         self.put(at + 16, 255)
         self.put(at + 20, storage)
 
-    def call(self, at, args=(), regs=None, stop=DONE):
+    def call(self, at, args=(), regs=None, stop=DONE, return_pc=DONE):
         u = self.u
         self.stops, self.arrived = {stop}, None
         u.reg_write(UC_M68K_REG_SR, 0x2000)
         u.reg_write(UC_M68K_REG_A7, STACK)
-        self.put(STACK, DONE)
+        self.put(STACK, return_pc)
         for i, value in enumerate(args):
             self.put(STACK + 4 + i * 4, value)
         for reg, value in (regs or {}).items():
@@ -214,8 +215,38 @@ def machine_gate():
     assert direct.get(0x46c7fe4c) == 0
     print("  [ok] CC46 and chromatic on/off match stock handler state and release count")
 
+    # Run the stock live CC producer through both installed branches. The
+    # parent return PC distinguishes the panel from the generic MIDI setter.
+    for tail, param in ((tail, param) for tail in (False, True) for param in range(20, 30)):
+        cases = [(0x4005542c, 1, 0, 1)]
+        if param == 20:  # shared provenance filter, independent of CC slot
+            cases += [(0x40054f74, 1, 0, 0), (0x40043b0e, 1, 0, 0),
+                      (0x4005542c, 0, 0, 0), (0x4005542c, 1, 1, 0)]
+        for parent, enabled, track, admitted in cases:
+            m = Machine(); m.put("lb_enabled", enabled, 1)
+            flag_byte, flag_bit = (0, param-18) if param < 24 else (1, param-24)
+            for t in range(2):
+                m.put(0x40171442 + 36*t, 1, 1)  # channel 1
+                m.put(0x40171360 + 32*t + flag_byte, 1 << flag_bit, 1)
+                m.put(0x46c76dc0 + 68*t + 30 + flag_byte, 1 << flag_bit, 1)
+                m.put(0x46c76dc0 + 68*t + 32, 1, 1)
+                m.put(0x46c76dc0 + 68*t + 52 + param-20, 34, 1)
+            # Make the other track the active channel/CC owner for tail send.
+            m.put(0x8000000c, (1 << (8+track)) if tail else (1 << (8+1-track)))
+            visited = []
+            hook = m.u.hook_add(UC_HOOK_CODE, lambda u, pc, n, data:
+                               visited.append(pc) if pc in (0x4009f22a, 0x4009f25e) else None)
+            m.call(0x4009eec8, (track, param, 80, 0), stop=parent, return_pc=parent)
+            m.u.hook_del(hook)
+            assert visited == [0x4009f25e if tail else 0x4009f22a], visited
+            assert m.get("lb_accepted") == admitted, (tail, parent, enabled, track)
+            assert m.get(0x400b967c) == 3  # exactly one external message
+            if admitted:
+                assert m.next() == bytes((0xb0, 34, 80))
+    print("  [ok] CC1-10 cached/tail panel paths, OFF/M2 exclusion and generic-setter feedback exclusion")
 
-def fixture(source, dest, length=6):
+
+def fixture(source, dest, length=6, control=None):
     import ab_fixture
     from hw import ot_project as otp
     ab_fixture.prepare(source, dest)
@@ -233,6 +264,21 @@ def fixture(source, dest, length=6):
                     data[setup] = 1 if t == 0 else 0
                     data[setup + 2] = 128  # PROG OFF
                     data[setup + 20] = 46  # CTRL1 CC1 setup, runtime +0x34
+                    if control:
+                        data[at+6:at+12] = bytes(6)  # all MIDI LFO speed/depth
+                        if t == 0:
+                            data[setup+20] = 34  # FX1 parameter 1: FILTER BASE
+                            data[at+20] = 64
+                            if control == "lfo":
+                                data[at+6], data[at+9] = 32, 24  # SPD1, DEP1
+                                data[setup+6] = 20  # PMTR = CC1
+                                data[setup+9] = 0  # TRI
+                                data[setup+30] = 4  # MULT x16
+                                data[setup+33] = 0  # FREE
+                if control:
+                    data[base] = 4  # T1 FX1 FILTER
+                    page = base + 0x11a
+                    data[page+12:page+18] = bytes((20, 100, 0, 0, 0, 0))
             for p in range(16):
                 end = 0x16 + (p + 1) * 0x8eec
                 data[end-11:end-6] = bytes((16, 2, 64, 2, 0))
@@ -246,6 +292,10 @@ def fixture(source, dest, length=6):
                         data[at+9:at+17] = (1).to_bytes(8, "big")
                         data[at+0x39:at+0x3c] = bytes((84, 100, length))
                         data[at+0x39+20] = 70
+                        if control:
+                            data[at+9:at+17] = (5 if control != "knob" else 0).to_bytes(8, "big")
+                            data[at+0x39+20] = 32
+                            data[at+0x39+64+20] = 96  # step 3 CC lock
         otp._bank_write(dest, int(path.stem[4:]), mutate, guard=False)
     values = dict(TRACK=7, MIDI_MODE=0, MIDI_AUTO_CHANNEL=10,
                   MIDI_AUDIO_TRK_CC_IN=1, MIDI_AUDIO_TRK_NOTE_IN=1,
@@ -255,6 +305,8 @@ def fixture(source, dest, length=6):
                   MIDI_PROGRAM_CHANGE_SEND=0, PATTERN_TEMPO_ENABLED=0,
                   TEMPOx24=2880)
     values.update({f"MIDI_TRIG_CH{i+1}": i for i in range(8)})
+    if control == "knob":
+        values.update(TRACK=0, MIDI_MODE=1)
     for path in dest.glob("project.*"):
         raw = re.sub(rb"\[SAMPLE\].*?\[/SAMPLE\]\r?\n", b"", path.read_bytes(), flags=re.S)
         for key, value in values.items():
@@ -347,14 +399,110 @@ def port_gate(source, remix):
     print("  [ok] real sequencer -> internal queue -> MIDI task -> audio state matches UART input")
 
 
+def controls_gate(source, remix, only=None):
+    """Real MIDI locks/LFO and the panel's encoder routine into T1 FILTER BASE."""
+    import hashlib
+    import emu_card
+    assert re.fullmatch(r"[a-z0-9-]+", remix), remix
+    out = ROOT / "out" / remix / "controls"
+    out.mkdir(parents=True, exist_ok=True)
+    sym, outcomes = symbols(), {}
+    kinds = (only,) if only else ("locks", "lfo", "knob")
+    for kind in kinds:
+        fixture(source, out / f"{kind}-project", control=kind)
+        card, _ = emu_card.stage_project(out / f"{kind}-project", "OCTABAM", "LOOPBACK", tree=out / f"{kind}-tree")
+        card_path = out / f"{kind}-card.img"
+        card_path.write_bytes(card)
+        modes = {"locks": ("off", "on"), "lfo": ("off", "on", "receive-off"),
+                 "knob": ("off", "on", "incoming", "direct")}[kind]
+        for mode in modes:
+            label = f"{kind}-{mode}"
+            log, capture = out / f"{label}.log", out / f"{label}.midi"
+            state, stats = out / f"{label}-filter.bin", out / f"{label}-stats.bin"
+            cmd = [str(ROOT / "out/emu/ot_emu"), "--image", str(ROOT / "out/mainos_bus.bin"),
+                   "--card", str(card_path), "--set", "OCTABAM", "--project", "LOOPBACK",
+                   "--sequencer", "--internal-clock", "--frames", "1200", "--load-ms", "90000",
+                   "--midi-out", str(capture), "--watch-mem", "0x80000822,1",
+                   "--mem-dump", f"0x80000822,1={state};{sym['lb_head']:#x},24={stats}"]
+            if mode != "off":
+                cmd += ["--step", f"-:poke:{sym['lb_enabled']:#x}=1"]
+            if mode == "receive-off":
+                cmd += ["--step", "-:poke:0x80000049=0"]
+            if kind == "knob":
+                # CTRL1 page, encoder C = CC1, +16 from the Part's 64.
+                cmd += ["--step", "-:poke:0x460d1687=3"]
+                if mode in ("incoming", "direct"):
+                    # Auto-channel CC36 changes M1 CC1 through the generic
+                    # setter. Its external CC must not become new loopback.
+                    midi_in = out / "incoming.midi"
+                    midi_in.write_text("400 ba 24 50\n")
+                    cmd += ["--midi", str(midi_in), "--step",
+                            f"-:poke:0x8000004d={1 if mode == 'direct' else 0}"]
+                else:
+                    cmd += ["--step", "400:call:0x40055008,2,16"]
+            with log.open("w") as stream:
+                result = subprocess.run(cmd, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, timeout=180)
+            text = log.read_text()
+            assert result.returncode == 0 and "run ended REACHED" in text, str(log)
+            assert "load run ended: LOAD PROJECT handled" in text, str(log)
+            raw = stats.read_bytes()
+            counts = [int.from_bytes(raw[i:i+4], "big") for i in range(0, 24, 4)]
+            midi = decode(capture.read_bytes())
+            ccs = [msg[2] for msg in midi if msg[:2] == [0xb0, 34]]
+            # Only the receiver's generic parameter writer, excluding load and
+            # frame refresh stores. Compare every value, in order, with the wire.
+            writes = [int(value, 16) for value in re.findall(
+                r"\[0x80000822\] <- (0x[0-9a-f]+|0) \(1\) at pc 0x40054e22", text)]
+            assert writes == (ccs if mode == "on" else []), (label, writes, ccs)
+            outcomes[label] = dict(filter=state.read_bytes()[0], stats=counts, midi=midi, cc_values=ccs, filter_writes=writes)
+            print(f"  [controls] {label}: filter={outcomes[label]['filter']}, CC34={ccs}, stats={counts}", flush=True)
+        off, on = outcomes[f"{kind}-off"], outcomes[f"{kind}-on"]
+        assert off["filter"] == 20, off
+        assert on["cc_values"] and on["filter"] == on["cc_values"][-1], on
+        assert on["midi"] == off["midi"], f"{kind}: external MIDI changed"
+        assert on["stats"][2] == on["stats"][3] > 0 and on["stats"][4] == 0, on
+        assert off["stats"][2] == 0, off
+        if kind == "locks":
+            assert on["cc_values"] == [32, 96], on
+            assert 32 in on["filter_writes"] and 96 in on["filter_writes"], on
+        if kind == "lfo":
+            assert len(set(on["cc_values"])) >= 8, on
+            assert len(set(on["filter_writes"])) >= 8, on
+            assert outcomes["lfo-receive-off"]["filter"] == 20
+            assert outcomes["lfo-receive-off"]["stats"][3] > 0
+        if kind == "knob":
+            assert 80 in on["cc_values"] and 80 in on["filter_writes"], on
+            incoming = outcomes["knob-incoming"]
+            assert incoming["cc_values"] == [80] and incoming["filter"] == 20, incoming
+            assert incoming["stats"][2] == 0, incoming
+            direct = outcomes["knob-direct"]
+            assert direct["midi"] == [[0xb0, 36, 80]] and direct["filter"] == 20, direct
+            assert direct["stats"][2] == 0, direct
+    receipt = dict(image_sha256=hashlib.sha256((ROOT / "out/mainos_bus.bin").read_bytes()).hexdigest(),
+                   runtime_sha256=hashlib.sha256((ROOT / "out/platform/runtime/runtime.bin").read_bytes()).hexdigest(),
+                   stock_sha256=hashlib.sha256((ROOT / "out/raw/section_3_MAIN_OS.bin").read_bytes()).hexdigest(),
+                   outcomes=outcomes, scope="ColdFire control state; no rendered audio or hardware proof")
+    (out / (f"result-{only}.json" if only else "result.json")).write_text(json.dumps(receipt, indent=2) + "\n")
+    print(f"  [ok] filter control scenarios passed: {', '.join(kinds)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("remix", nargs="?", default="midi-loopback")
     parser.add_argument("--project", type=pathlib.Path)
+    parser.add_argument("--controls", action="store_true", help="run filter-control project scenarios instead of note lifecycle scenarios")
+    parser.add_argument("--control-kind", choices=("locks", "lfo", "knob"), help="rerun one control group; requires --controls")
     args = parser.parse_args()
+    if args.controls and not args.project:
+        parser.error("--controls requires --project DIR")
+    if args.control_kind and not args.controls:
+        parser.error("--control-kind requires --controls")
     machine_gate()
     if args.project:
-        port_gate(args.project, args.remix)
+        if args.controls:
+            controls_gate(args.project, args.remix, args.control_kind)
+        else:
+            port_gate(args.project, args.remix)
     else:
         print("  [not run] full RTOS/project gate: supply --project DIR")
 

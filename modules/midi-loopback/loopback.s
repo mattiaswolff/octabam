@@ -1,6 +1,6 @@
 /* Experimental M1/channel-1 mirror. OFF by default, volatile lb_enabled.
- * Only proven sequencer send sites are sources. Incoming MIDI and audio
- * feedback therefore cannot recirculate. USB's entry detour stays intact.
+ * Only proven sequencer and panel CC sites are sources. Immediate received-MIDI
+ * and audio-feedback senders are excluded. USB's entry detour stays intact.
  * Queue messages, not bytes: DIN running status is never touched.
  */
     .text
@@ -8,6 +8,7 @@
     .global lb_enabled, lb_head, lb_tail, lb_accepted, lb_delivered
     .global lb_dropped, lb_highwater, lb_owned, lb_ring, lb_current
     .global lb_wake, lb_wake_pending, lb_external_turn
+    .global lb_live_cached, lb_live_tail
 
 .set MIDI_Q, 0x46c7e974
 .set POST, 0x40000c3c
@@ -47,6 +48,8 @@ lb_capture:
     tstl %d1
     bne.w .capture_done
     cmpil #0x4009fef2,%d0
+    beq.s .new_event
+    cmpil #lb_live_cc,%d0        /* private entry, qualified by panel caller */
     beq.s .new_event
     cmpil #0x4009ffbe,%d0
     bne.w .capture_done
@@ -159,6 +162,39 @@ lb_capture:
 .unlock:
     movew %d6,%sr
 .capture_done:
+    rts
+
+/* The live parameter sender has both a cached jsr and a tail jmp. Capture
+ * before either while d7 still names the MIDI track. Only the panel encoder
+ * caller qualifies: the generic setter is also used by received auto-channel
+ * CCs and must not create an internal echo. No global "inside live" flag is
+ * used, so a sequencer interrupt cannot borrow another task's provenance.
+ */
+lb_live_cached:
+    bsr lb_live_cc
+    pea 0x400d808f              /* displaced */
+    pea 3                      /* displaced */
+    jmp 0x4009f234
+lb_live_tail:
+    bsr lb_live_cc
+    movel #0x400d808f,%d2       /* displaced */
+    movel %d2,%sp@(68)          /* displaced */
+    jmp 0x4009f268
+lb_live_cc:
+    lea %sp@(-40),%sp
+    moveml %d0-%d6/%a0-%a2,%sp@
+    /* 40 saved + 4 bsr return + 60 stock live-sender frame. */
+    movel %sp@(104),%d0
+    cmpil #0x4005542c,%d0
+    bne.s .live_done
+    movel #lb_live_cc,%d0
+    movel %d7,%d1
+    moveq #3,%d2
+    lea 0x400d808f,%a0
+    bsr lb_capture
+.live_done:
+    moveml %sp@,%d0-%d6/%a0-%a2
+    lea %sp@(40),%sp
     rts
 
 /* Replace pea MIDI_Q / jsr a3, preserving the argument the stock task

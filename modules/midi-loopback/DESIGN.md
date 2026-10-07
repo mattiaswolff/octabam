@@ -4,6 +4,8 @@ Draft, 7 October 2026, based on local `origin/main` commit `6f9e5bc9`.
 The first [prototype](README.md) implements a bounded subset. The per-track
 destination controls and persistence below remain proposals; there is no
 hardware proof.
+The 8 October extension proves MIDI CC locks/LFO and panel CC knobs for
+M1/channel 1. It stays on the separate experimental module branch.
 
 MIDI Loopback lets selected MIDI tracks control the Octatrack's own audio
 side through its existing MIDI receive behaviour. A MIDI track becomes an
@@ -195,6 +197,8 @@ module's verifier.
   [memory placement](../../docs/contributing/PLACEMENT.md).
 - [Shared settings proposal](../../docs/proposals/OTX_PROJECT_PROPOSAL.md).
 
-Next implementation decision: locate producer hooks that retain MIDI-track
-identity through notes and deferred CC output, then prove safe delivery of
-complete messages in the MIDI task without recirculation.
+Next implementation decision: extend the proven producer boundaries to
+per-track routing, including internal-only suppression before DIN and USB,
+while retaining the origin checks and note-release ownership. Live notes,
+remaining message families and transition cleanup still need their own
+evidence before the full routing contract above is implemented.
