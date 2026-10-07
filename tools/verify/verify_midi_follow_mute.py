@@ -26,7 +26,7 @@ def balanced(events):
     assert not held, ('stuck notes', held)
 
 
-def port_gate(image, project, out):
+def port_gate(image, project, out, selected=None):
     out.mkdir(parents=True, exist_ok=True)
     receipt = out/'result.json'
     receipt.unlink(missing_ok=True)
@@ -43,6 +43,9 @@ def port_gate(image, project, out):
         modes.extend([('harmony', 0, False), ('harmony-arp', 0, True)])
     if 'ch_lock_table' in sym:
         modes.insert(0, ('chord-locks', 0, False))
+    if selected is not None:
+        assert selected and set(selected) <= {name for name, _, _ in modes}, selected
+        modes = [mode for mode in modes if mode[0] in selected]
     cases = {}
     for mode, leader, arp in modes:
         work = out/mode
