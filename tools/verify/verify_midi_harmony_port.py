@@ -7,7 +7,7 @@ import pathlib
 import subprocess
 import sys
 import re
-import verify_midi_follow as follow
+import midi_fixture as follow
 import verify_midi_harmony as harmony
 ROOT=harmony.ROOT
 sys.path.insert(0,str(ROOT/'tools'))
