@@ -52,7 +52,8 @@ def port_gate(image, project, out):
         for path in (work/'project').glob('project.*'):
             data = re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n', b'', path.read_bytes(), flags=re.M)
             if harmony:
-                data += f'\r\n#MIDI_HARMONY_TYPE_V1_T{leader+1}=2\r\n#MIDI_HARMONY_TYPE_V1_T2=2\r\n'.encode()
+                follower_type = 0 if mode == 'chord-locks' else 2
+                data += f'\r\n#MIDI_HARMONY_TYPE_V1_T{leader+1}=2\r\n#MIDI_HARMONY_TYPE_V1_T2={follower_type}\r\n'.encode()
             path.write_bytes(data)
         for path in (work/'project').glob('bank*.work'):
             def setup(data):
