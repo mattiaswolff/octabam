@@ -210,6 +210,9 @@ ch_display_poll:
     bne.s .poll_changed
     move.l 0x400beba2,%d1
     cmp.l ch_draw_octave,%d1
+    bne.s .poll_changed
+    bsr.w ch_settings_token
+    cmp.l ch_draw_settings_token,%d1
     beq.s .poll_done
 .poll_changed:
     move.l %d0,ch_draw_track
@@ -219,6 +222,8 @@ ch_display_poll:
     move.w %d1,ch_draw_identity
     move.l 0x400beba2,%d1
     move.l %d1,ch_draw_octave
+    bsr.w ch_settings_token
+    move.l %d1,ch_draw_settings_token
     jsr ch_play_guide
 .poll_done:
     rts
@@ -230,6 +235,7 @@ ch_display_poll:
 ch_draw_track: .long -1
 ch_draw_notes: .long -1
 ch_draw_octave: .long -1
+ch_draw_settings_token: .long -1
 ch_draw_identity: .word -1
 
 /* Full-width single-line pitches. Use the native font normally. Long lists
@@ -314,8 +320,8 @@ ch_draw_note_line: /* a0 text */
 .line_dash_bitmap: .long 1,1,1,.line_dash_pixels,.line_dash_pixels
 .line_dash_pixels: .long 0x80000000
 
-/* Most names fit beside the octave box. A long extension, e.g.
- * Ebdim(addb9), uses the second keyboard row instead of touching the border. */
+/* Reserve the lower row for settings. Long add9 names omit their optional
+ * parentheses in this view; the full chord identity remains in ch_name_text. */
     .global ch_draw_chord_name
 ch_draw_chord_name:
     lea -12(%sp),%sp
@@ -326,43 +332,105 @@ ch_draw_chord_name:
     pea 0x400ba876
     jsr 0x40012f30
     lea 12(%sp),%sp
-    moveq #-1,%d2
-    suba.l %a3,%a3
     cmpi.l #41,%d0
-    bls.s .chord_name_first
-    move.l %a2,%a3
-    moveq #0,%d2
-.chord_name_split:
-    move.b (%a3),%d0
-    beq.s .chord_name_unsplit
-    cmpi.b #40,%d0
-    beq.s .chord_name_first
-    addq.l #1,%a3
-    addq.l #1,%d2
-    bra.s .chord_name_split
-.chord_name_unsplit:
-    suba.l %a3,%a3
-    moveq #-1,%d2
-.chord_name_first:
-    moveq #17,%d0
-    bsr.s .chord_name_row
-    tst.l %a3
-    beq.s .chord_name_done
+    bls.s .chord_name_draw
+    move.l %a2,%a0
+    lea ch_compact_name,%a3
     move.l %a3,%a2
-    moveq #-1,%d2
-    moveq #9,%d0
-    bsr.s .chord_name_row
-.chord_name_done:
+.chord_name_copy:
+    move.b (%a0)+,%d0
+    beq.s .chord_name_end
+    cmpi.b #40,%d0
+    beq.s .chord_name_copy
+    cmpi.b #41,%d0
+    beq.s .chord_name_copy
+    move.b %d0,(%a3)+
+    bra.s .chord_name_copy
+.chord_name_end:
+    clr.b (%a3)
+.chord_name_draw:
+    move.l %a2,-(%sp)
+    pea -1
+    pea 17
+    pea 78
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40012bd8
+    lea 24(%sp),%sp
     movem.l (%sp),%d2/%a2-%a3
     lea 12(%sp),%sp
     rts
-.chord_name_row:
-    move.l %a2,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d0,-(%sp)
+
+/* UI settings token: use the public getters, including AUTO's separate bit.
+ * d0 track preserved, d1 token; a0 scratch. */
+ch_settings_token:
+    lea -12(%sp),%sp
+    movem.l %d0/%d2-%d3,(%sp)
+    move.l %d0,%d3
+    jsr mh_voic_get
+    move.l %d0,%d2
+    move.l %d3,%d0
+    jsr mh_sprd_get
+    lsl.l #3,%d0
+    or.l %d0,%d2
+    move.l %d3,%d0
+    jsr mh_root_get
+    lsl.l #5,%d0
+    or.l %d2,%d0
+    move.l %d0,%d1
+    movem.l (%sp),%d0/%d2-%d3
+    lea 12(%sp),%sp
+    rts
+
+    .global ch_settings_text,ch_draw_settings,ch_settings_buffer
+ch_settings_text: /* d0 track -> a0 compact V/S/R text */
+    bsr.w ch_settings_token
+    move.l %d1,%d0
+    lsr.l #5,%d0
+    lea .settings_roots,%a0
+    move.l (%a0,%d0.l*4),-(%sp)
+    move.l %d1,%d0
+    lsr.l #3,%d0
+    andi.l #3,%d0
+    lea .settings_spreads,%a0
+    move.l (%a0,%d0.l*4),-(%sp)
+    andi.l #7,%d1
+    lea .settings_voices,%a0
+    move.l (%a0,%d1.l*4),-(%sp)
+    pea .settings_format
+    pea ch_settings_buffer
+    jsr 0x40013a08
+    lea 20(%sp),%sp
+    lea ch_settings_buffer,%a0
+    rts
+ch_draw_settings:
+    bsr.s ch_settings_text
+    move.l %a0,-(%sp)
+    pea -1
+    pea 9
     pea 78
     pea 0x400bf10a
     pea 0x400ba876
     jsr 0x40012bd8
     lea 24(%sp),%sp
     rts
+    .balign 4
+.settings_voices: .long .svr,.sva,.sv1,.sv2,.sv3
+.settings_spreads: .long .ssc,.sso,.ssw
+.settings_roots: .long .srk,.sro,.sr1,.sr2
+.settings_format: .asciz "%s %s %s"
+.svr: .asciz "V:R"
+.sva: .asciz "V:A"
+.sv1: .asciz "V:1"
+.sv2: .asciz "V:2"
+.sv3: .asciz "V:3"
+.ssc: .asciz "S:C"
+.sso: .asciz "S:O"
+.ssw: .asciz "S:W"
+.srk: .asciz "R:K"
+.sro: .asciz "R:O"
+.sr1: .asciz "R:-1"
+.sr2: .asciz "R:-2"
+    .balign 4
+ch_settings_buffer: .space 16
+ch_compact_name: .space 32

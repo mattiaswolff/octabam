@@ -393,6 +393,9 @@ ch_play_guide:
     moveq #25,%d0
     bsr.s .guide_text
 .guide_flush:
+    moveq #0,%d0
+    move.b 0x100b14cc,%d0
+    jsr ch_draw_settings
     /* Same inverse title strip as native CHROMATIC; invert after text. */
     pea -1
     pea 31
