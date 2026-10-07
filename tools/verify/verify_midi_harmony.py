@@ -13,11 +13,17 @@ from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE, UC_HOOK_
 from unicorn.m68k_const import *
 NV = 0x100b14e2
 
-from midi_machine import MODES, raw_scale, symbols, Machine as LinkedMidiMachine
+from midi_machine import MODES, raw_scale, Machine as LinkedMidiMachine
+
+def symbols():
+    raw = subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')], text=True)
+    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [TtBb] ((?:ch|mh|bf|ms)_\w+)$',raw,re.M)}
 
 class Machine(LinkedMidiMachine):
     def __init__(self):
         super().__init__(symbols)
+    def instruction_limit(self, name):
+        return 250000 if (name == 'mh_boot' or name.startswith('ch_')) else 20000
     def setting(self,t,kind=0,key=0,scale=0):
         # Historical test cases 2/3 denote TRI/7TH; both now use HARM CHORD.
         self.call('mh_set',t,min(kind,2))
