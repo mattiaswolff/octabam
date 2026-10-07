@@ -379,16 +379,18 @@ mh_direct:
     bsr.w mh_source
     cmp.l %d7,%d0
     beq.s .gen_own
-    lea bf_roots,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #255,%d0
-    cmpi.l #127,%d0
-    bhi.s .gen_own
+    move.l %d7,%d1
+    jsr bf_register
+    cmpi.l #256,%d0
+    beq.s .gen_own
     move.l %d0,%d2
+    add.l (%sp),%d2
+    bra.s .gen_bounds /* Follow's signed octave must not wrap as a byte. */
 .gen_own:
 .endif
     add.l (%sp),%d2
     andi.l #255,%d2 /* Same byte arithmetic as stock TRAN/arranger. */
+.gen_bounds:
     cmpi.l #127,%d2
     bhi.w .gen_invalid
     move.l %d2,%d0
@@ -1131,6 +1133,8 @@ mh_stock_key:
 mh_latch_key_root:
     cmpi.l #127,%d0
     bhi.s .key_root_done
+    lea bf_pitches,%a1
+    move.b %d0,(%a1,%d2.l) /* preserve source octave for MIDI Follow */
 .key_root_mod:
     cmpi.l #12,%d0
     blt.s .key_root_store
