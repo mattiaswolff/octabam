@@ -45,11 +45,20 @@ mh_voice:
     jsr mh_active
     cmpi.l #2,%d0
     blt.w .voice_reset
+    lea ch_current,%a0
+    moveq #0,%d0
+    move.b (%a0,%d7.l),%d0
+    jsr ch_count
     move.l %d0,%d6
-    addq.l #1,%d6 /* 3 or 4 voices */
     move.l %d7,%d0
     jsr mh_scale_record
     move.l %d0,%d5
+    lea ch_current,%a0
+    moveq #0,%d0
+    move.b (%a0,%d7.l),%d0
+    lsl.l #8,%d0
+    lsl.l #5,%d0
+    or.l %d0,%d5
     move.l %d7,%d0
     jsr mh_source
     lsl.l #8,%d0
@@ -138,6 +147,23 @@ mh_voice:
     moveq #0,%d7
     move.b (%a3,%d1.l),%d7
     add.l %d7,%d0
+    tst.l %d3
+    beq.s .candidate_range
+    moveq #0,%d7
+    move.b 60(%sp),%d7
+.candidate_raise:
+    cmp.l %d7,%d0
+    bge.s .candidate_reduce
+    addi.l #12,%d0
+    bra.s .candidate_raise
+.candidate_reduce:
+    addi.l #12,%d7
+.candidate_lower:
+    cmp.l %d7,%d0
+    blt.s .candidate_range
+    subi.l #12,%d0
+    bra.s .candidate_lower
+.candidate_range:
     cmpi.l #127,%d0
     bhi.w .voice_next_octave /* unsigned comparison rejects negatives too */
     tst.l %d3
@@ -155,6 +181,7 @@ mh_voice:
     addq.l #1,%d3
     cmp.l %d6,%d3
     blt.s .voice_pitch
+    bsr.w mh_sort_chord
     move.l 76(%sp),%d0
     bsr.w mh_spread
     tst.l %d0
@@ -211,13 +238,13 @@ mh_voice:
     clr.l 4(%a2)
 .voice_omit:
     move.l (%sp),%d0 /* original track, not the search scratch register */
-    jsr mh_omit_get
+    jsr mh_root_get
     tst.l %d0
     beq.s .voice_done
     moveq #0,%d1
     move.b 52(%sp),%d1 /* original harmonic root, before inversion */
     move.l %a4,%a0
-    bsr.w mh_omit_root
+    bsr.w mh_root_apply
     bra.s .voice_done
 .voice_reset:
     clr.l 4(%a2)
@@ -225,6 +252,70 @@ mh_voice:
     movem.l (%sp),%d0-%d7/%a0-%a4
     lea 88(%sp),%sp
     rts
+/* d0 ROOT mode, d1 original logical root, a0 voiced four-byte pool.
+ * Move the existing root, never add a voice. Anchor to the logical root,
+ * not its inverted/spread register. Below MIDI zero, omit that root.
+ * AUTO history deliberately remains the full upper voicing, as with OMIT.
+ */
+    .global mh_root_apply
+mh_root_apply:
+    tst.l %d0
+    beq.w .root_apply_done
+    lea -32(%sp),%sp
+    movem.l %d0-%d5/%a1,(%sp)
+    move.l %d1,%d5
+    cmpi.l #1,%d0
+    beq.s .root_apply_omit
+    subi.l #12,%d5
+    cmpi.l #3,%d0
+    bne.s .root_apply_omit
+    subi.l #12,%d5
+.root_apply_omit:
+    bsr.w mh_omit_root
+    cmpi.l #1,%d0
+    beq.s .root_apply_return
+    tst.l %d5
+    bmi.s .root_apply_return
+    lea 28(%sp),%a1
+    move.b %d5,(%a1)
+    moveq #1,%d3
+    moveq #0,%d2
+.root_apply_next:
+    moveq #0,%d4
+    move.b (%a0,%d2.l),%d4
+    cmpi.l #127,%d4
+    bhi.s .root_apply_skip
+    moveq #0,%d1
+.root_apply_duplicate:
+    moveq #0,%d0
+    move.b (%a1,%d1.l),%d0
+    cmp.l %d4,%d0
+    beq.s .root_apply_skip
+    addq.l #1,%d1
+    cmp.l %d3,%d1
+    blt.s .root_apply_duplicate
+    cmpi.l #4,%d3
+    bge.s .root_apply_skip
+    move.b %d4,(%a1,%d3.l)
+    addq.l #1,%d3
+.root_apply_skip:
+    addq.l #1,%d2
+    cmpi.l #4,%d2
+    blt.s .root_apply_next
+.root_apply_pad:
+    cmpi.l #4,%d3
+    bge.s .root_apply_copy
+    move.b %d5,(%a1,%d3.l)
+    addq.l #1,%d3
+    bra.s .root_apply_pad
+.root_apply_copy:
+    move.l (%a1),(%a0)
+.root_apply_return:
+    movem.l (%sp),%d0-%d5/%a1
+    lea 32(%sp),%sp
+.root_apply_done:
+    rts
+
 /* Remove the harmonic root pitch class from all four pool entries.
  * Fill unused slots by duplicating the lowest remaining tone for stock arp.
  * An empty result is all FF: sequence converts it to a safe muted pool;
@@ -281,7 +372,8 @@ mh_omit_root:
 
 /* Manual inversion: d0=1..3, d6=count, a0=sorted complete root chord.
  * Clamp to count-1 (3RD on a triad uses 2ND). Raise each rotated note by
- * one octave. Atomic fallback to root position if any pitch exceeds 127.
+ * enough octaves to sit above the chosen bass, then sort. This preserves
+ * the selected inversion for an ADD9 whose ninth crosses the octave. Atomic fallback to root position if any pitch exceeds 127.
  * Registers preserved. Spread is applied afterward by the caller.
  */
     .global mh_invert
@@ -308,6 +400,21 @@ mh_invert:
     moveq #0,%d4
     move.b (%a0,%d1.l),%d4
     add.l %d4,%d3
+    moveq #0,%d4
+    move.b (%a0,%d0.l),%d4 /* requested bass */
+.invert_raise:
+    cmp.l %d4,%d3
+    bge.s .invert_reduce
+    addi.l #12,%d3
+    bra.s .invert_raise
+.invert_reduce:
+    addi.l #12,%d4
+.invert_lower:
+    cmp.l %d4,%d3
+    blt.s .invert_range
+    subi.l #12,%d3
+    bra.s .invert_lower
+.invert_range:
     cmpi.l #127,%d3
     bhi.s .invert_done
     move.b %d3,(%a1,%d2.l)
@@ -315,6 +422,7 @@ mh_invert:
     cmp.l %d6,%d2
     blt.s .invert_pitch
     move.l (%a1),(%a0)
+    bsr.w mh_sort_chord
 .invert_done:
     movem.l (%sp),%d0-%d4/%a1
     lea 28(%sp),%sp
@@ -373,3 +481,31 @@ mh_spread:
     rts
     .balign 4
 mh_voice_history: .space 64,0
+
+/* Sort only the sounding voices; triad padding is handled by the caller.
+ * d6 count, a0 four pitches. Preserve all registers. */
+    .text
+mh_sort_chord:
+    lea -20(%sp),%sp
+    movem.l %d0-%d4,(%sp)
+    move.l %d6,%d4
+.sort_pass:
+    moveq #1,%d2
+.sort_pair:
+    moveq #0,%d0
+    moveq #0,%d1
+    move.b -1(%a0,%d2.l),%d0
+    move.b (%a0,%d2.l),%d1
+    cmp.l %d1,%d0
+    bls.s .sort_next
+    move.b %d1,-1(%a0,%d2.l)
+    move.b %d0,(%a0,%d2.l)
+.sort_next:
+    addq.l #1,%d2
+    cmp.l %d6,%d2
+    blt.s .sort_pair
+    subq.l #1,%d4
+    bne.s .sort_pass
+    movem.l (%sp),%d0-%d4
+    lea 20(%sp),%sp
+    rts

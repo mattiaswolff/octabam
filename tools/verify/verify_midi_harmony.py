@@ -21,7 +21,7 @@ MODES = [(0,2,4,5,7,9,11),(0,2,3,5,7,9,10),(0,1,3,5,7,8,10),
 
 def symbols():
     raw = subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')], text=True)
-    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [Tt] ((?:mh|bf|ms)_\w+)$',raw,re.M)}
+    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [TtBb] ((?:ch|mh|bf|ms)_\w+)$',raw,re.M)}
 
 class Machine:
     def __init__(self):
@@ -45,11 +45,14 @@ class Machine:
         u.reg_write(UC_M68K_REG_D0,d0);u.reg_write(UC_M68K_REG_D1,d1)
         if a0 is not None:u.reg_write(UC_M68K_REG_A0,a0)
         for r,v in (regs or {}).items():u.reg_write(r,v)
-        u.emu_start(self.sym[name],0,count=20000)
+        u.emu_start(self.sym[name],0,count=250000 if (name == 'mh_boot' or name.startswith('ch_')) else 20000)
         assert self.arrival in self.stops,(name,hex(u.reg_read(UC_M68K_REG_PC)))
         return u.reg_read(UC_M68K_REG_D0)
     def setting(self,t,kind=0,key=0,scale=0):
-        self.call('mh_set',t,kind)
+        # Historical test cases 2/3 denote TRI/7TH; both now use HARM CHORD.
+        self.call('mh_set',t,min(kind,2))
+        for name in ('ch_current','ch_live','ch_sequence_quality'):
+            self.uc.mem_write(self.sym[name]+t, bytes((1 if kind==3 else 0,)))
         self.uc.mem_write(0x46c76df1+68*t,bytes((raw_scale(key,scale),)))
     def chord(self,t,n,offset=0,direct=False):
         self.uc.mem_write(self.scratch,bytes((n,11,12,13)))
@@ -58,13 +61,13 @@ class Machine:
 
 def machine_gate():
     m=Machine();u=m.uc
-    assert bytes(u.mem_read(NV,10))==bytes(9)+b'M'
+    assert bytes(u.mem_read(NV,10))==bytes(9)+b'O'
     # Per-track TYPE writes leave the other tracks and adjacent Quantizer alone.
-    values=[t%4 for t in range(8)]
+    values=[t%3 for t in range(8)]
     for t,v in enumerate(values):m.call('mh_set',t,v)
     assert [m.call('mh_get',t) for t in range(8)]==values
     for t in range(8):
-        for kind in range(4):
+        for kind in range(3):
             m.call('mh_set',t,kind)
             assert m.call('mh_get',t)==kind
             assert all(m.call('mh_get',j)==values[j] for j in range(8) if j!=t)
@@ -97,7 +100,7 @@ def machine_gate():
     u.mem_write(NV,b'\xff'*10)
     assert m.call('mh_get',0)==0
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes(9)+b'M'
+    assert bytes(u.mem_read(NV,10))==bytes(9)+b'O'
     if 'bf_sources' in m.sym:
         u.mem_write(m.sym['bf_sources'],bytes((0,1,2,0,0,0,0,0)))
         u.mem_write(m.sym['bf_roots'],bytes((38,255,255,255,255,255,255,255)))
@@ -164,7 +167,7 @@ def final_note_gate():
         u.mem_write(0x46c7a124,b'\0')
         for live in (0,1):
             u.mem_write(0x46c77b1e,bytes((live,)))
-            m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+            m.call('mh_transpose',stop=0x4009fb40 if live else 0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         # Out-of-range sequenced root is muted, then a valid trig recovers.
         u.mem_write(0x46c77b1e,b'\0')
         u.mem_write(lane+0x22c,b'\0')
@@ -173,7 +176,7 @@ def final_note_gate():
         assert u.mem_read(m.sym['mh_muted'],1)==b'\x01'
         m.call('mh_transpose',stop=0x4009fd2a,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(0x46c77b1e,b'\x01')
-        m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(lane+0x22c,b'\x40');u.mem_write(m.scratch,bytes((60,0,0,0)))
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert u.mem_read(m.sym['mh_muted'],1)==b'\0'
@@ -315,7 +318,7 @@ def keyboard_gate():
     assert key(127,0)==[]
     assert recorded[-2:]==[(0,127,100,1),(0,127,0,1)]
     assert u.mem_read(m.sym['mh_held']+127*4,4)==b'\xff'*4
-    print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
+    print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute roots and pre-arp pools independent of TRAN')
 
 
 def register_reference(previous,old_root,new_root):
@@ -486,7 +489,7 @@ def spread_gate():
                             previous=actual[:count];previous_root=raw[0]
     # Per-track packed settings preserve one another and reject invalid writes.
     for t in range(8):
-        for kind in range(4):
+        for kind in range(3):
             for spread in range(3):
                 m.call('mh_sprd_set',t,spread);m.call('mh_set',t,kind)
                 assert m.call('mh_get',t)==kind and m.call('mh_sprd_get',t)==spread
@@ -498,10 +501,10 @@ def spread_gate():
     # track bytes cannot turn into accidental spread selections.
     u.mem_write(NV,bytes((0,1,2,3,255,4,12,3,0xa5,0x4a)))
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes((0,1,2,3,0,0,0,3,0xa5,0x4d))
+    assert bytes(u.mem_read(NV,10))==bytes((0,1,2,2,0,0,0,2,0xa5,0x4f))
     u.mem_write(NV,bytes((11,10,9,8,7,6,255,12,0xa5,0x4b)))
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes((11,10,9,8,7,6,0,0,0xa5,0x4d))
+    assert bytes(u.mem_read(NV,10))==bytes((10,10,9,8,6,6,0,0,0xa5,0x4f))
     # OFF/NOTE/KEY OFF ignore spread; toggling spacing reseeds AUTO.
     for kind in (0,1):
         m.setting(0,kind);m.call('mh_sprd_set',0,2)
@@ -551,7 +554,7 @@ def inversion_gate():
     for t in range(8):
         for choice in range(5):
             m.call('mh_voic_set',t,choice)
-            for kind in range(4):
+            for kind in range(3):
                 m.call('mh_set',t,kind)
                 for spread in range(3):
                     m.call('mh_sprd_set',t,spread)
@@ -597,9 +600,53 @@ def omit_gate():
     # Inversion-only battery state migrates with OMIT OFF.
     u.mem_write(NV,bytes((59,54,33,16,2,1,0,3,0x80,0x4c)))
     m.call('mh_boot',stop=0x4001022a)
-    assert bytes(u.mem_read(NV,10))==bytes((59,54,33,16,2,1,0,3,0x80,0x4d))
+    assert bytes(u.mem_read(NV,10))==bytes((58,54,33,16,2,1,0,2,0x80,0x4f))
     assert all(m.call('mh_omit_get',t)==0 for t in range(8))
     print('  [ok] OMIT: harmonic-root removal across voicings/spreads/MIDI range, silent empty pools, OFF/NOTE identity, packed settings and migration')
+
+
+def root_placement_gate():
+    m=Machine();u=m.uc;history=m.sym['mh_voice_history']
+    for kind in range(4):
+        for choice in range(5):
+            for spread in range(3):
+                m.setting(0,kind);m.call('mh_voic_set',0,choice);m.call('mh_sprd_set',0,spread)
+                for note in range(128):
+                    raw=m.chord(0,note)
+                    m.call('mh_root_set',0,0);u.mem_write(m.scratch,bytes(raw))
+                    m.call('mh_voice',0,a0=m.scratch)
+                    full=set(u.mem_read(m.scratch,4))-{255}
+                    for mode,drop in ((2,12),(3,24)):
+                        m.call('mh_root_set',0,mode);u.mem_write(m.scratch,bytes(raw))
+                        regs={r:0x12340000+i for i,r in enumerate((UC_M68K_REG_D1,UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A1,UC_M68K_REG_A2,UC_M68K_REG_A3,UC_M68K_REG_A4))}
+                        m.call('mh_voice',0,a0=m.scratch,regs=regs)
+                        got=list(u.mem_read(m.scratch,4));actual=set(got)-{255}
+                        want=full if kind<2 else {n for n in full if n%12!=raw[0]%12} | ({raw[0]-drop} if raw[0]>=drop else set())
+                        assert actual==want,(kind,choice,spread,note,mode,full,got,want)
+                        assert len(actual)<=len(full) and all(0<=n<=127 for n in actual)
+                        assert all(u.reg_read(r)==v for r,v in regs.items())
+                        assert all(m.scratch<=a and a+n<=m.scratch+4 or m.stack-256<=a and a+n<=m.stack+4 or history<=a and a+n<=history+8 for a,n in m.writes)
+    # AUTO history must still describe the upper chord, independent of ROOT.
+    for mode in (2,3):
+        m.setting(0,3);m.call('mh_voic_set',0,1);m.call('mh_sprd_set',0,0);m.call('mh_root_set',0,mode)
+        for root,want in ((48,[48-(12 if mode==2 else 24),52,55,59]),(53,[53-(12 if mode==2 else 24),48,52,57])):
+            raw=m.chord(0,root);u.mem_write(m.scratch,bytes(raw));m.call('mh_voice',0,a0=m.scratch)
+            assert list(u.mem_read(m.scratch,4))==want,(mode,root,list(u.mem_read(m.scratch,4)),want)
+    for t in range(8):
+        for mode in range(4):
+            m.call('mh_root_set',t,mode)
+            for voic in range(5):
+                m.call('mh_voic_set',t,voic);m.call('mh_sprd_set',t,2);m.call('mh_set',t,2)
+                assert m.call('mh_root_get',t)==mode and m.call('mh_voic_get',t)==voic
+    before=bytes(u.mem_read(NV,10));m.call('mh_boot',stop=0x4001022a)
+    assert bytes(u.mem_read(NV,10))==before
+    for t,v in ((8,2),(0xffffffff,1),(0,4),(0,0xffffffff)):
+        m.call('mh_root_set',t,v);assert bytes(u.mem_read(NV,10))==before
+    # Old bit 7 must not turn into a bass setting during migration.
+    u.mem_write(NV,bytes((0,64,123,127,128,255,59,3,0xa5,0x4d)))
+    m.call('mh_boot',stop=0x4001022a)
+    assert bytes(u.mem_read(NV,10))==bytes((0,64,122,0,0,0,58,2,0xa5,0x4f))
+    print('  [ok] ROOT: both octave drops across HARM/voicings/spreads/MIDI range, AUTO history, four-voice limit, underflow, register/write guards and migration')
 
 
 def recorder_gate():
@@ -633,7 +680,8 @@ def project_parser_gate():
         u.mem_write(m.stack+58,int(parse_only).to_bytes(4,'big'))
         m.call('mh_load',35,stop=0x40088224,regs={UC_M68K_REG_D3:m.scratch})
     load('#MIDI_HARMONY_TYPE_V1_T8=3\r\n')
-    assert m.call('mh_get',7)==3
+    assert m.call('mh_get',7)==2
+    assert int.from_bytes(u.mem_read(m.sym['ch_legacy7_mask'],4),'big')==128
     for line in ('#MIDI_HARMONY_TYPE_V1_T8=2x','#MIDI_HARMONY_TYPE_V1_T8=4',
                  '#MIDI_HARMONY_TYPE_V1_T8=-1','#MIDI_HARMONY_TYPE_V1_T8=',
                  '#MIDI_HARMONY_TYPE_V1_T8=0000','#MIDI_HARMONY_TYPE_V1_T9=1',
@@ -641,7 +689,8 @@ def project_parser_gate():
         before=bytes(u.mem_read(NV,10));load(line)
         assert bytes(u.mem_read(NV,10))==before,line
     load('#MIDI_HARMONY_TYPE_V1_T8=1',parse_only=True)
-    assert m.call('mh_get',7)==3
+    assert m.call('mh_get',7)==2
+    assert int.from_bytes(u.mem_read(m.sym['ch_legacy7_mask'],4),'big')==128
     assert [m.call('mh_get',t) for t in range(7)]==[0]*7
     for t in range(8):
         load(f'#MIDI_HARMONY_VOIC_V1_T{t+1}=1\r\n')
@@ -661,7 +710,7 @@ def project_parser_gate():
     for t in range(8):
         load(f'#MIDI_HARMONY_SPRD_V1_T{t+1}={t%3}\r\n')
         assert m.call('mh_sprd_get',t)==t%3
-        assert m.call('mh_get',t)==(3 if t==7 else 0)
+        assert m.call('mh_get',t)==(2 if t==7 else 0)
     for bad in ('3','-1','1x','','0000'):
         load(f'#MIDI_HARMONY_SPRD_V1_T8={bad}')
         assert m.call('mh_sprd_get',7)==1
@@ -675,7 +724,46 @@ def project_parser_gate():
         assert m.call('mh_omit_get',0)==1
     load('#MIDI_HARMONY_OMIT_V1_T1=0',parse_only=True)
     assert m.call('mh_omit_get',0)==1
+    for t in range(8):
+        for mode in range(4):
+            load(f'#MIDI_HARMONY_ROOT_V1_T{t+1}={mode}\r\n')
+            assert m.call('mh_root_get',t)==mode
+    for bad in ('4','-1','2x','','0000'):
+        load(f'#MIDI_HARMONY_ROOT_V1_T1={bad}')
+        assert m.call('mh_root_get',0)==3
+    load('#MIDI_HARMONY_ROOT_V1_T1=0',parse_only=True)
+    assert m.call('mh_root_get',0)==3
     print('  [ok] project parser: valid track, malformed/out-of-range comments and parse-only isolation')
+
+
+def live_transpose_gate():
+    """Compare live Harmony's output hook with the original stock instructions."""
+    patched=Machine();stock=Machine()
+    entry,end=0x4009fb3a,0x4009fb58
+    raw=(ROOT/'out/raw/section_3_MAIN_OS.bin').read_bytes()
+    stock.uc.mem_write(entry,raw[entry-0x40000400:end-0x40000400])
+    stock.sym['stock_transpose']=entry
+    cases=0
+    for track in (0,7):
+        for kind in (1,2):
+            patched.setting(track,kind)
+            patched.uc.mem_write(0x46c77b1e+10*track,b'\x01')
+            # A muted sequencer pool must not silence an independent live arp.
+            patched.uc.mem_write(patched.sym['mh_muted']+track,b'\x01')
+            for arranger in (0,12):
+                for delta in (-64,-12,-7,-1,0,1,7,12,63):
+                    for pitch in range(128):
+                        outputs=[]
+                        for m,name in ((patched,'mh_transpose'),(stock,'stock_transpose')):
+                            lane=m.scratch+0x1000
+                            m.uc.mem_write(lane+0x22c,bytes((64+delta,)))
+                            m.uc.mem_write(0x46c7a124+track,bytes((arranger,)))
+                            m.uc.mem_write(m.scratch,bytes((pitch,)))
+                            m.call(name,d1=pitch,stop=end,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A2:m.scratch,UC_M68K_REG_D7:track})
+                            outputs.append((bytes(m.uc.mem_read(m.scratch,1)),tuple(m.uc.reg_read(r) for r in (UC_M68K_REG_D0,UC_M68K_REG_D1,UC_M68K_REG_A0,UC_M68K_REG_A1,UC_M68K_REG_A7))))
+                        assert outputs[0]==outputs[1],(track,kind,arranger,delta,pitch,outputs)
+                        cases+=1
+    print(f'  [ok] live arp TRAN: {cases} exact stock comparisons, both Harmony modes, track isolation, arranger offsets and MIDI bounds')
 
 
 def controls_gate():
@@ -690,14 +778,14 @@ def controls_gate():
         assert u.reg_read(UC_M68K_REG_A7)==m.stack-16
         assert int.from_bytes(u.mem_read(m.stack+4,4),'big')==slot
     u.mem_write(0x100b14cc,b'\x01')
-    for delta,want in [(1,1),(1,2),(100000,3),(-1,2),(-100000,0)]:
+    for delta,want in [(1,1),(1,2),(100000,2),(-1,1),(-100000,0)]:
         args(5,delta);m.call(entry,stop=0x40036548)
         assert m.call('mh_get',1)==want
         assert m.call('mh_get',0)==0
     u.mem_write(m.sym['mh_page_track'],(1).to_bytes(4,'big'))
-    for slot,delta,want in ((0,2,2),(0,0x7fffffff,3),(0,-0x80000000,0),(1,1,2),(1,1,3),(1,1,4),(1,1,1),(1,0x7fffffff,1),(1,-1,4),(1,-0x80000000,0),(2,1,1),(2,0x7fffffff,2),(2,-1,1),(2,-0x80000000,0),(3,1,1),(3,-1,0)):
+    for slot,delta,want in ((0,2,2),(0,0x7fffffff,2),(0,-0x80000000,0),(1,1,2),(1,1,3),(1,1,4),(1,1,1),(1,0x7fffffff,1),(1,-1,4),(1,-0x80000000,0),(2,1,1),(2,0x7fffffff,2),(2,-1,1),(2,-0x80000000,0),(3,1,1),(3,1,2),(3,1,3),(3,0x7fffffff,3),(3,-1,2),(3,-0x80000000,0)):
         args(slot,delta);m.call('mh_page_encoder',stop=m.sym['mh_page_draw'])
-        assert m.call(('mh_get','mh_voic_get','mh_sprd_get','mh_omit_get')[slot],1)==want
+        assert m.call(('mh_get','mh_voic_get','mh_sprd_get','mh_root_get')[slot],1)==want
     for slot in range(4,7):
         before=bytes(u.mem_read(NV,10))
         args(slot,100);m.call('mh_page_encoder')
@@ -723,8 +811,10 @@ def main():
     voicing_gate()
     inversion_gate()
     omit_gate()
+    root_placement_gate()
     spread_gate()
     recorder_gate()
+    live_transpose_gate()
     controls_gate()
     project_parser_gate()
 if __name__=='__main__':main()
