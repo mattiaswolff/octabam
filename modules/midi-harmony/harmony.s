@@ -379,16 +379,18 @@ mh_direct:
     bsr.w mh_source
     cmp.l %d7,%d0
     beq.s .gen_own
-    lea bf_roots,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #255,%d0
-    cmpi.l #127,%d0
-    bhi.s .gen_own
+    move.l %d7,%d1
+    jsr bf_register
+    cmpi.l #256,%d0
+    beq.s .gen_own
     move.l %d0,%d2
+    add.l (%sp),%d2
+    bra.s .gen_bounds /* Follow's signed octave must not wrap as a byte. */
 .gen_own:
 .endif
     add.l (%sp),%d2
     andi.l #255,%d2 /* Same byte arithmetic as stock TRAN/arranger. */
+.gen_bounds:
     cmpi.l #127,%d2
     bhi.w .gen_invalid
     move.l %d2,%d0
@@ -510,10 +512,12 @@ mh_prepare:
 mh_final:
     jmp ch_final
 
-/* Harmony's arp pool already contains transposed, scale-built pitches.
- * Live pools contain the player's absolute pitches. Neither is transposed
- * again. OFF/KEY OFF replay stock arithmetic. Invalid sequenced roots are
- * muted after safely initializing the arp; live keyboard pools remain usable.
+/* Sequenced pools already contain TRAN from chord generation; do not add it
+ * twice. Live pools contain absolute keyboard pitches, so their arp output
+ * uses stock TRAN/arranger arithmetic on every tick. Direct keyboard output
+ * never enters this hook and remains absolute, just like stock.
+ * OFF/KEY OFF replay stock arithmetic. Invalid sequenced roots are muted
+ * after safely initializing the arp; live keyboard pools remain usable.
  */
     .global mh_transpose
 mh_transpose:
@@ -530,7 +534,7 @@ mh_transpose:
     add.l %d0,%d0
     move.b (%a0,%d0.l),%d0
     cmpi.b #1,%d0
-    beq.s .transpose_ready
+    beq.s .transpose_stock
     lea mh_muted,%a0
     tst.b (%a0,%d7.l)
     bne.s .transpose_muted
@@ -1163,6 +1167,8 @@ mh_stock_key:
 mh_latch_key_root:
     cmpi.l #127,%d0
     bhi.s .key_root_done
+    lea bf_pitches,%a1
+    move.b %d0,(%a1,%d2.l) /* preserve source octave for MIDI Follow */
 .key_root_mod:
     cmpi.l #12,%d0
     blt.s .key_root_store

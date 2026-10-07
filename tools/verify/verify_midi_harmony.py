@@ -143,7 +143,7 @@ def final_note_gate():
         u.mem_write(0x46c7a124,b'\0')
         for live in (0,1):
             u.mem_write(0x46c77b1e,bytes((live,)))
-            m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+            m.call('mh_transpose',stop=0x4009fb40 if live else 0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         # Out-of-range sequenced root is muted, then a valid trig recovers.
         u.mem_write(0x46c77b1e,b'\0')
         u.mem_write(lane+0x22c,b'\0')
@@ -152,7 +152,7 @@ def final_note_gate():
         assert u.mem_read(m.sym['mh_muted'],1)==b'\x01'
         m.call('mh_transpose',stop=0x4009fd2a,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(0x46c77b1e,b'\x01')
-        m.call('mh_transpose',stop=0x4009fb58,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
+        m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(lane+0x22c,b'\x40');u.mem_write(m.scratch,bytes((60,0,0,0)))
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert u.mem_read(m.sym['mh_muted'],1)==b'\0'
@@ -294,7 +294,7 @@ def keyboard_gate():
     assert key(127,0)==[]
     assert recorded[-2:]==[(0,127,100,1),(0,127,0,1)]
     assert u.mem_read(m.sym['mh_held']+127*4,4)==b'\xff'*4
-    print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute chord roots and ignored TRAN')
+    print('  [ok] linked keyboard ownership: overlapping chord tones, setting changes while held, absolute roots and pre-arp pools independent of TRAN')
 
 
 def register_reference(previous,old_root,new_root):
@@ -712,6 +712,36 @@ def project_parser_gate():
     print('  [ok] project parser: valid track, malformed/out-of-range comments and parse-only isolation')
 
 
+def live_transpose_gate():
+    """Compare live Harmony's output hook with the original stock instructions."""
+    patched=Machine();stock=Machine()
+    entry,end=0x4009fb3a,0x4009fb58
+    raw=(ROOT/'out/raw/section_3_MAIN_OS.bin').read_bytes()
+    stock.uc.mem_write(entry,raw[entry-0x40000400:end-0x40000400])
+    stock.sym['stock_transpose']=entry
+    cases=0
+    for track in (0,7):
+        for kind in (1,2):
+            patched.setting(track,kind)
+            patched.uc.mem_write(0x46c77b1e+10*track,b'\x01')
+            # A muted sequencer pool must not silence an independent live arp.
+            patched.uc.mem_write(patched.sym['mh_muted']+track,b'\x01')
+            for arranger in (0,12):
+                for delta in (-64,-12,-7,-1,0,1,7,12,63):
+                    for pitch in range(128):
+                        outputs=[]
+                        for m,name in ((patched,'mh_transpose'),(stock,'stock_transpose')):
+                            lane=m.scratch+0x1000
+                            m.uc.mem_write(lane+0x22c,bytes((64+delta,)))
+                            m.uc.mem_write(0x46c7a124+track,bytes((arranger,)))
+                            m.uc.mem_write(m.scratch,bytes((pitch,)))
+                            m.call(name,d1=pitch,stop=end,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A2:m.scratch,UC_M68K_REG_D7:track})
+                            outputs.append((bytes(m.uc.mem_read(m.scratch,1)),tuple(m.uc.reg_read(r) for r in (UC_M68K_REG_D0,UC_M68K_REG_D1,UC_M68K_REG_A0,UC_M68K_REG_A1,UC_M68K_REG_A7))))
+                        assert outputs[0]==outputs[1],(track,kind,arranger,delta,pitch,outputs)
+                        cases+=1
+    print(f'  [ok] live arp TRAN: {cases} exact stock comparisons, both Harmony modes, track isolation, arranger offsets and MIDI bounds')
+
+
 def controls_gate():
     """Check the shared NOTE callback and inherited KEY control boundaries."""
     m=Machine();u=m.uc
@@ -760,6 +790,7 @@ def main():
     root_placement_gate()
     spread_gate()
     recorder_gate()
+    live_transpose_gate()
     controls_gate()
     project_parser_gate()
 if __name__=='__main__':main()

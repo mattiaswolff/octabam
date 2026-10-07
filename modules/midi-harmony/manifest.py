@@ -107,7 +107,7 @@ MODULE = Module(
         Detour(0x40044920, bytes.fromhex('4fefffd448d77cfc'), 'harmonyplay', 'ch_play_guide', 'CHORD PLAY key layout guide', pad_to=8),
         Detour(0x400501d8, bytes.fromhex('2f02206f0008'), 'harmonyplay', 'ch_play_key', 'CHORD PLAY trig dispatch'),
         *(Detour(addr, bytes.fromhex('b0b9460d16f0'), 'harmonyplay', 'ch_octave_compare', 'CHORD PLAY uses native FUNC LEFT/RIGHT octave controls', kind='jsr') for addr in (0x400458b2,0x400458e6)),
-        Detour(0x4009fb3a, bytes.fromhex("102d022c2241"), "midiharmony", "mh_transpose", "generated pools bypass duplicate TRAN"),
+        Detour(0x4009fb3a, bytes.fromhex("102d022c2241"), "midiharmony", "mh_transpose", "sequenced pools bypass duplicate TRAN; live arp uses stock"),
         Detour(0x4009fb86, bytes.fromhex("77012006d083"), "midiharmony", "mh_output", "final scale correction before note ownership"),
         Detour(0x40036682, bytes.fromhex('2001e9882040'), 'midiharmony', 'mh_draw_type', 'NOTE SETUP F module value'),
         Detour(0x4003a8e8, bytes.fromhex('4feffff048d70c0c'), 'midiharmony', 'mh_note_encoder', 'NOTE SETUP F TYPE encoder', pad_to=8),
