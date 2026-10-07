@@ -59,7 +59,7 @@ def extra_voicings(m):
                             assert {x%12 for x in actual[:size]}=={x%12 for x in raw[:size]}
                         count+=1
     m.setting(0,2,0,5)
-    for root,q,want in [(48,0,'Cm'),(48,1,'Cm7'),(50,1,'Dm7b5'),(51,1,'Ebmaj7'),
+    for root,q,want in [(48,0,'Cm'),(48,1,'Cm7'),(50,1,'Dm7b5'),(51,1,'D#maj7'),
                          (55,7,'G7'),(48,2,'Cm(add9)'),(50,2,'Ddim(addb9)'),
                          (48,3,'Csus2'),(50,3,'Dsusb2b5'),(53,4,'Fsus4')]:
         m.uc.mem_write(m.sym['ch_last_root'],bytes((root,)))

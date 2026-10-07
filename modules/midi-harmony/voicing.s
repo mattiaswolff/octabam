@@ -52,6 +52,10 @@ mh_voice:
     move.l %d0,%d6
     move.l %d7,%d0
     jsr mh_scale_record
+    tst.l %d0
+    bpl.s .voice_scale_token
+    move.l #0x3ff,%d0 /* distinct no-scale context, below source/count bits */
+.voice_scale_token:
     move.l %d0,%d5
     lea ch_current,%a0
     moveq #0,%d0

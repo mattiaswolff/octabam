@@ -25,6 +25,19 @@ def machine():
     u.mem_write(s['mh_held']+60*4,bytes((48,64,79,255)))
     assert text()=='Cmaj7'
     assert row(0,4)=='C3-E4-G5'
+    for pitch,label in enumerate(('C','C#','D','D#','E','F','F#','G','G#','A','A#','B'),48):
+        m.setting(0,1,0,0)
+        # KEY OFF gives an unsnapped root name; shared spelling must still agree.
+        u.mem_write(0x46c76df1,b'\0')
+        u.mem_write(s['ch_pressed'],struct.pack('>I',pitch)+b'\xff'*28)
+        u.mem_write(s['ch_last_root'],bytes((pitch,)))
+        u.mem_write(s['mh_held']+pitch*4,bytes((pitch,255,255,255)))
+        assert text()==label and row(0,4)==label+'3'
+    m.setting(0,2,0,0)
+    u.mem_write(s['ch_pressed'],struct.pack('>I',60)+b'\xff'*28)
+    u.mem_write(s['ch_last_root'],b'\x3c')
+    u.mem_write(s['ch_live'],b'\x01')
+    u.mem_write(s['mh_held']+60*4,bytes((48,64,79,255)))
     # Settings can change while notes sustain: retain the actual captured notes.
     m.call('mh_root_set',0,3);m.call('mh_sprd_set',0,2)
     assert text()=='Cmaj7' and row(0,2)=='C3-E4'
@@ -53,7 +66,7 @@ def machine():
         lit=[(x,y) for x in range(128) for y in range(64)
              if ink[x*8+y//8] & (0x80>>(y%8))]
         assert lit and all(61<=x<=118 and 25<=y<=30 for x,y in lit),(line,lit)
-    for name in ('Cmaj7','Ddim(addb9)','Ebdim(addb9)','Gbsus#4b5'):
+    for name in ('Cmaj7','Ddim(addb9)','D#dim(addb9)','F#sus#4b5'):
         u.mem_write(plane,bytes(1024))
         u.mem_write(m.scratch,name.encode()+b'\0')
         m.call('ch_draw_chord_name',a0=m.scratch)
@@ -87,8 +100,11 @@ def port(source, selected=None):
     (work/'card.img').write_bytes(card)
     cases={
         'held':(panel.PANEL+'1600 key 0 down\n2300 quit\n','Cm',[48,51,55]),
-        'accidentals':(panel.PANEL+'1600 key 0 down\n1800 key 9 down\n2300 quit\n','Ebm7',[51,54,58,61]),
+        'accidentals':(panel.PANEL+'1600 key 0 down\n1800 key 9 down\n2300 quit\n','D#m7',[51,54,58,61]),
         'ninth':(panel.PANEL+'1600 key 1 down\n1800 key 10 down\n2300 quit\n','Ddim(addb9)',[50,53,56,63]),
+        'no-scale':(panel.PANEL+'1600 key 1 down\n2300 quit\n','D',[50,54,57]),
+        'no-scale-minor':(panel.PANEL+'1600 key 1 down\n1800 key 14 down\n2300 quit\n','Dm',[50,53,57]),
+        'no-scale-sequence':(panel.PANEL+panel.key(1600,0x28)+'2100 quit\n',None,None),
         'released':(panel.PANEL+'1600 key 0 down\n1900 key 0 up\n2300 quit\n','',[]),
         'octave':(panel.PANEL+panel.combo(1500,0x21)+'2000 key 0 down\n2400 quit\n','Cm',[60,63,67]),
         'sequence':(panel.PANEL+panel.key(1600,0x28)+'2100 quit\n',None,None),
@@ -100,7 +116,12 @@ def port(source, selected=None):
     for name,(script,want_name,want_notes) in cases.items():
         if selected and name not in selected:continue
         # Configure the Part too, so native KEY caches agree with the UI.
-        work=p.fixture(source,'accidentals',{0:2},key_raw=8) if name=='accidentals' else panel_work
+        work=p.fixture(source,'accidentals',{0:2},key_raw=8) if name=='accidentals' else p.fixture(source,name,{0:2},key_raw=0) if name.startswith('no-scale') else panel_work
+        if name=='no-scale-sequence':
+            for bank in (work/'project').glob('bank*.work'):
+                p.otp._bank_write(work/'project',int(bank.stem[4:]),sustain,guard=False)
+            card,_=p.emu_card.stage_project(work/'project','OCTABAM','BASS',tree=work/'sustain-tree')
+            (work/'card.img').write_bytes(card)
         path=work/f'{name}.txt';path.write_text(script)
         dump=f'{sym["ch_name_text"]:#x},32={work}/{name}-name.bin;{sym["ch_display_notes"]:#x},4={work}/{name}-notes.bin;0x400beba2,4={work}/{name}-octave.bin;0x46c77a16,32={work}/{name}-native.bin'
         events=p.run(work,name,['--rtc','1800000000','--live-script',path,'--internal-clock','--lcd',work/f'{name}.lcd','--mem-dump',dump])
@@ -116,14 +137,20 @@ def port(source, selected=None):
                     else:held.discard(n)
             assert notes and set(notes)==held,(name,actual,notes,held)
             assert actual and actual!='Cm',(name,actual)
+            if name=='no-scale-sequence':assert actual=='D'
             if name=='next-sequence':assert actual!='Ddim'
         assert int.from_bytes((work/f'{name}-octave.bin').read_bytes(),'big')==(5 if name=='octave' else 4)
         subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/f'{name}.lcd'),'--png',str(work/f'{name}.png')],check=True,stdout=subprocess.DEVNULL)
-        results[name]=dict(name=actual,notes=notes)
+        plane=(work/f'{name}.lcd').read_bytes()
+        # Native title strip: solid border around inverse text, even after STOP.
+        def bit(x,y):return bool(plane[x*8+y//8] & (0x80>>(y%8)))
+        assert all(bit(x,31) for x in range(60,119)),name
+        assert all(bit(60,y) for y in range(25,32)),name
+        results[name]=dict(name=actual,notes=notes,title_bar=True)
         print('[ok]',name,actual,notes,flush=True)
     (OUT/('receipt-'+ '-'.join(selected)+'.json' if selected else 'receipt.json')).write_text(json.dumps(dict(cases=results,image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','accidentals','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','accidentals','no-scale','no-scale-minor','no-scale-sequence','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
     machine()
     if args.project:port(args.project,args.selected)

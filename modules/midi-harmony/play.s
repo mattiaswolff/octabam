@@ -37,7 +37,7 @@ ch_play_key:
     jsr mh_scale_record
     tst.l %d0
     bpl.s .key_scale
-    moveq #0,%d0 /* KEY OFF: major keyboard, Harmony still bypasses */
+    moveq #0,%d0 /* KEY OFF: C-major root keyboard; each root builds its own major chord */
 .key_scale:
     move.l %d0,%d1
     lsr.l #6,%d1
@@ -321,7 +321,8 @@ ch_play_guide:
     tst.l 0x460d1aec
     bne.w .guide_done
     /* Keep the stock CHROMATIC octave box at its exact native position.
-     * The full-width top line holds pitches; the chord name sits beside it. */
+     * The stock inverted title bar holds pitches while sounding, otherwise
+     * CHORD PLAY. The chord name replaces the keyboard beside the octave box. */
     clr.l -(%sp)
     pea 31
     pea 118
@@ -392,6 +393,15 @@ ch_play_guide:
     moveq #25,%d0
     bsr.s .guide_text
 .guide_flush:
+    /* Same inverse title strip as native CHROMATIC; invert after text. */
+    pea -1
+    pea 31
+    pea 118
+    pea 25
+    pea 60
+    pea 0x400bf10a
+    jsr 0x40012254
+    lea 24(%sp),%sp
     moveq #1,%d0
     move.l %d0,0x46c7c72c
 .guide_done:

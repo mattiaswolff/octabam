@@ -25,8 +25,11 @@ The other encoders are inactive, leaving room for future controls. Turning F on 
 
 Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
 Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales
-adds five modes in every key. **KEY OFF bypasses Harmony**, including chord
-generation. HARM defaults OFF.
+adds five modes in every key. **KEY OFF leaves roots unsnapped**: NOTE passes
+the pitch through; CHORD uses major intervals from each played root. TRI
+gives C–E–G or D–F♯–A, and 7TH adds the major seventh. Other CHRD choices
+retain their intervals, including explicit MIN and DOM7. HARM OFF restores stock behavior.
+Voicing, spread and ROOT still apply without a scale. HARM defaults OFF.
 
 For example, C Major with HARM CHORD and CHRD TRI turns C, D and F into C major, D minor
 and F major. C Dorian gives C minor, D minor and F major. Chromatic trig keys
@@ -97,6 +100,9 @@ and play TRI, independently of the live selection or the previous step.
 
 Choose CHORD PLAY with the normal FUNC + UP/DOWN mode selector. Outside grid
 recording, trigs 1–8 play the selected scale from tonic through the next octave.
+With KEY OFF they use C–D–E–F–G–A–B–C as roots; each TRI is major.
+The stock-style inverted title bar reads CHORD PLAY when idle and shows the
+actual MIDI notes while sounding. Chord names and note names both use sharps.
 FUNC + LEFT/RIGHT uses the chromatic octave controls. Trigs 9–16 temporarily
 select these choices, in fixed positions:
 
@@ -278,7 +284,7 @@ voice-omission behavior and resets history. Silence/STOP alone does not reset
 history; set VOIC ROOT then AUTO to deliberately reseed it. AUTO is dynamic:
 the same stored root can receive a different inversion after a different
 preceding chord. Held keys retain their original note-offs when settings change.
-VOIC and SPRD have no effect in HARM OFF/NOTE or with KEY OFF.
+VOIC and SPRD have no effect in HARM OFF/NOTE.
 
 ## Chord spacing
 
@@ -324,7 +330,7 @@ tones keep their pitches. For C4 major with VOIC 2ND, G4–C5–E5 becomes
 C3–G4–E5 with -1 OCT. The resulting pool enters the stock arp normally;
 there is no separate bass channel or special sustained-bass behavior.
 
-Only HARM CHORD with an active KEY uses ROOT. NOTE, OFF and KEY OFF stay
+Only HARM CHORD uses ROOT, including with KEY OFF. NOTE and OFF stay
 unchanged. MIDI Follow still receives the original harmonic root and live
 recording still stores the physical key once. AUTO optimizes and remembers
 the full underlying chord before ROOT placement, as it previously did for
