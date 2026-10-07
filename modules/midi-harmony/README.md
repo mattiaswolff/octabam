@@ -42,7 +42,11 @@ High chord voices beyond MIDI 127 are omitted; pitches do not wrap.
 
 With MIDI Follow, RFOL stays on NOTE SETUP D. The follower retains its own
 HARM, rhythm and TRAN/P-locks, while its chord root and KEY come from the
-ultimate source track. KEY is displayed from that source and is read-only
+ultimate source track. The receiver's MIDI Follow MODE/OCT setting chooses a
+fixed register or the source root's octave (with -2..+2 octave offset) before
+TRAN and root snapping. Source capture retains the harmonic root before VOIC,
+SPRD and ROOT placement. This requires the matching MIDI Follow register update.
+KEY is displayed from that source and is read-only
 on the follower. Disable RFOL to restore the follower's own Part KEY.
 For **NOTE and CHORD**, the root passes through TRAN/P-locks and then
 snaps to the effective KEY/scale. TRI and 7TH build their additional notes
