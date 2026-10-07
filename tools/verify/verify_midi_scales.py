@@ -31,10 +31,11 @@ def machine_gate():
     ordered=[0]+[h.raw_scale(key,mode) for key in range(12) for mode in range(7)]
     for ordinal,raw in enumerate(ordered):
         u.mem_write(0x46c76df1,bytes((raw,)))
-        for delta in (-100000,-1,0,1,100000):
+        for delta in (-100000,-4,-1,0,1,4,100000):
+            u.mem_write(0x46c7d244+5*20,bytes(4))
             m.call('ms_encoder',5,stop=0x4007a3ea,regs={UC_M68K_REG_D5:delta & 0xffffffff})
             actual=u.reg_read(UC_M68K_REG_D5)
-            target=ordered[max(0,min(84,ordinal+max(-84,min(84,delta))))]
+            target=ordered[max(0,min(84,ordinal+(1 if delta>=4 else -1 if delta<=-4 else 0)))]
             assert actual==(target-raw)&0xffffffff,(raw,delta,actual,target)
     for slot in range(5):m.call('ms_encoder',slot,stop=0x4007a4cc)
     if 'bf_sources' in m.sym:
