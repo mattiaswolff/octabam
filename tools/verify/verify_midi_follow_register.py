@@ -19,6 +19,30 @@ def main():
     edit(1,0,-0x80000000);assert m.call('bf_mode_get',1)==0
     edit(1,1,0x7fffffff);assert m.call('bf_oct_get',1)==10
     edit(1,1,-0x80000000);assert m.call('bf_oct_get',1)==0
+    # Exercise the actual C-ABI encoder callback, not only its register helper.
+    # B must never write either saved octave; C must never change MODE/RFOL.
+    u.mem_write(s['bf_page_track'],(3).to_bytes(4,'big'))
+    def knob(control,delta):
+        u.mem_write(m.stack+4,control.to_bytes(4,'big')+(delta&0xffffffff).to_bytes(4,'big'))
+        m.call('bf_page_encoder')
+    octaves=bytes(u.mem_read(s['bf_reg_fixed'],16))
+    for delta in (4,4,127,-4,-4,-128):
+        knob(1,delta)
+        assert bytes(u.mem_read(s['bf_reg_fixed'],16))==octaves
+    modes=bytes(u.mem_read(s['bf_reg_modes'],8))
+    sources=bytes(u.mem_read(s['bf_sources'],8))
+    knob(2,4)
+    assert m.call('bf_oct_get',3)==4
+    assert bytes(u.mem_read(s['bf_reg_modes'],8))==modes
+    assert bytes(u.mem_read(s['bf_sources'],8))==sources
+    knob(1,4);assert m.call('bf_oct_get',3)==0 # recall relative offset
+    knob(2,-4);assert m.call('bf_oct_get',3)==0xffffffff
+    knob(1,-4);assert m.call('bf_oct_get',3)==4 # fixed value retained
+    settings=bytes(u.mem_read(s['bf_reg_modes'],24))
+    knob(0,4)
+    assert bytes(u.mem_read(s['bf_reg_modes'],24))==settings
+    assert bytes(u.mem_read(s['bf_sources'],8))!=sources
+    print('[ok] encoder isolation: A RFOL only, B MODE only, C OCT only; independent octave recall')
     before=bytes(u.mem_read(s['bf_reg_modes'],24))
     edit(8,0,1);edit(0,2,1)
     assert bytes(u.mem_read(s['bf_reg_modes'],24))==before
