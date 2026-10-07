@@ -297,12 +297,12 @@ def port_case(image, project, arp=False, leader=0, enabled=True, live_change=Non
                '--midi-out', str(capture), '--card-out', str(work/f'{label}-card.img')]
         if label == 'patched' and enabled:
             cmd += ['--step', '-:poke:0x100b14cc=1',
-                    '--step', f'-:call:{symbols()["bf_encoder"]:#x},3,{leader + 1 - (leader > 1)}']
+                    '--step', f'-:call:{symbols()["bf_encoder"]:#x},3,4'] * (leader + 1 - (leader > 1))
             if live_change:
                 # Use the real encoder callback while the sequencer is playing.
                 # +1 skips T2 itself and selects T3; -1 switches RFOL OFF.
                 delta = -1 if live_change == 'off' else 1
-                cmd += ['--step', f'1500:call:{symbols()["bf_encoder"]:#x},3,{delta}',
+                cmd += ['--step', f'1500:call:{symbols()["bf_encoder"]:#x},3,{4*delta}',
                         '--step', f'1500:dump:{symbols()["bf_sources"]:#x},8={work / "sources.bin"}']
         with log.open('w') as f:
             proc = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
