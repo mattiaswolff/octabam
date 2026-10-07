@@ -1,5 +1,19 @@
 # Working in this repository
 
+## Personal fork integration branch
+
+This is `codex/remix/mattias-bus`, the combined development and hardware-test
+selection. Follow the branch/worktree map and candidate workflow in
+`remixes/mattias-bus/README.md`. Make module fixes on their module branches
+first, then integrate those commits here. Chord Play extends MIDI Harmony.
+The old worktrees and `codex/checkpoints/*` are preserved references.
+
+Here `origin` is Mattias's fork and `upstream` is `sambanks/octabam`.
+When the upstream instructions below say `origin/main`, use `upstream/main`;
+run `make reach BASE=upstream/main TESTS=1` so the new module test remixes are
+included. Only push to the fork unless the user explicitly requests an
+upstream contribution. An image build alone is not hardware acceptance.
+
 octabam is a remixer for the Octatrack's OS: it composes modules, each
 credited to its author, into one image built from the user's own 1.40C.
 `README.md` says what each module and remix is and where it has run;

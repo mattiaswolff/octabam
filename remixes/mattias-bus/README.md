@@ -35,6 +35,8 @@ post-FX1 dry input to the shared engines.
   matching useful parameter defaults.
 - RLEN PLEN, to record one pattern-length pass with `TRIG ONE` and `QREC PLEN`.
 - Tuner, opened with `UP + TEMPO`.
+- MIDI Follow, MIDI Scales, and MIDI Harmony, including the Chord Play
+  development extension. Chord Play is part of Harmony, not a fourth module.
 
 ## Deliberately excluded
 
@@ -43,10 +45,9 @@ post-FX1 dry input to the shared engines.
 - Analog BD currently composes with stock DSP effects only, while this remix
   carries the bus DSP servers. Combining them requires new DSP composition
   work rather than a remix configuration change.
-- Scale Quantizer, REPITCH and MUTE MODES: their required ColdFire code and
-  menu tables do not fit alongside RLEN PLEN and this FX1 station bank.
-- Octakit is omitted to keep this bus remix focused and preserve future
-  flexibility for Analog BD work.
+- Scale Quantizer, REPITCH, MUTE MODES, and KITS are not selected. The older
+  remix's size and compatibility observations have not been remeasured on
+  this upstream revision; omission is not a current incompatibility claim.
 
 ## Validation boundary
 
@@ -54,3 +55,99 @@ The source selection has not yet completed its local check for this exact
 configuration. No real Octatrack, CompactFlash project, or firmware flash is
 part of that check. Before any device use, back up the CompactFlash card and
 follow the recovery process in `docs/guide/BUILDING.md`.
+
+## Fork development
+
+`origin` is `mattiaswolff/octabam`; `upstream` is `sambanks/octabam`.
+Push development commits to `origin`. Pushing does not open a PR or change
+upstream. Keep the fork's `main` aligned with upstream and develop in the
+worktrees below. The original local `main` checkout is preserved at its old
+revision; use these worktrees for new development.
+
+Paths below are relative to the Octabam repository's `.claude/worktrees/`.
+
+| Purpose | Branch | Worktree |
+| --- | --- | --- |
+| MIDI Follow | `codex/modules/midi-follow` | `fork-midi-follow` |
+| MIDI Scales | `codex/modules/midi-scales` | `fork-midi-scales` |
+| MIDI Harmony, including ROOT controls | `codex/modules/midi-harmony` | `fork-midi-harmony` |
+| Chord Play extension of Harmony | `codex/features/chord-play` | `fork-chord-play` |
+| Personal selection and combined testing | `codex/remix/mattias-bus` | `fork-mattias-bus` |
+| Shared MIDI verification helpers and interactive capture | `codex/support/midi-verification` | `fork-midi-verification` |
+
+The three module branches each contain only their own new firmware module.
+They share the small verification-support base. Chord Play depends on the
+Harmony branch. The remix integrates Follow, Scales, and Harmony with Chord
+Play, plus the original bus selection. Minimal `midi-follow`, `midi-scales`,
+and `midi-harmony` test remixes isolate the individual modules;
+`midi-harmony-follow` combines them on stock effects to isolate the MIDI
+work from the bus selection. Earlier `mattias-midi-*` test selections are
+retained for existing verification scripts.
+
+Make module fixes in their module worktree, commit and push there, then
+merge those commits into this remix worktree. Harmony fixes also flow into
+the Chord Play branch before that branch is integrated. Change the personal
+selection here; do not bury module fixes here. Commit unfinished experiments
+as explicit checkpoints rather than claiming they passed acceptance.
+
+The old worktrees remain available, with their original uncommitted files.
+The `codex/checkpoints/*-20261007` branches preserve the pre-organization
+source and history in the fork. They are reference snapshots, not the new
+development branches. Build outputs, supplied stock firmware, virtual CF
+images, and local dependencies are not included in those source backups.
+
+Fetch upstream at planned checkpoints, integrate it in a module worktree,
+resolve conflicts, and rerun verification before propagating that version
+into the remix. Do not rebase or change a worktree while another task is
+using it. Do not rewrite a published hardware candidate's source reference.
+
+The upstream guides assume that `origin` names upstream. In this fork setup,
+pass the actual base explicitly, including test remixes:
+
+```sh
+git fetch upstream
+make reach BASE=upstream/main TESTS=1
+make reach BASE=upstream/main TESTS=1 RUN=1 KEEP=1
+```
+
+The first command after fetching only lists the gates; the second runs them.
+`make reach` refuses a branch that does not contain the specified base.
+Passing the plan alone is not verification. Check the parent branch of any
+stacked contribution before opening a PR. Shared support can be reviewed
+first; each module can then be reviewed separately. No PR is opened by this
+workflow setup.
+
+Build the emulator in each worktree with `make emu-cf`; never symlink
+`out/emu`. Local `.venv` and `vendor` links currently point to the preserved
+`mattias-bus` worktree's tools. Do not remove that worktree or rebuild shared
+tools from a different revision while another task is using them. A change
+to toolchain patches or DSP host code requires an isolated, matching tool
+build, as described in `AGENTS.md`.
+
+## Hardware candidates
+
+Use this worktree and `REMIX=mattias-bus` for combined hardware candidates.
+The branch setup and an assembled image do not establish hardware readiness.
+
+1. Commit the exact source and selection. Record the commit, upstream base,
+   integrated module commits, and module list. Push the source to the fork.
+2. Choose an unused `BUILD` number after checking `CHANGELOG.md` and the
+   local hardware receipts. Run `make check REMIX=mattias-bus BUILD=N`, with
+   the appropriate local project fixture, and the additional gates listed by
+   `make reach`. Record failures and skipped checks explicitly. Verify that
+   shared tool versions match this tree before trusting the results.
+3. Only after the required checks pass, run
+   `make image REMIX=mattias-bus BUILD=N` from the same clean commit. Keep the
+   image, its SHA-256, commands, results, and source references together in a
+   local candidate directory. Never commit or upload firmware images.
+4. Give the candidate an immutable source tag after verification. Preserve
+   the previous working image and project/card backup. Flash manually using
+   the build guide, then record the actual device, displayed build, scenarios,
+   and observations. Source/emulator checks are not hardware results.
+5. Fix failures on the responsible feature branch, integrate the fix here,
+   and prepare a new numbered candidate. Keep the earlier record unchanged.
+
+Chord Play adds project companion files. Back up the whole project with its
+companions, and review [Harmony's storage notes](../../modules/midi-harmony/README.md#chrd-storage-and-migration)
+before testing save, reload, or migration. No existing card or hardware
+project is modified by setting up these branches.
