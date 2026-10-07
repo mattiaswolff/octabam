@@ -63,6 +63,8 @@ def extra_voicings(m):
                          (55,7,'G7'),(48,2,'Cm(add9)'),(50,2,'Ddim(addb9)'),
                          (48,3,'Csus2'),(50,3,'Dsusb2b5'),(53,4,'Fsus4')]:
         m.uc.mem_write(m.sym['ch_last_root'],bytes((root,)))
+        m.uc.mem_write(m.sym['ch_pressed'],root.to_bytes(4,'big')+b'\xff'*28)
+        m.uc.mem_write(m.sym['mh_held']+4*root,bytes((root,root,root,255)))
         m.uc.mem_write(m.sym['ch_live'],bytes((q,)))
         m.call('ch_chord_name',0)
         actual=bytes(m.uc.mem_read(m.uc.reg_read(UC_M68K_REG_A0),32)).split(b'\0')[0].decode()

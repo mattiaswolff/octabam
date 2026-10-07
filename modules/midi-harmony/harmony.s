@@ -451,6 +451,10 @@ mh_sequence:
     move.l %d7,%d0
     lea -4(%fp),%a0
     bsr.w mh_generate
+    lea ch_sequence_root,%a0
+    move.b -4(%fp),%d1
+    move.b %d1,(%a0,%d7.l)
+    lea -4(%fp),%a0
     tst.l %d0
     ble.s .sequence_not_voiced
     move.l %d0,-(%sp)
@@ -925,12 +929,15 @@ mh_note_encoder:
     movem.l %d2-%d3/%a2-%a3,(%sp)
     jmp 0x4003a8f0
 .type_ours:
+    move.l 8(%sp),%d1
+    bsr.w mh_ui_delta
     move.l %d2,-(%sp)
+    move.l %d0,-(%sp)
     moveq #0,%d2
     move.b 0x100b14cc,%d2
     move.l %d2,%d0
     bsr.w mh_get
-    move.l 12(%sp),%d1
+    move.l (%sp)+,%d1
     cmpi.l #2,%d1
     ble.s .type_delta_low
     moveq #2,%d1
@@ -1265,6 +1272,7 @@ mh_release:
     rts
     .balign 4
 mh_muted: .space 8,0
+    .global mh_held
 mh_held: .space 4096,255
 mh_refs: .space 1024,0
 
@@ -1290,3 +1298,23 @@ mh_draw_key:
     move.l %d3,%d0
     moveq #3,%d2
     jmp 0x4007a1b6
+
+/* d0 physical encoder, d1 raw movement -> d0 choice delta.
+ * Stock fixed-point detent accumulator; four counts per choice, at most one
+ * choice per report. No push acceleration for these small enumerations. */
+    .global mh_ui_delta
+mh_ui_delta:
+    cmpi.l #4,%d1
+    ble.s .ui_delta_low
+    moveq #4,%d1
+.ui_delta_low:
+    cmpi.l #-4,%d1
+    bge.s .ui_delta_accumulate
+    moveq #-4,%d1
+.ui_delta_accumulate:
+    pea 1024
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr 0x40032510
+    lea 12(%sp),%sp
+    rts

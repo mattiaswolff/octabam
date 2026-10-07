@@ -500,3 +500,22 @@ reproduced that failure through actual chromatic-key events. Repeat with
 7TH and other spacing choices, then C → F to retain smooth voice leading.
 The automated regressions live in the linked gate and full-firmware suite;
 a passing emulator run is not hardware acceptance of the corrected build.
+
+UI refinement: HARM and the detail-page choices use the stock encoder accumulator
+with four raw counts per selection and a one-choice cap per input report. Closing
+the detail window redraws NOTE SETUP from the current HARM value. Hardware feel
+still needs a physical check.
+
+CHORD PLAY's guide shows the currently sounding chord and its captured MIDI
+pitches on one line above the chord name. The octave uses the stock CHROMATIC
+PLAY box, position and numbering (MIDI 60 is C4). Long pitch lists use compact
+sharps and separators to keep all four notes visible. Released chords disappear;
+sequencer playback supplies its own root/CHRD identity and native active-note
+ownership. With overlapping live roots, the latest still-held root is shown;
+releasing it reveals another held root or the sequencer. The display reads
+captured voices rather than rerunning AUTO. Live and held-step CHRD selection
+uses the same four-count stock accumulator as Harmony's other new controls.
+
+`tools/verify/verify_chord_display.py --project DIR` checks captured pitches,
+release/STOP clearing, native octave changes and sequencer UART agreement on a
+copied virtual card. These remain emulator checks, not hardware acceptance.

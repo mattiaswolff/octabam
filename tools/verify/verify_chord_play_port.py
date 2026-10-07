@@ -205,7 +205,8 @@ def playing_layout(source):
 """
     events=run(work,'base-overrides',script)
     expected=[48,51,55, 48,51,55,58, 48,53,55, 48,51,55,58,
-              48,53,55, 48,51,55,58, 55,58,62,65, 55,59,62,65]
+              48,53,55, 48,51,55,58, 55,58,62,65, 55,58,62,68, 55,56,62, 55,60,62,
+              55,59,62, 55,58,62, 55,59,62,65]
     assert [e[2] for e in events if e[:2]==('on',1)]==expected,events
     run(work,'held-groups',PANEL+'1600 key 0 down\n1700 key 9 down\n1800 key 0 up\n1900 key 9 up\n2000 quit\n')
     # Native cleanup must release captured notes when leaving the playing layout.

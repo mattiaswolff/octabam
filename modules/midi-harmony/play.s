@@ -320,40 +320,78 @@ ch_play_guide:
     bne.w .guide_stock
     tst.l 0x460d1aec
     bne.w .guide_done
-    /* Chord name below the mode title, above the native footer (y=0..7).
-     * Leave the footer's text, mode icon and separator to the stock UI. */
+    /* Keep the stock CHROMATIC octave box at its exact native position.
+     * The full-width top line holds pitches; the chord name sits beside it. */
     clr.l -(%sp)
-    pea 23
-    pea 116
-    pea 9
+    pea 31
+    pea 118
+    pea 8
     pea 60
     pea 0x400bf10a
     jsr 0x40012254
     lea 24(%sp),%sp
+    pea 8
+    pea 60
+    pea 0x400bf10a
+    pea .guide_octave
+    jsr 0x400128a8
+    lea 16(%sp),%sp
+    move.l 0x400beba2,%d0
+    subq.l #1,%d0
+    move.l %d0,-(%sp)
+    pea 0x400b465d /* stock %d */
+    pea 0x400b527d /* stock octave width template: -1 */
+    clr.l -(%sp)
+    pea 1
+    pea 9
+    pea 68
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40013904
+    lea 36(%sp),%sp
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     jsr ch_chord_name
+    tst.b (%a0)
+    beq.s .guide_idle
+    jsr ch_draw_chord_name
+    moveq #0,%d0
+    moveq #4,%d1
+    jsr ch_note_text
+    jsr ch_draw_note_line
+    bra.s .guide_notes_done
+.guide_idle:
+    lea ch_play_title,%a0
+    moveq #25,%d0
+    bsr.w .guide_text
+.guide_notes_done:
+    /* Preserve the companion-file diagnostic in place of the note line. */
     moveq #0,%d0
     move.b 0x80000002,%d0
     lea ch_lock_status,%a1
     move.b (%a1,%d0.l),%d0
     cmpi.b #2,%d0
-    bcs.s .guide_name
+    bcs.s .guide_flush
     lea .guide_bad,%a0
-    beq.s .guide_name
+    beq.s .guide_diagnostic
     lea .guide_mismatch,%a0
     cmpi.b #3,%d0
-    beq.s .guide_name
+    beq.s .guide_diagnostic
     lea .guide_save_error,%a0
-.guide_name:
+.guide_diagnostic:
     move.l %a0,-(%sp)
-    pea -1
-    pea 17
-    pea 61
+    clr.l -(%sp)
+    pea 31
+    pea 118
+    pea 25
+    pea 60
     pea 0x400bf10a
-    pea 0x400ba876
-    jsr 0x40012bd8
+    jsr 0x40012254
     lea 24(%sp),%sp
+    move.l (%sp)+,%a0
+    moveq #25,%d0
+    bsr.s .guide_text
+.guide_flush:
     moveq #1,%d0
     move.l %d0,0x46c7c72c
 .guide_done:
@@ -362,6 +400,21 @@ ch_play_guide:
     lea -44(%sp),%sp
     movem.l %d2-%d7/%a2-%fp,(%sp)
     jmp 0x40044928
+.guide_text: /* a0 text, d0 baseline */
+    move.l %a0,-(%sp)
+    pea -1
+    move.l %d0,-(%sp)
+    pea 61
+    pea 0x400bf10a
+    pea 0x400ba876
+    jsr 0x40012bd8
+    lea 24(%sp),%sp
+    rts
+    .balign 4
+.guide_octave:
+    /* Crop the native keyboard bitmap to its 17-column octave indicator.
+     * Reference the user's stock graphics in place; no firmware bytes copied. */
+    .long 17,16,1,0x400caf30,0x400cb01c
 .guide_bad: .asciz "CHRD FILE BAD"
 .guide_mismatch: .asciz "CHRD MISMATCH"
 .guide_save_error: .asciz "CHRD SAVE ERR"

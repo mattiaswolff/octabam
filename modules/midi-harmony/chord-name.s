@@ -9,9 +9,9 @@ ch_chord_name: /* d0 track -> a0 name; d0/d1/a1 volatile */
     movem.l %d2-%d7/%a2-%a3,(%sp)
     move.l %d0,%d7
     lea ch_name_text,%a2
-    lea ch_last_root,%a0
+    jsr ch_display_snapshot
     moveq #0,%d2
-    move.b (%a0,%d7.l),%d2
+    move.b ch_display_root,%d2
     cmpi.l #127,%d2
     bhi.w .name_idle
     move.l %d2,%d0
@@ -40,9 +40,8 @@ ch_chord_name: /* d0 track -> a0 name; d0/d1/a1 volatile */
     lea .name_masks,%a0
     moveq #0,%d4
     move.w (%a0,%d0.l*2),%d4
-    lea ch_live,%a0
     moveq #0,%d6
-    move.b (%a0,%d7.l),%d6
+    move.b ch_display_quality,%d6
     move.l %d2,%d0
     move.l %d6,%d1
     move.l %d2,36(%sp)
@@ -176,6 +175,6 @@ ch_chord_name: /* d0 track -> a0 name; d0/d1/a1 volatile */
 .sus4: .asciz "sus4"
 .sussharp4: .asciz "sus#4"
 .flat5: .asciz "b5"
-.idle: .asciz "PLAY A ROOT"
+.idle: .asciz ""
     .bss
 ch_name_text: .space 32
