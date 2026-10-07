@@ -87,6 +87,7 @@ def port(source, selected=None):
     (work/'card.img').write_bytes(card)
     cases={
         'held':(panel.PANEL+'1600 key 0 down\n2300 quit\n','Cm',[48,51,55]),
+        'accidentals':(panel.PANEL+'1600 key 0 down\n1800 key 9 down\n2300 quit\n','Ebm7',[51,54,58,61]),
         'ninth':(panel.PANEL+'1600 key 1 down\n1800 key 10 down\n2300 quit\n','Ddim(addb9)',[50,53,56,63]),
         'released':(panel.PANEL+'1600 key 0 down\n1900 key 0 up\n2300 quit\n','',[]),
         'octave':(panel.PANEL+panel.combo(1500,0x21)+'2000 key 0 down\n2400 quit\n','Cm',[60,63,67]),
@@ -95,9 +96,11 @@ def port(source, selected=None):
         'rest':(panel.PANEL+panel.key(1600,0x28)+'3800 quit\n','',[]),
         'stopped':(panel.PANEL+panel.key(1600,0x28)+panel.key(2400,0x27)+'2800 quit\n','',[]),
     }
-    results={}
+    results={};panel_work=work
     for name,(script,want_name,want_notes) in cases.items():
         if selected and name not in selected:continue
+        # Configure the Part too, so native KEY caches agree with the UI.
+        work=p.fixture(source,'accidentals',{0:2},key_raw=8) if name=='accidentals' else panel_work
         path=work/f'{name}.txt';path.write_text(script)
         dump=f'{sym["ch_name_text"]:#x},32={work}/{name}-name.bin;{sym["ch_display_notes"]:#x},4={work}/{name}-notes.bin;0x400beba2,4={work}/{name}-octave.bin;0x46c77a16,32={work}/{name}-native.bin'
         events=p.run(work,name,['--rtc','1800000000','--live-script',path,'--internal-clock','--lcd',work/f'{name}.lcd','--mem-dump',dump])
@@ -121,6 +124,6 @@ def port(source, selected=None):
     (OUT/('receipt-'+ '-'.join(selected)+'.json' if selected else 'receipt.json')).write_text(json.dumps(dict(cases=results,image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('held','accidentals','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
     machine()
     if args.project:port(args.project,args.selected)
