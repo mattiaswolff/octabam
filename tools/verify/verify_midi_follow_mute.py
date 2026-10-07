@@ -79,7 +79,7 @@ def port_gate(image, project, out):
         control = None
         for state in ('audible', 'source-muted', 'follower-muted', 'mute-unmute'):
             args = ['--step', '-:poke:0x100b14cc=1', '--step',
-                    f'-:call:{sym["bf_encoder"]:#x},3,{leader+1-(leader>1)}']
+                    f'-:call:{sym["bf_encoder"]:#x},3,4'] * (leader+1-(leader>1))
             mask = (1 << leader) if state == 'source-muted' else 2 if state == 'follower-muted' else 0
             args += ['--step', f'-:poke:0x8000000e={mask}']
             if state == 'mute-unmute':
