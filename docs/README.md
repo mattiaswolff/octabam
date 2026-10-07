@@ -46,6 +46,10 @@ REPITCH in [REPITCH.md](firmware/REPITCH.md)).
 
 ## Proposals
 
+[MIDI Loopback module sketch](../modules/midi-loopback/DESIGN.md): draft
+internal routing from MIDI tracks to the existing audio MIDI controls,
+with destination settings, firmware boundaries and planned verification.
+
 [proposals/](proposals/): two OTX documents, a shared settings store for
 modules (draft, not implemented): [OTX_PROJECT_PROPOSAL.md](proposals/OTX_PROJECT_PROPOSAL.md)
 and [OTX_MODULE_GUIDELINES.md](proposals/OTX_MODULE_GUIDELINES.md).
