@@ -35,11 +35,12 @@ ch_nv_bank: .long -1
 ch_lock_status: .space 16
 .bss
 ch_lock_table: .space 131072
-.global ch_messages,mp_snapshot_bank,mp_snapshot_parts,mp_snapshot
+.global ch_messages,mp_snapshot_bank,mp_snapshot_parts,mp_snapshot,mp_part_epochs
 ch_messages: .space 4096
 mp_snapshot_bank: .space 4
 mp_snapshot_parts: .space 4
 mp_snapshot: .space 1152
+mp_part_epochs: .space 256
 """)
         objects = []
         for name, source in [('codec', ROOT/'modules/harmony-degrees/codec.s'),

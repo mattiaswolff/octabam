@@ -38,22 +38,17 @@ def machine_gate(image):
     layout = json.loads((ROOT / 'out/platform/layout.json').read_text())
     base = layout['base']
     sym = symbols()
-    root, sources = sym['bf_roots'], sym['bf_sources']
+    root = sym['bf_roots']
     entry, capture_entry = sym['bf_note'], sym['bf_capture']
     binary = image.read_bytes()
     assert binary[SITE - 0x40000400:SITE - 0x40000400 + 6] == b'\x4e\xf9' + entry.to_bytes(4, 'big')
     assert binary[CAPTURE - 0x40000400:CAPTURE - 0x40000400 + 6] == b'\x4e\xf9' + capture_entry.to_bytes(4, 'big')
-    uc = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
-    uc.ctl_set_cpu_model(UC_CPU_M68K_CFV4E)
-    uc.mem_map(0x40000000, 0x1000000)
-    uc.mem_write(0x40000400, binary)
-    uc.mem_write(base, (ROOT / 'out/platform/runtime/runtime.bin').read_bytes())
-    uc.mem_map(0x47000000, 0x10000)
-    uc.mem_map(0x46c70000, 0x20000)
-    uc.mem_map(0x10000000, 0x200000)
-    uc.mem_map(0x80000000, 0x10000)
+    from midi_machine import Machine
+    m = Machine(symbols)
+    uc = m.uc
+    m.stops = set()  # This gate observes native detour continuation addresses.
     pitch, stack = 0x47001000, 0x47008000
-    stack_budget = 192 if "mh_get" in subprocess.check_output(["m68k-elf-nm", str(ROOT/"out/platform/runtime/runtime.elf")], text=True) else 64
+    stack_budget = 192
     arrivals = []
     unexpected_writes = []
     written_addresses = set()
@@ -62,7 +57,11 @@ def machine_gate(image):
         written_addresses.add(address)
         # Only module state, scratch output, the displaced stock write and
         # a bounded stack frame may change during these machine-code calls.
-        allowed = ((root, root + 8), (sym["bf_pitches"], sym["bf_pitches"] + 8), (sources, sources + 8),
+        allowed = tuple((sym[name],sym[name]+size) for name,size in (('bf_response_context',64),('bf_response_anchor',32),('bf_response_seen',32),('bf_response_pool',32))) + ((root, root + 8), (sym["bf_pitches"], sym["bf_pitches"] + 8), *tuple((m.part_address(t,3),m.part_address(t,3)+1) for t in range(8)),
+                   *tuple((0x100a4ece+0x4e2+t*36+3,0x100a4ece+0x4e2+t*36+4) for t in range(8)),
+                   (0x400e21e0+0x95048,0x400e21e0+0x95049),
+                   (0x400e21e0+0x9b332,0x400e21e0+0x9b336),
+                   (0x100b145e,0x100b145f),(0x100f8598,0x100f859c),
                    (pitch, pitch + 4), (stack - stack_budget, stack),
                    (0x47004000 - 43, 0x47004000 - 42))
         if not any(lo <= address and address + size <= hi for lo, hi in allowed):
@@ -88,7 +87,7 @@ def machine_gate(image):
         uc.mem_write(pitch - 1, bytes((0xa5, value, 0x5a)))
         uc.mem_write(before[13] + 0x22c, bytes((transpose,)))
         arrivals.clear()
-        uc.emu_start(SITE, 0, count=500)
+        uc.emu_start(SITE, 0, count=3000)
         result = uc.mem_read(pitch, 1)[0]
         assert arrivals == [SKIP if result >= 128 else CONTINUE]
         after = [uc.reg_read(reg) for reg in REGS]
@@ -123,13 +122,13 @@ def machine_gate(image):
         uc.reg_write(UC_M68K_REG_D1, delta & 0xffffffff)
         uc.mem_write(stack, done.to_bytes(4, 'big'))
         arrivals.clear()
-        uc.emu_start(sym['bf_select'], 0, count=2000)
+        uc.emu_start(sym['bf_select'], 0, count=4000)
         assert arrivals == [done]
         assert uc.reg_read(UC_M68K_REG_A7) == stack + 4
-        return uc.mem_read(sources, 8)
+        return m.follow_read('source')
 
     assert uc.mem_read(root, 8) == b'\xff' * 8
-    assert uc.mem_read(sources, 8) == bytes(8)
+    assert m.follow_read('source') == bytes(8)
     assert capture(0, 60) == 36
     assert note(1, 0, 48) == 48  # OFF is the default
     uc.mem_write(root, b'\xff' * 8)
@@ -183,15 +182,15 @@ def machine_gate(image):
         for leader in range(8):
             if follower == leader:
                 continue
-            uc.mem_write(sources, bytes(8))
+            m.follow_write('source', bytes(8))
             # Selection skips the follower itself.
             select(follower, leader + 1 - (leader > follower))
-            assert uc.mem_read(sources + follower, 1)[0] == leader + 1
+            assert m.follow_read('source',1,follower)[0] == leader + 1
             capture(leader, 65)
             assert note(follower, 0, 60) == 41
             select(follower, -8)
             assert note(follower, 0, 60) == 60
-    uc.mem_write(sources, bytes(8))
+    m.follow_write('source', bytes(8))
     select(1, 1)                 # T2 -> T1
     select(2, 2)                 # T3 -> T2 -> T1
     assert select(0, 1)[0] == 4  # T1 cannot choose itself, T2 or T3
@@ -204,7 +203,7 @@ def machine_gate(image):
     assert select(99, 1)[7] == 0
 
     # Real pre-loop hook: T8's root arrives before T2's same-tick note.
-    uc.mem_write(sources, bytes((0, 8, 0, 0, 0, 0, 0, 0)))
+    m.follow_write('source', bytes((0, 8, 0, 0, 0, 0, 0, 0)))
     frame = 0x47004000
     def pre_capture(mask=128, mute=0, channel=8, velocity=90, note_value=65, disabled=False, track=7):
         uc.mem_write(frame - 42, mask.to_bytes(4, 'big'))
@@ -250,9 +249,9 @@ def machine_gate(image):
         assert pre_capture(track=track, mask=1 << track, mute=255, note_value=65) == 41
         assert pre_capture(track=track, mask=1 << track, mute=255, velocity=0) == 41
 
-    uc.mem_write(sources, bytes((2, 1, 0, 0, 0, 0, 0, 0)))
+    m.follow_write('source', bytes((2, 1, 0, 0, 0, 0, 0, 0)))
     assert note(1, 0, 48) == 48  # bounded even for corrupt cyclic RAM
-    uc.mem_write(sources + 1, b'\xff')
+    m.follow_write('source', b'\xff',1)
     assert note(1, 0, 48) == 48
 
     for value in range(10):
@@ -264,7 +263,7 @@ def machine_gate(image):
         assert arrivals == [done]
         expected = f'T{value}' if 1 <= value <= 8 else 'OFF'
         assert bytes(uc.mem_read(pitch, len(expected)+1)) == expected.encode()+b'\0'
-    assert {root, sources + 1, pitch} <= written_addresses, 'memory-write hook did not observe known writes'
+    assert {root, m.part_address(1,3), pitch} <= written_addresses, 'memory-write hook did not observe known writes'
     assert not unexpected_writes, ('out-of-contract memory writes', unexpected_writes[:10])
     print('  [ok] machine code: 56 routes, OFF, chains/cycles, 128 roots, all follower TRAN offsets, arp isolation, same-tick muted T8 source, all eight muted sources, gates, note-offs path, formatters, registers, bounded memory writes')
 
@@ -303,14 +302,15 @@ def port_case(image, project, arp=False, leader=0, enabled=True, live_change=Non
                 # +1 skips T2 itself and selects T3; -1 switches RFOL OFF.
                 delta = -1 if live_change == 'off' else 1
                 cmd += ['--step', f'1500:call:{symbols()["bf_encoder"]:#x},3,{4*delta}',
-                        '--step', f'1500:dump:{symbols()["bf_sources"]:#x},8={work / "sources.bin"}']
+                        '--step', f'1500:dump:0x100a4ece,25288={work / "sources.bin"}']
         with log.open('w') as f:
             proc = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
         text = log.read_text()
         assert proc.returncode == 0 and 'run ended REACHED' in text, log
         assert 'load run ended: LOAD PROJECT handled' in text, log
         if label == 'patched' and live_change:
-            assert (work/'sources.bin').read_bytes()[1] == (0 if live_change == 'off' else 3)
+            raw=(work/'sources.bin').read_bytes()
+            assert raw[0x4e2+36+3] == (0 if live_change == 'off' else 3)
         events = notes(capture.read_bytes())
         results[label] = events
         (work/f'{label}-notes.json').write_text(json.dumps(events, indent=2)+'\n')
@@ -412,28 +412,34 @@ def panel_gate(image):
     disabled = linked + [('key', '0x32'), ('key', '0x10'), ('setup', None),
                          ('enc', 1), ('enc', -1), ('key', '0x32'),
                          ('key', '0x11'), ('setup', None), ('enc', -1)]
+    baseline = None
     for name, actions, expected in [
+            ('baseline', open_t2, bytes(8)),
             ('t2-t1', linked, bytes((0, 1, 1, 0, 0, 0, 0, 0))),
             ('t2-off', disabled, bytes((0, 0, 1, 0, 0, 0, 0, 0))),
-            ('reboot-off', open_t2, bytes(8))]:
+            ('fresh-part', open_t2, bytes(8))]:
         events, log = work/f'{name}.txt', work/f'{name}.log'
         events.write_text(script(actions))
-        before, after = work/f'{name}-before.bin', work/f'{name}-after.bin'
+        after = work/f'{name}-after.bin'
         state = work/f'{name}-state.bin'
         # Stock working-Part mirror (four Parts, stride 0x18b2), not live lanes.
         cmd = [str(ROOT/'out/emu/ot_emu'), '--image', str(image), '--card', str(card),
                '--set', 'OCTABAM', '--project', 'BASS', '--load-ms', '90000', '--mkii',
-               '--step', f'-:dump:0x100a4ed0,25288={before}',
                '--live-script', str(events), '--lcd', str(work/f'{name}.lcd'),
-               '--mem-dump', f'{sym["bf_sources"]:#x},8={state};0x100a4ed0,25288={after}']
+               '--mem-dump', f'0x100b14cf,1={state};0x100a4ece,25288={after}']
         with log.open('w') as f:
             proc = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
         assert proc.returncode == 0 and 'ended on quit' in log.read_text(), log
-        assert state.read_bytes() == expected, (name, state.read_bytes())
-        assert before.read_bytes() == after.read_bytes(), (name, 'Part mirror changed')
+        part=state.read_bytes()[0]
+        raw=after.read_bytes()
+        actual=bytes(raw[part*0x18b2+0x4e2+t*36+3] for t in range(8))
+        assert actual == expected, (name,actual)
+        if baseline is None:baseline=raw
+        allowed={part*0x18b2+0x4e2+t*36+3 for t in range(8)}
+        assert all(a==b or i in allowed for i,(a,b) in enumerate(zip(baseline,raw))), (name,'unrelated native Part byte changed')
         subprocess.run([sys.executable, str(ROOT/'tools/emu/lcd_view.py'),
                         str(work/f'{name}.lcd'), '--png', str(work/f'{name}.png')], check=True)
-    print('  [ok] UART panel: RFOL selection, shared source, track reopening, OFF, reboot defaults; Part mirror unchanged')
+    print('  [ok] UART panel: RFOL selection, shared source, track reopening, OFF, fresh-project defaults; only native RFOL bytes change')
 
 
 def port_gate(image, project):

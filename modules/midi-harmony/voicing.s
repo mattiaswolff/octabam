@@ -25,9 +25,24 @@ mh_voice_clear:
     bne.s .vc_loop
     rts
 
+    .global mh_voice_ui,mh_voice_at
 mh_voice:
-    lea -88(%sp),%sp
+    lea -92(%sp),%sp
     movem.l %d0-%d7/%a0-%a4,(%sp)
+    jsr mp_play_context
+    bra.s .voice_context
+mh_voice_ui:
+    lea -92(%sp),%sp
+    movem.l %d0-%d7/%a0-%a4,(%sp)
+    jsr mp_ui_context
+    bra.s .voice_context
+mh_voice_at: /* d0 track,d1 captured context,a0 pool; all regs preserved */
+    lea -92(%sp),%sp
+    movem.l %d0-%d7/%a0-%a4,(%sp)
+    move.l %d1,%d0
+.voice_context:
+    move.l %d0,88(%sp)
+    move.l (%sp),%d0
     cmpi.l #7,%d0
     bhi.w .voice_done
     move.l %d0,%d7
@@ -35,11 +50,34 @@ mh_voice:
     lea mh_voice_history,%a2
     lsl.l #3,%d0
     adda.l %d0,%a2
+    move.l 88(%sp),%d1
+    moveq #16,%d2
     move.l %d7,%d0
-    jsr mh_voic_get
+    jsr mp_read
+    move.l 88(%sp),%d1
+    lsl.l #8,%d1
+    or.l %d1,%d0
+    lea mh_voice_context,%a0
+    cmp.l (%a0,%d7.l*4),%d0
+    beq.s .voice_context_ready
+    move.l %d0,(%a0,%d7.l*4)
+    clr.l 4(%a2)
+.voice_context_ready:
+    move.l 88(%sp),%d0
+    jsr mp_epoch
+    lea mh_voice_epoch,%a0
+    cmp.l (%a0,%d7.l*4),%d0
+    beq.s .voice_epoch_ready
+    move.l %d0,(%a0,%d7.l*4)
+    clr.l 4(%a2)
+.voice_epoch_ready:
+    move.l %d7,%d0
+    move.l 88(%sp),%d1
+    jsr mh_voic_get_at
     move.l %d0,80(%sp)
     move.l %d7,%d0
-    jsr mh_sprd_get
+    move.l 88(%sp),%d1
+    jsr mh_sprd_get_at
     /* SOFT OPEN drops the third sorted voice; SOFT WIDE uses the
      * former OPEN shape. FULL retains the original spacing exactly. */
     move.l %d0,%d1
@@ -58,7 +96,8 @@ mh_voice:
 .voice_width_ready:
     move.l %d0,76(%sp)
     move.l %d7,%d0
-    jsr mh_active
+    move.l 88(%sp),%d1
+    jsr mh_get_at
     cmpi.l #2,%d0
     blt.w .voice_reset
     lea ch_current,%a0
@@ -67,7 +106,8 @@ mh_voice:
     jsr ch_count
     move.l %d0,%d6
     move.l %d7,%d0
-    jsr mh_scale_record
+    move.l 88(%sp),%d1
+    jsr mh_scale_record_at
     tst.l %d0
     bpl.s .voice_scale_token
     move.l #0x3ff,%d0 /* distinct no-scale context, below source/count bits */
@@ -80,7 +120,8 @@ mh_voice:
     lsl.l #5,%d0
     or.l %d0,%d5
     move.l %d7,%d0
-    jsr mh_source
+    move.l 88(%sp),%d1
+    jsr mh_source_at
     lsl.l #8,%d0
     lsl.l #2,%d0
     or.l %d0,%d5
@@ -285,7 +326,8 @@ mh_voice:
     clr.l 4(%a2)
 .voice_omit:
     move.l (%sp),%d0 /* original track, not the search scratch register */
-    jsr mh_root_get
+    move.l 88(%sp),%d1
+    jsr mh_root_get_at
     tst.l %d0
     beq.s .voice_done
     moveq #0,%d1
@@ -297,7 +339,7 @@ mh_voice:
     clr.l 4(%a2)
 .voice_done:
     movem.l (%sp),%d0-%d7/%a0-%a4
-    lea 88(%sp),%sp
+    lea 92(%sp),%sp
     rts
 /* d0 ROOT mode, d1 original logical root, a0 voiced four-byte pool.
  * Move the existing root, never add a voice. Anchor to the logical root,
@@ -542,6 +584,7 @@ mh_spread:
     rts
     .balign 4
 mh_voice_history: .space 64,0
+mh_voice_context: .space 32,0xff
 
 /* Sort only the sounding voices; triad padding is handled by the caller.
  * d6 count, a0 four pitches. Preserve all registers. */
@@ -599,3 +642,6 @@ mh_width_set:
     clr.l 4(%a0,%d0.l)
 .width_done:
     rts
+
+    .balign 4
+mh_voice_epoch: .space 32,0xff

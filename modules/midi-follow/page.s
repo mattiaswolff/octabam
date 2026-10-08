@@ -112,9 +112,8 @@ bf_page_draw:
     lea 0x400467a4,%a1 /* same stock field and value baseline as RFOL */
     bsr.w .page_selector
     move.l bf_page_track,%d0
-    lea bf_sources,%a0
-    moveq #0,%d1
-    move.b (%a0,%d0.l),%d1
+    jsr bf_source_get
+    move.l %d0,%d1
     moveq #10,%d0
     lea bf_format,%a0
     lea 0x400467a4,%a1 /* stock numeric/text field, like NOTE SETUP RFOL */

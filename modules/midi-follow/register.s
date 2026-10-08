@@ -1,53 +1,42 @@
-/* Receiver register policy. Volatile per-track settings, like RFOL.
+/* Receiver register policy. Settings come from the playing native Part.
  * Keep absolute source pitches independently of the historical bass latch.
  * Register selection precedes receiver TRAN and Harmony root snapping.
  */
     .text
     .global bf_register,bf_reg_change,bf_mode_get,bf_oct_get
-    .global bf_reg_modes,bf_reg_fixed,bf_reg_offsets
 /* d0=ultimate source track, d1=receiver -> d0=signed pitch or 256 (unknown).
  * A relative octave can temporarily go outside MIDI; TRAN may bring it back.
  * All other registers are preserved; callers validate after adding TRAN.
  */
 bf_register:
-    lea -16(%sp),%sp
-    movem.l %d1-%d3/%a0,(%sp)
+    lea -20(%sp),%sp
+    movem.l %d1-%d4/%a0,(%sp)
     cmpi.l #7,%d0
     bhi.w .reg_unknown
     cmpi.l #7,%d1
     bhi.w .reg_unknown
-    lea bf_reg_modes,%a0
-    move.b (%a0,%d1.l),%d3
-    cmpi.b #1,%d3
+    move.l %d0,%d4
+    move.l %d1,%d0
+    jsr bf_mode_play
+    cmpi.l #1,%d0
     beq.s .reg_source
     lea bf_roots,%a0
     moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
+    move.b (%a0,%d4.l),%d2
     cmpi.l #127,%d2
     bhi.w .reg_unknown
     subi.l #36,%d2
-    lea bf_reg_fixed,%a0
-    moveq #0,%d0
-    move.b (%a0,%d1.l),%d0
-    cmpi.l #10,%d0
-    bls.s .reg_octave
-    moveq #3,%d0
+    move.l %d1,%d0
+    jsr bf_fixed_play
     bra.s .reg_octave
 .reg_source:
     lea bf_pitches,%a0
     moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
+    move.b (%a0,%d4.l),%d2
     cmpi.l #127,%d2
     bhi.w .reg_unknown
-    lea bf_reg_offsets,%a0
-    move.b (%a0,%d1.l),%d0
-    extb.l %d0
-    cmpi.l #-2,%d0
-    blt.s .reg_offset_bad
-    cmpi.l #2,%d0
-    ble.s .reg_octave
-.reg_offset_bad:
-    moveq #0,%d0
+    move.l %d1,%d0
+    jsr bf_offset_play
 .reg_octave:
     moveq #12,%d3
     muls.l %d3,%d0
@@ -56,48 +45,28 @@ bf_register:
 .reg_unknown:
     move.l #256,%d0
 .reg_return:
-    movem.l (%sp),%d1-%d3/%a0
-    lea 16(%sp),%sp
+    movem.l (%sp),%d1-%d4/%a0
+    lea 20(%sp),%sp
     rts
 
-/* UI getters: d0 track -> value. d1/a0 scratch only. */
-bf_mode_get:
-    cmpi.l #7,%d0
-    bhi.s .mode_default
-    lea bf_reg_modes,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #255,%d0
-    cmpi.l #1,%d0
-    bls.s .mode_done
-.mode_default:
-    moveq #0,%d0
-.mode_done:
-    rts
+/* UI octave follows MODE but retains both independent values in the Part. */
 bf_oct_get:
-    cmpi.l #7,%d0
-    bhi.s .oct_default
+    move.l %d1,-(%sp)
     move.l %d0,%d1
-    bsr.s bf_mode_get
+    jsr bf_mode_get
     tst.l %d0
     bne.s .oct_relative
-    lea bf_reg_fixed,%a0
-    moveq #0,%d0
-    move.b (%a0,%d1.l),%d0
-    cmpi.l #10,%d0
-    bls.s .oct_done
-.oct_default:
-    moveq #3,%d0
-    rts
+    move.l %d1,%d0
+    jsr bf_fixed_get
+    bra.s .oct_done
 .oct_relative:
-    lea bf_reg_offsets,%a0
-    move.b (%a0,%d1.l),%d0
-    extb.l %d0
+    move.l %d1,%d0
+    jsr bf_offset_get
 .oct_done:
+    move.l (%sp)+,%d1
     rts
 
-/* d0 track, d1 control (0 mode, 1 octave), d2 signed delta.
- * Independent fixed/relative values survive mode switches. Preserve all regs.
- */
+/* d0 track,d1 control (0 mode,1 octave),d2 delta; preserves all registers. */
 bf_reg_change:
     lea -28(%sp),%sp
     movem.l %d0-%d5/%a0,(%sp)
@@ -108,24 +77,26 @@ bf_reg_change:
     move.l %d0,%d3
     moveq #0,%d4
     moveq #1,%d5
-    lea bf_reg_modes,%a0
     tst.l %d1
-    beq.s .change_unsigned
-    bsr.w bf_mode_get
+    bne.s .change_octave
+    jsr bf_mode_get
+    lea bf_mode_set,%a0
+    bra.s .change_clamp
+.change_octave:
+    jsr bf_mode_get
     tst.l %d0
     bne.s .change_relative
-    lea bf_reg_fixed,%a0
+    move.l %d3,%d0
+    jsr bf_fixed_get
     moveq #10,%d5
-.change_unsigned:
-    moveq #0,%d0
-    move.b (%a0,%d3.l),%d0
+    lea bf_fixed_set,%a0
     bra.s .change_clamp
 .change_relative:
-    lea bf_reg_offsets,%a0
+    move.l %d3,%d0
+    jsr bf_offset_get
     moveq #-2,%d4
     moveq #2,%d5
-    move.b (%a0,%d3.l),%d0
-    extb.l %d0
+    lea bf_offset_set,%a0
 .change_clamp:
     cmpi.l #16,%d2
     ble.s .change_low_delta
@@ -144,12 +115,10 @@ bf_reg_change:
     ble.s .change_store
     move.l %d5,%d0
 .change_store:
-    move.b %d0,(%a0,%d3.l)
+    move.l %d0,%d1
+    move.l %d3,%d0
+    jsr (%a0)
 .change_done:
     movem.l (%sp),%d0-%d5/%a0
     lea 28(%sp),%sp
     rts
-    .balign 4
-bf_reg_modes: .space 8,0
-bf_reg_fixed: .space 8,3
-bf_reg_offsets: .space 8,0

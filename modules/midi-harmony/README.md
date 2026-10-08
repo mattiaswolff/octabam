@@ -81,10 +81,16 @@ NOTE and snaps when Harmony plays it. Shared chord tones do not suppress
 a new key's recording. Playback regenerates the chord from NOTE, including
 when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
 
-HARM, VOIC, SPRD and ROOT are stored per MIDI track per **project**, not per Part/pattern. They are
-saved in backward-compatible project comment lines and survive battery-RAM
-resume. KEY remains a native Part setting. MIDI Follow's RFOL selection is
-still its existing volatile setting; select it again after power-up.
+HARM, VOIC, SPRD and ROOT are native Part settings for each MIDI track,
+alongside KEY. UI edits address the selected working Part; playback reads each
+track's playing Part. MIDI Follow stores its source, register choices and
+response in that same native Part. KITS carries these bytes through ordinary
+Part operations; neither module depends on KITS. Runtime note ownership and
+voice-leading history are not stored in Parts.
+
+This is a greenfield storage format. There is no decoder or migration for the
+previous global project-comment settings. Native project persistence and live
+Part/Kit replacement are still undergoing integration validation on this branch.
 
 ## CHORD PLAY and CHRD
 

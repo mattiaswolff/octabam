@@ -14,7 +14,7 @@ def machine_gate():
             for n in range(128):
                 want=min(valid,key=lambda v:(abs(v-n),v))
                 assert m.call('ms_snap',n,raw)==want,(raw,n,want)
-            u.mem_write(0x46c76df1,bytes((raw,)))
+            m.set_key(0,raw)
             u.mem_write(0x100b14cc,b'\0')
             u.mem_write(m.scratch-1,b'\xa5'+b'?'*10+b'\xa5')
             # Formatter takes normal stack arguments.
@@ -30,7 +30,7 @@ def machine_gate():
     # Native setter receives the raw-ID delta for a musical-order movement.
     ordered=[0]+[h.raw_scale(key,mode) for key in range(12) for mode in range(7)]
     for ordinal,raw in enumerate(ordered):
-        u.mem_write(0x46c76df1,bytes((raw,)))
+        m.set_key(0,raw)
         for delta in (-100000,-4,-1,0,1,4,100000):
             u.mem_write(0x46c7d244+5*20,bytes(4))
             m.call('ms_encoder',5,stop=0x4007a3ea,regs={UC_M68K_REG_D5:delta & 0xffffffff})
@@ -38,8 +38,8 @@ def machine_gate():
             target=ordered[max(0,min(84,ordinal+(1 if delta>=4 else -1 if delta<=-4 else 0)))]
             assert actual==(target-raw)&0xffffffff,(raw,delta,actual,target)
     for slot in range(5):m.call('ms_encoder',slot,stop=0x4007a4cc)
-    if 'bf_sources' in m.sym:
-        u.mem_write(m.sym['bf_sources'],bytes((0,1,0,0,0,0,0,0)))
+    if 'bf_source_get' in m.sym:
+        m.follow_write('source',bytes((0,1,0,0,0,0,0,0)),0)
         u.mem_write(0x100b14cc,b'\x01')
         m.call('ms_encoder',5,stop=0x4007a6ba,regs={UC_M68K_REG_D5:1})
     print('  [ok] scale encoder order, both end clamps, stock-control pass-through and inherited KEY guard')

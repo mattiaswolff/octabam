@@ -33,7 +33,43 @@ class Machine:
         self.stops={self.done}; self.arrival=None;self.writes=[]
         u.hook_add(UC_HOOK_CODE,self.stop)
         u.hook_add(UC_HOOK_MEM_WRITE,lambda u,a,p,n,v,x:self.writes.append((p,n)))
+        # A native fresh Part fixture, with UI and all engine tracks on bank 0
+        # Part 0. Tests may move either context independently.
+        u.mem_write(0x46c82456,(0x400e21e0).to_bytes(4,'big'))
+        for p in range(4):
+            for t in range(8):
+                u.mem_write(0x400e21e0+0x8ed80+p*0x18b2+0x4e2+t*36+13,b'\x03')
+                u.mem_write(0x400e21e0+0x8ed80+p*0x18b2+0x4e2+t*36+15,b'\x02')
         if 'mh_defaults' in self.sym:self.call('mh_defaults',stop=0x40025ace)
+    def part_address(self,track,field):
+        bank=int.from_bytes(self.uc.mem_read(0x46c82456,4),'big')
+        part=self.uc.mem_read(0x100b14cf,1)[0]
+        return bank+0x8ed80+part*0x18b2+0x4e2+track*36+field
+    def follow_write(self,field,data,track=0):
+        """Seed native Part bytes, including deliberately corrupt routing data."""
+        slots={'source':3,'mode':12,'fixed':13,'offset':15,'response':12}
+        for t,v in enumerate(data,track):
+            a=self.part_address(t,slots[field])
+            if field=='mode':v=(self.uc.mem_read(a,1)[0]&2)|(v&1)
+            if field=='response':v=(self.uc.mem_read(a,1)[0]&1)|((v&1)<<1)
+            if field=='offset':v=(v+2)&255
+            self.uc.mem_write(a,bytes((v,)))
+    def follow_read(self,field,count=8,track=0):
+        slots={'source':3,'mode':12,'fixed':13,'offset':15,'response':12}
+        values=[]
+        for t in range(track,track+count):
+            v=self.uc.mem_read(self.part_address(t,slots[field]),1)[0]
+            if field=='mode':v&=1
+            if field=='response':v=(v>>1)&1
+            if field=='offset':v=(v-2)&255
+            values.append(v)
+        return bytes(values)
+    def harmony_state(self):
+        return b''.join(bytes(self.uc.mem_read(self.part_address(t,f),1))
+                        for t in range(8) for f in (5,16))
+    def set_key(self,track,value):
+        self.uc.mem_write(self.part_address(track,17),bytes((value,)))
+        self.uc.mem_write(0x46c76df1+68*track,bytes((value,)))
     def stop(self,u,p,n,x):
         if p in self.stops:self.arrival=p;u.emu_stop()
     def call(self,name,d0=0,d1=0,a0=None,stop=None,regs=None):

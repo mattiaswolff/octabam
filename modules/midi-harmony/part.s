@@ -7,7 +7,7 @@
     .include "remix.inc"
     .if MP_DEFINE
     .text
-    .global mp_ui_context,mp_play_context,mp_read,mp_write,mp_read_key
+    .global mp_ui_context,mp_play_context,mp_read,mp_write,mp_read_key,mp_epoch
 mp_ui_context:
     lea -12(%sp),%sp
     movem.l %d1-%d2/%a0,(%sp)
@@ -33,6 +33,20 @@ mp_ui_context:
 .ui_done:
     movem.l (%sp),%d1-%d2/%a0
     lea 12(%sp),%sp
+    rts
+
+/* d0 context -> replacement epoch, or -1. Runtime-only history invalidation;
+ * ordinary single-field UI edits do not replace a Part or change its epoch. */
+mp_epoch:
+    cmpi.l #63,%d0
+    bhi.s .epoch_bad
+    move.l %a0,-(%sp)
+    lea mp_part_epochs,%a0
+    move.l (%a0,%d0.l*4),%d0
+    move.l (%sp)+,%a0
+    rts
+.epoch_bad:
+    moveq #-1,%d0
     rts
 
 /* d0 track. Unlatched tracks use the engine's applied bank/Part, not UI. */
@@ -147,6 +161,9 @@ mp_read_key:
 .snapshot_address:
     cmpa.l mp_snapshot_bank,%a1
     bne.s .snapshot_done
+    move.l mp_snapshot_parts,%d5
+    btst %d4,%d5
+    beq.s .snapshot_done
     move.l #0x18b2-288,%d5
     mulu.l %d4,%d5
     neg.l %d5

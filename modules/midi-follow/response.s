@@ -7,31 +7,31 @@
  */
     .text
     .include "remix.inc"
-    .global bf_response_modes,bf_response_set,bf_response_get
+    .global bf_response_set,bf_response_get
     .global bf_response_tick,bf_response_observe,bf_response_anchor,bf_response_adjust
 
-bf_response_get:
-    cmpi.l #7,%d0
-    bhi.s .get_zero
-    lea bf_response_modes,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #1,%d0
-    rts
-.get_zero:
-    moveq #0,%d0
-    rts
-/* d0 track,d1 value; all registers preserved. Changes arm at the next ordinary trig. */
+/* d0 track,d1 value; preserve all regs, arm on the next ordinary trig. */
 bf_response_set:
-    lea -8(%sp),%sp
-    movem.l %d2/%a0,(%sp)
+    lea -16(%sp),%sp
+    movem.l %d0-%d2/%a0,(%sp)
     cmpi.l #7,%d0
     bhi.s .set_done
     cmpi.l #1,%d1
     bhi.s .set_done
-    lea bf_response_modes,%a0
-    cmp.b (%a0,%d0.l),%d1
+    jsr bf_response_get
+    cmp.l %d1,%d0
     beq.s .set_done
-    move.b %d1,(%a0,%d0.l)
+    move.l (%sp),%d0
+    jsr bf_response_value_set
+    tst.l %d0
+    beq.s .set_done
+    move.l (%sp),%d0
+    jsr mp_play_context
+    move.l %d0,%d2
+    jsr mp_ui_context
+    cmp.l %d2,%d0
+    bne.s .set_done
+    move.l (%sp),%d0
     moveq #-1,%d2
     lea bf_response_anchor,%a0
     move.l %d2,(%a0,%d0.l*4)
@@ -40,8 +40,8 @@ bf_response_set:
     lea bf_response_pool,%a0
     move.l %d2,(%a0,%d0.l*4)
 .set_done:
-    movem.l (%sp),%d2/%a0
-    lea 8(%sp),%sp
+    movem.l (%sp),%d0-%d2/%a0
+    lea 16(%sp),%sp
     rts
 
 /* d0 receiver -> d0 effective root or -1, d1 source identity/pitch token.
@@ -52,21 +52,10 @@ bf_response_target:
     lea -20(%sp),%sp
     movem.l %d2-%d4/%a0-%a1,(%sp)
     move.l %d0,%d3
-    lea bf_sources,%a0
-    moveq #0,%d1
-    move.b (%a0,%d3.l),%d1
-    moveq #8,%d2
-.target_resolve:
-    subq.l #1,%d1
-    cmpi.l #7,%d1
-    bhi.w .target_unknown
-    move.l %d1,%d4
-    moveq #0,%d1
-    move.b (%a0,%d4.l),%d1
-    beq.s .target_source
-    subq.l #1,%d2
-    bne.s .target_resolve
-    bra.w .target_unknown
+    jsr bf_source_resolve
+    cmp.l %d3,%d0
+    beq.w .target_unknown
+    move.l %d0,%d4
 .target_source:
     move.l %d4,%d0
     move.l %d3,%d1
@@ -120,8 +109,9 @@ bf_response_adjust:
     .ifdef HAVE_HARMONY
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
-    lea bf_response_modes,%a0
-    tst.b (%a0,%d7.l)
+    move.l %d7,%d0
+    jsr bf_response_play
+    tst.l %d0
     beq.s .adjust_done
     move.l %d7,%d0
     jsr mh_active
@@ -161,8 +151,9 @@ bf_response_observe:
     bmi.s .observe_return
     lea -12(%sp),%sp
     movem.l %d0-%d1/%a0,(%sp)
-    lea bf_response_modes,%a0
-    tst.b (%a0,%d7.l)
+    move.l %d7,%d0
+    jsr bf_response_play
+    tst.l %d0
     beq.s .observe_done
     lea bf_response_pool,%a0
     tst.l (%a0,%d7.l*4)
@@ -182,6 +173,44 @@ bf_response_observe:
 .observe_return:
     rts
 
+/* A recalled/replaced Part waits for its next ordinary trig before LIVE
+ * response can move a held voice. Release ownership and deadlines stay native.
+ * d0 receiver; preserve all registers. Same-Part UI edits retain their normal
+ * response behavior; native replacement is identified by its runtime epoch. */
+    .global bf_response_sync
+bf_response_sync:
+    lea -20(%sp),%sp
+    movem.l %d0-%d3/%a0,(%sp)
+    cmpi.l #7,%d0
+    bhi.s .sync_done
+    jsr mp_play_context
+    move.l %d0,%d1
+    jsr mp_epoch
+    move.l %d0,%d2
+    move.l (%sp),%d3
+    lsl.l #3,%d3
+    lea bf_response_context,%a0
+    adda.l %d3,%a0
+    cmp.l (%a0),%d1
+    bne.s .sync_changed
+    cmp.l 4(%a0),%d2
+    beq.s .sync_done
+.sync_changed:
+    move.l %d1,(%a0)
+    move.l %d2,4(%a0)
+    move.l (%sp),%d0
+    moveq #-1,%d2
+    lea bf_response_anchor,%a0
+    move.l %d2,(%a0,%d0.l*4)
+    lea bf_response_seen,%a0
+    move.l %d2,(%a0,%d0.l*4)
+    lea bf_response_pool,%a0
+    move.l %d2,(%a0,%d0.l*4)
+.sync_done:
+    movem.l (%sp),%d0-%d3/%a0
+    lea 20(%sp),%sp
+    rts
+
 /* d0 stock trigger/release mask, d1 stock effective mute mask.
  * All regs preserved. Skip tracks with a scheduled edge on this pass. */
 bf_response_tick:
@@ -191,8 +220,10 @@ bf_response_tick:
     move.l %d1,60(%sp)
     moveq #0,%d7
 .tick_track:
-    lea bf_response_modes,%a0
-    tst.b (%a0,%d7.l)
+    move.l %d7,%d0
+    bsr.w bf_response_sync
+    jsr bf_response_play
+    tst.l %d0
     beq.w .tick_next
     move.l %d7,%d0
     bsr.w bf_response_target
@@ -340,8 +371,8 @@ bf_response_tick:
     lea 12(%sp),%sp
     rts
     .balign 4
-bf_response_modes: .space 8,0
 bf_response_anchor: .space 32,0xff
 bf_response_seen: .space 32,0xff
 bf_response_velocity: .space 8,0
 bf_response_pool: .space 32,0xff
+bf_response_context: .space 64,0xff

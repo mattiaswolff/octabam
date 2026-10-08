@@ -27,31 +27,31 @@ def main():
     def knob(control,delta):
         u.mem_write(m.stack+4,control.to_bytes(4,'big')+(delta&0xffffffff).to_bytes(4,'big'))
         m.call('bf_page_encoder')
-    octaves=bytes(u.mem_read(s['bf_reg_fixed'],16))
+    octaves=bytes((m.follow_read('fixed')+m.follow_read('offset')))
     for delta in (4,4,127,-4,-4,-128):
         knob(1,delta)
-        assert bytes(u.mem_read(s['bf_reg_fixed'],16))==octaves
-    modes=bytes(u.mem_read(s['bf_reg_modes'],8))
-    sources=bytes(u.mem_read(s['bf_sources'],8))
+        assert bytes((m.follow_read('fixed')+m.follow_read('offset')))==octaves
+    modes=bytes(m.follow_read('mode',8,0))
+    sources=bytes(m.follow_read('source',8,0))
     knob(2,4)
     assert m.call('bf_oct_get',3)==4
-    assert bytes(u.mem_read(s['bf_reg_modes'],8))==modes
-    assert bytes(u.mem_read(s['bf_sources'],8))==sources
+    assert bytes(m.follow_read('mode',8,0))==modes
+    assert bytes(m.follow_read('source',8,0))==sources
     knob(1,4);assert m.call('bf_oct_get',3)==0 # recall relative offset
     knob(2,-4);assert m.call('bf_oct_get',3)==0xffffffff
     knob(1,-4);assert m.call('bf_oct_get',3)==4 # fixed value retained
-    settings=bytes(u.mem_read(s['bf_reg_modes'],24))
+    settings=bytes((m.follow_read('mode')+m.follow_read('fixed')+m.follow_read('offset')))
     knob(0,4)
-    assert bytes(u.mem_read(s['bf_reg_modes'],24))==settings
-    assert bytes(u.mem_read(s['bf_sources'],8))!=sources
+    assert bytes((m.follow_read('mode')+m.follow_read('fixed')+m.follow_read('offset')))==settings
+    assert bytes(m.follow_read('source',8,0))!=sources
     print('[ok] encoder isolation: A RFOL only, B MODE only, C OCT only; independent octave recall')
-    before=bytes(u.mem_read(s['bf_reg_modes'],24))
+    before=bytes((m.follow_read('mode')+m.follow_read('fixed')+m.follow_read('offset')))
     edit(8,0,1);edit(0,2,1)
-    assert bytes(u.mem_read(s['bf_reg_modes'],24))==before
+    assert bytes((m.follow_read('mode')+m.follow_read('fixed')+m.follow_read('offset')))==before
     assert m.call('bf_register',8,0)==256
     assert m.call('bf_register',0,8)==256
     assert m.call('bf_register',0,1)==256
-    u.mem_write(s['bf_sources'],bytes((0,1,2,0,0,0,0,0)))
+    m.follow_write('source',bytes((0,1,2,0,0,0,0,0)),0)
     cases=0
     for root in range(128):
         u.mem_write(lane+0x220,bytes((root,)));u.mem_write(lane+0x22c,b'\x40')
@@ -61,8 +61,8 @@ def main():
         for mode,octaves in ((0,range(11)),(1,range(-2,3))):
             for octave in octaves:
                 for receiver in (1,2): # direct and chained receiver use ultimate source
-                    u.mem_write(s['bf_reg_modes']+receiver,bytes((mode,)))
-                    u.mem_write(s['bf_reg_offsets' if mode else 'bf_reg_fixed']+receiver,bytes((octave&255,)))
+                    m.follow_write('mode',bytes((mode,)),receiver)
+                    m.follow_write('offset' if mode else 'fixed',bytes((octave&255,)),receiver)
                     base=(root if mode else root%12)+12*octave
                     assert m.call('bf_register',0,receiver)==base&0xffffffff,(root,mode,octave)
                     for tran in (-12,0,12):
@@ -75,15 +75,15 @@ def main():
                         cases+=1
     if 'mh_generate' in s:
         # Both sequenced and live sources retain their harmonic root's octave.
-        u.mem_write(0x46c76df1,b'\x01') # source C major inherited by receivers
+        m.set_key(0,1) # source C major inherited by receivers
         m.call('mh_set',1,1) # receiver HARM NOTE
         for root in range(128):
             m.call('mh_latch_key_root',root,regs={UC_M68K_REG_D2:0})
             assert u.mem_read(s['bf_pitches'],1)==bytes((root,))
             for mode,octaves in ((0,range(11)),(1,range(-2,3))):
                 for octave in octaves:
-                    u.mem_write(s['bf_reg_modes']+1,bytes((mode,)))
-                    u.mem_write(s['bf_reg_offsets' if mode else 'bf_reg_fixed']+1,bytes((octave&255,)))
+                    m.follow_write('mode',bytes((mode,)),1)
+                    m.follow_write('offset' if mode else 'fixed',bytes((octave&255,)),1)
                     for tran in (-190,-12,0,12,190):
                         pitch=(root if mode else root%12)+12*octave+tran
                         u.mem_write(m.scratch,b'\x3c\x01\x02\x03')
@@ -106,15 +106,15 @@ def ui():
     win=m.scratch; plane=win+0x1000
     u.mem_write(win+36,struct.pack('>IIII',120,60,2,plane))
     u.mem_write(s['bf_page_win'],win.to_bytes(4,'big'))
-    u.mem_write(s['bf_sources'],b'\x02')
-    assert bytes(u.mem_read(s['bf_response_modes'],8))==bytes(8),'TRIG must default on all tracks'
+    m.follow_write('source',b'\x02',0)
+    assert bytes(m.follow_read('response',8,0))==bytes(8),'TRIG must default on all tracks'
     out=Path(__file__).resolve().parents[2]/'out/follow-ui';out.mkdir(exist_ok=True)
     icons={}
     for mode,octaves in ((0,range(11)),(1,range(-2,3))):
         for octave in octaves:
             for response in (0,1):
-                u.mem_write(s['bf_reg_modes'],bytes((mode,)))
-                u.mem_write(s['bf_reg_offsets' if mode else 'bf_reg_fixed'],bytes((octave&255,)))
+                m.follow_write('mode',bytes((mode,)),0)
+                m.follow_write('offset' if mode else 'fixed',bytes((octave&255,)),0)
                 m.call('bf_response_set',0,response)
                 for formatter,value,want in (('bf_oct_format',octave+2,str(octave)),
                                              ('bf_response_format',response,('TRIG','LIVE')[response])):

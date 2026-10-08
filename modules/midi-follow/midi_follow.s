@@ -1,7 +1,7 @@
 /* OS 1.40C. All new state is module-owned volatile DRAM. */
     .text
     .include "remix.inc"
-    .global bf_capture, bf_note, bf_roots, bf_sources, bf_pre_capture
+    .global bf_capture, bf_note, bf_roots, bf_pre_capture
     .global bf_encoder, bf_draw_value, bf_format, bf_select
 
 /* Before the stock output loop: latch eligible ordinary triggers for ALL
@@ -55,10 +55,6 @@ bf_pre_capture:
     addq.l #1,%d7
     cmpi.l #8,%d7
     bne.w .pre_loop
-    tst.l bf_response_modes
-    bne.s .pre_response
-    tst.l bf_response_modes+4
-    beq.s .pre_restore
 .pre_response:
     move.l -42(%fp),%d0
     moveq #0,%d1
@@ -218,22 +214,10 @@ bf_note:
     .endif
     tst.b (%a2)
     bmi.s .restore
-    lea bf_sources,%a0
-    moveq #0,%d0
-    move.b (%a0,%d7.l),%d0
+    move.l %d7,%d0
+    jsr bf_source_resolve
+    cmp.l %d7,%d0
     beq.s .restore
-    moveq #8,%d2
-.resolve:
-    subq.l #1,%d0
-    cmpi.l #7,%d0
-    bhi.s .restore
-    moveq #0,%d1
-    move.b (%a0,%d0.l),%d1
-    beq.s .resolved
-    move.l %d1,%d0
-    subq.l #1,%d2
-    bne.s .resolve
-    bra.s .restore
 .resolved:
     move.l %d7,%d1
     jsr bf_register
@@ -303,9 +287,8 @@ bf_select:
     bls.s .bounded
     moveq #8,%d3
 .bounded:
-    lea bf_sources,%a0
-    moveq #0,%d0
-    move.b (%a0,%d2.l),%d0
+    move.l %d2,%d0
+    jsr bf_source_get
 .next_choice:
     add.l %d4,%d0
     bmi.s .select_return
@@ -321,14 +304,22 @@ bf_select:
     beq.s .next_choice
     cmpi.l #7,%d1
     bhi.s .next_choice
-    move.b (%a0,%d1.l),%d1
-    andi.l #255,%d1
+    move.l %d0,-(%sp)
+    move.l %d1,%d0
+    jsr bf_source_get
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
+    tst.l %d1
     beq.s .accept
     subq.l #1,%d5
     bne.s .check_cycle
     bra.s .next_choice
 .accept:
-    move.b %d0,(%a0,%d2.l)
+    move.l %d0,-(%sp)
+    move.l %d0,%d1
+    move.l %d2,%d0
+    jsr bf_source_set
+    move.l (%sp)+,%d0
     subq.l #1,%d3
     bne.s .next_choice
 .select_return:
@@ -344,9 +335,8 @@ bf_draw_value:
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     andi.l #7,%d0
-    lea bf_sources,%a0
-    moveq #0,%d3
-    move.b (%a0,%d0.l),%d3
+    jsr bf_source_get
+    move.l %d0,%d3
     move.l %d3,48(%sp)         /* comparison value: no false pending-edit mark */
 .draw_return:
     move.l %d4,%d2
@@ -374,8 +364,6 @@ bf_format:
     rts
 
     .balign 2
-bf_sources:
-    .space 8,0                 /* OFF at every reboot; not stored in a Part */
 bf_roots:
     .space 8,0xff              /* no eligible source yet: pass through */
 

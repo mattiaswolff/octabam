@@ -7,7 +7,18 @@
     .include "remix.inc"
     .if MP_DEFINE
     .text
-    .global mp_native_copy,mp_native_init,mp_snapshot_bank,mp_snapshot
+    .global mp_native_copy,mp_native_init,mp_snapshot_bank,mp_snapshot,mp_activate,mp_snapshot_parts,mp_part_epochs
+/* The platform's verified loader has returned before this native boot call.
+ * Tail-call preserves the original stock return address at 0x40000518.
+ */
+mp_activate:
+    move.l %d0,-(%sp)
+    move.l #mp_native_copy,%d0
+    move.l %d0,mp_copy_target
+    move.l #mp_native_init,%d0
+    move.l %d0,mp_init_target
+    move.l (%sp)+,%d0
+    jmp 0x4000f938
 mp_native_copy:
     lea -24(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
@@ -36,7 +47,35 @@ mp_native_init:
 .finish:
     tst.l 16(%sp)
     beq.s .finished
+    /* Epoch and settings publication are one short critical section.
+     * No native copying, initialization or degree callback runs masked. */
+    lea -20(%sp),%sp
+    movem.l %d0-%d3/%a0,(%sp)
+    move.w %sr,%d3
+    move.w #0x2700,%sr
+    move.l mp_snapshot_bank,%d0
+    subi.l #0x400e21e0,%d0
+    move.l #0x9b340,%d1
+    divu.l %d1,%d0
+    lsl.l #4,%d0
+    lea mp_part_epochs,%a0
+    adda.l %d0,%a0
+    move.l mp_snapshot_parts,%d1
+    moveq #0,%d2
+.epoch_part:
+    btst %d2,%d1
+    beq.s .epoch_next
+    addq.l #1,(%a0)
+.epoch_next:
+    addq.l #4,%a0
+    addq.l #1,%d2
+    cmpi.l #4,%d2
+    bne.s .epoch_part
     clr.l mp_snapshot_bank
+    clr.l mp_snapshot_parts
+    move.w %d3,%sr
+    movem.l (%sp),%d0-%d3/%a0
+    lea 20(%sp),%sp
 .finished:
     lea 24(%sp),%sp
     rts
@@ -75,12 +114,30 @@ mp_native_init:
     cmpi.l #0x9b340,%d1
     bhi.w .no_begin
     cmpi.l #0x8ed80,%d1
-    bls.s .no_begin
+    bls.w .no_begin
     cmpi.l #0x95048,%d2
-    bcc.s .no_begin
+    bcc.w .no_begin
     addi.l #0x400e21e0,%d4
     move.l %d4,%d5
+    /* Publish the exact overlapped Parts, including partial SETUP copies. */
+    moveq #0,%d0
+    moveq #0,%d3
+    move.l #0x8ed80,%d4
+.mask_part:
+    cmp.l %d4,%d1
+    bls.s .mask_next
     move.l %d4,%a0
+    adda.l #0x18b2,%a0
+    cmpa.l %d2,%a0
+    bls.s .mask_next
+    bset %d3,%d0
+.mask_next:
+    addi.l #0x18b2,%d4
+    addq.l #1,%d3
+    cmpi.l #4,%d3
+    bne.s .mask_part
+    move.l %d0,mp_snapshot_parts
+    move.l %d5,%a0
     adda.l #0x8ed80+0x4e2,%a0
     lea mp_snapshot,%a1
     moveq #4,%d3
@@ -94,6 +151,23 @@ mp_native_init:
     subq.l #1,%d3
     bne.s .snapshot_part
     move.l %d5,mp_snapshot_bank
+    .ifdef HAVE_DEGREES
+    /* DEG must not reattach affected provenance while this mask is active. */
+    moveq #0,%d3
+    move.l mp_snapshot_parts,%d2
+.before_part:
+    btst %d3,%d2
+    beq.s .before_next
+    move.l #0x18b2,%d0
+    mulu.l %d3,%d0
+    add.l %d5,%d0
+    addi.l #0x8ed80,%d0
+    jsr hd_part_before
+.before_next:
+    addq.l #1,%d3
+    cmpi.l #4,%d3
+    bne.s .before_part
+    .endif
     moveq #1,%d0
     bra.s .begin_done
 .no_begin:
@@ -104,5 +178,7 @@ mp_native_init:
     rts
     .balign 4
 mp_snapshot_bank: .long 0
+mp_snapshot_parts: .long 0
 mp_snapshot: .space 4*288
+mp_part_epochs: .space 64*4
     .endif

@@ -28,7 +28,7 @@ def machine():
     for pitch,label in enumerate(('C','C#','D','D#','E','F','F#','G','G#','A','A#','B'),48):
         m.setting(0,1,0,0)
         # KEY OFF gives an unsnapped root name; shared spelling must still agree.
-        u.mem_write(0x46c76df1,b'\0')
+        m.set_key(0,0)
         u.mem_write(s['ch_pressed'],struct.pack('>I',pitch)+b'\xff'*28)
         u.mem_write(s['ch_last_root'],bytes((pitch,)))
         u.mem_write(s['mh_held']+pitch*4,bytes((pitch,255,255,255)))

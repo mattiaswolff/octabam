@@ -1,5 +1,5 @@
-"""Per-MIDI-track root follower with a volatile NOTE SETUP D selector."""
-from remix.schema import Category, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
+"""Per-MIDI-track root follower with native Part settings."""
+from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
 
 def harmony_inc(modules):
     return ('.set HAVE_HARMONY,1\n' if 'MIDI HARMONY' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '') + ('.set HAVE_DEGREES,1\n' if 'HARMONY DEGREES' in modules else '')
@@ -10,9 +10,11 @@ MODULE = Module(
     category=Category.MIDI_USB, author="Mattias Wolff", author_url="https://github.com/mattiaswolff/octabam",
     proof=Proof.PORT, proof_note="verify_midi_follow: stock/patched MIDI capture; not flashed",
     doc="RFOL selects a source; press D for fixed or source-relative octave, then follower TRAN/P-locks.",
+    requires=('MIDI PART STATE',),
     linked=(Linked("bassfollow", "modules/midi-follow/midi_follow.s", dram=True, include=harmony_inc),
             Linked("followresponse", "modules/midi-follow/response.s", dram=True, include=harmony_inc),
             Linked("followregister", "modules/midi-follow/register.s", dram=True),
+            Linked("followsettings", "modules/midi-follow/settings.s", dram=True),
             Linked("followpage", "modules/midi-follow/page.s", dram=True)),
     symbol_refs=(
         SymbolRef(0x400bc5a4, 0x4004ae08, "followpage", "bf_page_open", "RFOL D press opens register settings"),
@@ -25,7 +27,13 @@ MODULE = Module(
         Poke(0x400D3E8A, b"----\0\0", b"RFOL\0\0", "NOTE SETUP D label"),
         Poke(0x400D3EFC, bytes.fromhex("00000080"), bytes.fromhex("00000009"), "RFOL nine values"),
         Poke(0x400D3FCB, b"\x01", b"\x11", "enable NOTE SETUP D only"),
+        Poke(0x400d4082, bytes.fromhex('00000001'), bytes.fromhex('00000004'), 'Follow MODE/response Part range'),
+        Poke(0x400d4086, bytes.fromhex('00000001'), bytes.fromhex('0000000b'), 'Follow fixed octave Part range'),
+        Poke(0x400d408e, bytes.fromhex('00000001'), bytes.fromhex('00000005'), 'Follow relative octave Part range'),
+        Poke(0x400d4035, b'\x00', b'\x03', 'Follow fixed octave default 3'),
+        Poke(0x400d4037, b'\x00', b'\x02', 'Follow relative octave default zero biased by two'),
     ),
+    claims=Claims(part_window=tuple((0x4e2+36*t+f, 1, 'Follow Part setting') for t in range(8) for f in (3,12,13,15))),
     detours=(Detour(0x4009F986, bytes.fromhex("41f980006676"),
                     "bassfollow", "bf_pre_capture", "capture all ordinary source triggers before any track emits"),
              Detour(0x40036674, bytes.fromhex("261524047003"),

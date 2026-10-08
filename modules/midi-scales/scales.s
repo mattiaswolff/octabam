@@ -7,28 +7,44 @@
     .global ms_decode,ms_raw,ms_source,ms_snap,ms_encoder,ms_output,ms_format
 ms_source:
 .ifdef HAVE_FOLLOW
-    lea -12(%sp),%sp
-    movem.l %d1-%d2/%a0,(%sp)
-    move.l %d0,%d2
-    moveq #8,%d1
-    lea bf_sources,%a0
-.ms_resolve:
-    cmpi.l #7,%d0
-    bhi.s .ms_bad
-    tst.b (%a0,%d0.l)
-    beq.s .ms_resolved
-    move.b (%a0,%d0.l),%d0
-    andi.l #255,%d0
-    subq.l #1,%d0
-    subq.l #1,%d1
-    bne.s .ms_resolve
-.ms_bad:
-    move.l %d2,%d0
-.ms_resolved:
-    movem.l (%sp),%d1-%d2/%a0
-    lea 12(%sp),%sp
+    jmp bf_source_resolve
+.else
+    rts
+.endif
+ms_source_ui:
+.ifdef HAVE_FOLLOW
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr mp_ui_context
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
+    jsr bf_source_resolve_at
+    move.l (%sp)+,%d1
 .endif
     rts
+ms_raw_ui:
+.ifdef HAVE_FOLLOW
+    lea -12(%sp),%sp
+    movem.l %d1-%d3,(%sp)
+    move.l %d0,%d2
+    bsr.w ms_source_ui
+    move.l %d0,%d3
+    cmp.l %d2,%d0
+    bne.s .ui_followed
+    jsr mp_ui_context
+    bra.s .ui_context
+.ui_followed:
+    jsr mp_play_context
+.ui_context:
+    move.l %d0,%d1
+    move.l %d3,%d0
+    jsr mp_read_key
+    movem.l (%sp),%d1-%d3
+    lea 12(%sp),%sp
+    rts
+.else
+    bra.s ms_raw
+.endif
 /* d0 track -> effective native KEY byte. */
 ms_raw:
     bsr.s ms_source
@@ -143,10 +159,10 @@ ms_encoder:
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     move.l %d0,%d2
-    bsr.w ms_source
+    bsr.w ms_source_ui
     cmp.l %d2,%d0
     bne.w .encoder_locked
-    bsr.w ms_raw
+    bsr.w ms_raw_ui
     move.l %d0,%d2 /* previous raw */
     bsr.w ms_decode
     tst.l %d0
@@ -272,7 +288,7 @@ ms_format:
     move.l 12(%sp),%a2
     moveq #0,%d0
     move.b 0x100b14cc,%d0
-    bsr.w ms_raw
+    bsr.w ms_raw_ui
     bsr.w ms_decode
     clr.l (%a2)
     clr.l 4(%a2)

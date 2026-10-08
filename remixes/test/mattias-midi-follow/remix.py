@@ -30,7 +30,7 @@ REMIX = Remix(
         # Requested firmware behaviour.
         "RLEN PLEN",
         "TUNER",
-        "MIDI FOLLOW",
+        "MIDI PART STATE", "MIDI FOLLOW",
     ),
     fallback="SEND",
 

@@ -31,9 +31,11 @@ Source register refers to the harmonic root before inversion, spread and root
 omission/placement, not whichever generated or arpeggiated note is lowest.
 Source sequence TRAN/scale and live key root selection still happen before capture.
 
-The new settings share RFOL's existing lifetime: per-track module RAM, reset on
-reboot; not saved in Parts/projects or parameter locked. Existing stock controls
-and the source selector remain in place. NO/YES/D or a track/page key closes the
+RFOL, MODE, both remembered octave choices and TRIG/LIVE response are native
+Part settings per MIDI track. They are not parameter locked. UI edits use the
+selected working Part; playback uses each track's playing Part. KITS carries
+these native bytes but is not required. Existing stock controls and the source
+selector remain in place. NO/YES/D or a track/page key closes the
 window; transport and chromatic playing continue through it.
 
 ## On the Octatrack
@@ -75,9 +77,11 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 - Ordinary same-tick source trigs are captured before any track emits, so
   **T2 following T8** sees the new root on that tick. Earlier microtimed bass
   trigs still use the previous root.
-- Roots latch through rests and transport stops. Configuration and roots are
-  **RAM-only**: they survive pattern/Part/project changes in the running session
-  and reset on reboot. They are not saved or copied with a Part/project.
+- Roots latch through rests and transport stops and remain runtime state.
+  Configuration belongs to the native Part; roots and held-note ownership are
+  not copied or persisted with it. This greenfield format has no migration
+  from the previous volatile settings. Native persistence and live Part/Kit
+  replacement are still undergoing integration validation on this branch.
 - **Muting a source silences its sequenced MIDI output but keeps its root
   progression available to followers**, including when playback starts muted.
   Muting a follower independently silences that follower. Mute/unmute does not

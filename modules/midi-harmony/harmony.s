@@ -1,228 +1,46 @@
-/* MIDI Harmony for 1.40C. No stored note/chord lanes are rewritten.
- * TYPE/SPRD/manual inversion/ROOT share e2..e9; ea AUTO bits, eb version.
- * Native KEY/scale remains in the Part. Quantizer ec..ee are separate.
- */
+/* MIDI Harmony for 1.40C. Settings and KEY belong to native Parts. */
     .text
     .include "remix.inc"
-    .set MH_NV,0x100b14e2
-    .set MH_VERSION,0x100b14eb
-    .set MH_VOIC,0x100b14ea
     .global mh_get,mh_set,mh_source,mh_quant,mh_generate,mh_sequence
-    .global mh_boot,mh_defaults,mh_load,mh_save,mh_arp_encoder,mh_note_encoder,mh_draw_type,mh_type_format,mh_keyboard
-
-/* One byte per track: bits 0..1 TYPE, bits 2..3 SPRD (0..2), bits 4..5 inversion (0..3), bits 6..7 ROOT (KEEP/OMIT/-1 OCT/-2 OCT). */
-mh_get:
-    cmpi.l #7,%d0
-    bhi.s .get_off
-    move.b MH_VERSION,%d1
-    cmpi.b #0x4f,%d1
-    bne.s .get_off
-    lea MH_NV,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #15,%d0 /* ignore inversion and ROOT; reject invalid spread */
-    cmpi.l #11,%d0
-    bhi.s .get_off
-    andi.l #3,%d0
-    rts
-.get_off:
-    moveq #0,%d0
-    rts
-mh_set:
-.ifdef HAVE_DEGREES
-    jmp hd_set
-    .global mh_set_native
-mh_set_native:
-.endif
-    cmpi.l #7,%d0
-    bhi.s .set_done
-    cmpi.l #2,%d1
-    bhi.s .set_done
-    lea MH_NV,%a0
-    move.l %d2,-(%sp)
-    moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
-    andi.l #252,%d2
-    or.l %d2,%d1
-    move.l (%sp)+,%d2
-    cmp.b (%a0,%d0.l),%d1
-    beq.s .set_done
-    move.b %d1,(%a0,%d0.l)
-    lea mh_voice_history,%a0
-    move.l %d0,%d1
-    lsl.l #3,%d1
-    clr.l 4(%a0,%d1.l)
-.set_done:
-    rts
-
-/* SPRD CLOSE=0, OPEN=1, WIDE=2, in the existing track byte. */
-    .global mh_sprd_get,mh_sprd_set
-mh_sprd_get:
-    cmpi.l #7,%d0
-    bhi.s .sprd_off
-    move.b MH_VERSION,%d1
-    cmpi.b #0x4f,%d1
-    bne.s .sprd_off
-    lea MH_NV,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #15,%d0 /* ignore inversion and ROOT; reject invalid spread */
-    cmpi.l #11,%d0
-    bhi.s .sprd_off
-    lsr.l #2,%d0
-    rts
-.sprd_off:
-    moveq #0,%d0
-    rts
-mh_sprd_set:
-    cmpi.l #7,%d0
-    bhi.s .sprd_done
-    cmpi.l #2,%d1
-    bhi.s .sprd_done
-    lea MH_NV,%a0
-    move.l %d2,-(%sp)
-    moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
-    andi.l #243,%d2
-    lsl.l #2,%d1
-    or.l %d2,%d1
-    move.l (%sp)+,%d2
-    cmp.b (%a0,%d0.l),%d1
-    beq.s .sprd_done
-    move.b %d1,(%a0,%d0.l)
-    lea mh_voice_history,%a0
-    lsl.l #3,%d0
-    clr.l 4(%a0,%d0.l)
-.sprd_done:
-    rts
-
-/* Stable project values ROOT=0, AUTO=1, 1ST=2, 2ND=3, 3RD=4.
- * Keep the existing AUTO bitmap; manual inversions use track bits 4..5.
- */
-    .global mh_voic_get,mh_voic_set
-mh_voic_get:
-    cmpi.l #7,%d0
-    bhi.s .voic_off
-    move.b MH_VERSION,%d1
-    cmpi.b #0x4f,%d1
-    bne.s .voic_off
-    lea MH_NV,%a0
-    moveq #0,%d1
-    move.b (%a0,%d0.l),%d1
-    andi.l #15,%d1
-    cmpi.l #11,%d1
-    bhi.s .voic_off
-    moveq #0,%d1
-    move.b MH_VOIC,%d1
-    btst %d0,%d1
-    bne.s .voic_auto
-    move.b (%a0,%d0.l),%d0
-    andi.l #48,%d0
-    beq.s .voic_off
-    lsr.l #4,%d0
-    addq.l #1,%d0
-    rts
-.voic_auto:
-    moveq #1,%d0
-    rts
-.voic_off:
-    moveq #0,%d0
-    rts
-mh_voic_set:
-    cmpi.l #7,%d0
-    bhi.s .voic_set_done
-    cmpi.l #4,%d1
-    bhi.s .voic_set_done
-    bclr %d0,MH_VOIC
-    cmpi.l #1,%d1
-    bne.s .voic_manual
-    bset %d0,MH_VOIC
-    moveq #0,%d1
-    bra.s .voic_pack
-.voic_manual:
-    tst.l %d1
-    beq.s .voic_pack
-    subq.l #1,%d1
-    lsl.l #4,%d1
-.voic_pack:
-    lea MH_NV,%a0
-    move.l %d2,-(%sp)
-    moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
-    andi.l #207,%d2
-    or.l %d2,%d1
-    move.b %d1,(%a0,%d0.l)
-    move.l (%sp)+,%d2
-    lea mh_voice_history,%a0
-    lsl.l #3,%d0
-    clr.l 4(%a0,%d0.l)
-.voic_set_done:
-    rts
-
-/* ROOT KEEP=0, OMIT=1, -1 OCT=2, -2 OCT=3; packed in bits 6..7.
- * Legacy OMIT entry points remain binary-valued for old project comments.
- */
-    .global mh_root_get,mh_root_set,mh_omit_get,mh_omit_set
-mh_omit_get:
-    bsr.s mh_root_get
-    cmpi.l #1,%d0
-    bls.s .root_return
-    moveq #0,%d0
-.root_return:
-    rts
-mh_root_get:
-    cmpi.l #7,%d0
-    bhi.s .root_keep
-    move.b MH_VERSION,%d1
-    cmpi.b #0x4f,%d1
-    bne.s .root_keep
-    lea MH_NV,%a0
-    moveq #0,%d1
-    move.b (%a0,%d0.l),%d1
-    andi.l #15,%d1
-    cmpi.l #11,%d1
-    bhi.s .root_keep
-    moveq #0,%d1
-    move.b (%a0,%d0.l),%d1
-    move.l %d1,%d0
-    lsr.l #6,%d0
-    rts
-.root_keep:
-    moveq #0,%d0
-    rts
-mh_omit_set:
-    cmpi.l #1,%d1
-    bhi.s .root_set_done
-mh_root_set:
-    cmpi.l #7,%d0
-    bhi.s .root_set_done
-    cmpi.l #3,%d1
-    bhi.s .root_set_done
-    lea MH_NV,%a0
-    move.l %d2,-(%sp)
-    moveq #0,%d2
-    move.b (%a0,%d0.l),%d2
-    andi.l #63,%d2
-    lsl.l #6,%d1
-    or.l %d2,%d1
-    move.l (%sp)+,%d2
-    move.b %d1,(%a0,%d0.l)
-    lea mh_voice_history,%a0
-    lsl.l #3,%d0
-    clr.l 4(%a0,%d0.l)
-.root_set_done:
-    rts
+    .global mh_boot,mh_defaults,mh_arp_encoder,mh_note_encoder,mh_draw_type,mh_type_format,mh_keyboard
 
 /* Effective native KEY, decoded to key<<2 | mode<<6; -1 for OFF.
  * Standalone Harmony uses stock Major/Minor. MIDI Scales adds five modes.
  */
     .global mh_active,mh_scale_record
 mh_scale_record:
-    bsr.w mh_source
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr mp_play_context
     move.l %d0,%d1
-    lsl.l #6,%d0
-    lea 0x46c76df1,%a0
-    adda.l %d0,%a0
-    moveq #0,%d0
-    move.b (%a0,%d1.l*4),%d0
+    move.l (%sp)+,%d0
+    bsr.w mh_scale_record_at
+    move.l (%sp)+,%d1
+    rts
+    .global mh_scale_record_at
+mh_scale_record_at:
+    bsr.w mh_raw_key_at
+    bra.w .record_decode
+    .global mh_raw_key_at
+mh_raw_key_at:
+    lea -12(%sp),%sp
+    movem.l %d1-%d3,(%sp)
+    move.l %d0,%d2
+    move.l %d1,%d3
+    bsr.w mh_source_at
+    cmp.l %d2,%d0
+    beq.s .record_own_context
+    move.l %d0,-(%sp)
+    jsr mp_play_context
+    move.l %d0,%d3
+    move.l (%sp)+,%d0
+.record_own_context:
+    move.l %d3,%d1
+    jsr mp_read_key
+    movem.l (%sp),%d1-%d3
+    lea 12(%sp),%sp
+    rts
+.record_decode:
 .ifdef HAVE_SCALES
     jmp ms_decode
 .else
@@ -245,7 +63,15 @@ mh_scale_record:
 .endif
 mh_active:
     /* KEY OFF disables snapping, not the selected Harmony operation. */
-    bra.w mh_get
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr mp_play_context
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
+    jsr mh_get_at
+    move.l (%sp)+,%d1
+    tst.l %d0
+    rts
 
 /* d0 track, d1 root -> effective chord scale record.
  * With KEY OFF, use major intervals rooted at this exact unsnapped pitch.
@@ -253,11 +79,22 @@ mh_active:
     .global mh_chord_scale
 mh_chord_scale:
     move.l %d2,-(%sp)
-    move.l %d1,%d2
-    bsr.w mh_scale_record
+    move.l %d0,-(%sp)
+    jsr mp_play_context
+    move.l %d0,%d2
+    move.l (%sp)+,%d0
+    bsr.w mh_chord_scale_at
+    move.l (%sp)+,%d2
+    rts
+    .global mh_chord_scale_at
+mh_chord_scale_at: /* d0 track,d1 root,d2 context */
+    move.l %d3,-(%sp)
+    move.l %d1,%d3
+    move.l %d2,%d1
+    bsr.w mh_scale_record_at
     tst.l %d0
     bpl.s .chord_scale_done
-    move.l %d2,%d0
+    move.l %d3,%d0
 .chord_scale_pc:
     cmpi.l #12,%d0
     bcs.s .chord_scale_major
@@ -266,51 +103,76 @@ mh_chord_scale:
 .chord_scale_major:
     lsl.l #2,%d0
 .chord_scale_done:
-    move.l (%sp)+,%d2
+    move.l (%sp)+,%d3
     rts
 
 /* d0 track -> ultimate source, or original track on invalid/cyclic data.
  * Preserves d2+; usable without Follow in the build. */
 mh_source:
 .ifdef HAVE_FOLLOW
-    lea -12(%sp),%sp
-    movem.l %d1-%d2/%a0,(%sp)
-    move.l %d0,%d2
-    moveq #8,%d1
-    lea bf_sources,%a0
-.source_loop:
-    cmpi.l #7,%d0
-    bhi.s .source_bad
-    tst.b (%a0,%d0.l)
-    beq.s .source_done
-    move.b (%a0,%d0.l),%d0
-    andi.l #255,%d0
-    subq.l #1,%d0
-    subq.l #1,%d1
-    bne.s .source_loop
-.source_bad:
-    move.l %d2,%d0
-.source_done:
-    movem.l (%sp),%d1-%d2/%a0
-    lea 12(%sp),%sp
-.endif
+    jmp bf_source_resolve
+.else
     rts
+.endif
+    .global mh_source_ui
+mh_source_ui:
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr mp_ui_context
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
+    bsr.w mh_source_at
+    move.l (%sp)+,%d1
+    tst.l %d0
+    rts
+    .global mh_source_at
+mh_source_at:
+.ifdef HAVE_FOLLOW
+    jmp bf_source_resolve_at
+.else
+    rts
+.endif
 
 /* d0 MIDI pitch, d1 track -> d0 snapped pitch, or unchanged if TYPE OFF.
  * All other regs preserved. Nearest degree; exact ties choose lower.
  */
 mh_quant:
-    lea -28(%sp),%sp
+    move.l %d2,-(%sp)
+    move.l %d0,-(%sp)
+    move.l %d1,%d0
+    jsr mp_play_context
+    move.l %d0,%d2
+    move.l (%sp)+,%d0
+    bsr.w mh_quant_at
+    move.l (%sp)+,%d2
+    rts
+    .global mh_quant_ui
+mh_quant_ui:
+    move.l %d2,-(%sp)
+    move.l %d0,-(%sp)
+    jsr mp_ui_context
+    move.l %d0,%d2
+    move.l (%sp)+,%d0
+    bsr.w mh_quant_at
+    move.l (%sp)+,%d2
+    tst.l %d0
+    rts
+    .global mh_quant_at
+mh_quant_at: /* d0 pitch,d1 track,d2 captured context; others preserved */
+    lea -32(%sp),%sp
     movem.l %d1-%d5/%a0-%a1,(%sp)
+    move.l %d2,28(%sp)
     move.l %d0,%d2
     cmpi.l #127,%d2
     bhi.w .quant_done
     move.l %d1,%d0
-    bsr.w mh_active
+    move.l 28(%sp),%d1
+    jsr mh_get_at
     beq.w .quant_done
     move.l %d1,%d0  /* d1 was clobbered by getter; reload input track */
     move.l (%sp),%d0
-    bsr.w mh_scale_record
+    move.l 28(%sp),%d1
+    bsr.w mh_scale_record_at
     tst.l %d0
     bmi.w .quant_done
     move.l %d0,%d3
@@ -344,7 +206,7 @@ mh_quant:
 .quant_done:
     move.l %d2,%d0
     movem.l (%sp),%d1-%d5/%a0-%a1
-    lea 28(%sp),%sp
+    lea 32(%sp),%sp
     rts
 /* d0 note,d3 tonic,d4 mask -> Z false if degree. */
 .is_degree:
@@ -370,17 +232,24 @@ mh_quant:
 mh_generate:
     lea -40(%sp),%sp
     movem.l %d1-%d7/%a0-%a1,(%sp)
+    move.l %d0,%d7
+    jsr mp_play_context
+    move.l %d0,36(%sp)
     moveq #1,%d5
     bra.s .gen_start
     .global mh_direct
 mh_direct:
     lea -40(%sp),%sp
     movem.l %d1-%d7/%a0-%a1,(%sp)
+    move.l %d0,%d7
+    jsr mp_ui_context
+    move.l %d0,36(%sp)
     moveq #0,%d5
 .gen_start:
-    move.l %d0,%d7
     move.l %a0,%a1
-    bsr.w mh_active
+    move.l %d7,%d0
+    move.l 36(%sp),%d1
+    jsr mh_get_at
     move.l %d0,%d6
     beq.w .gen_return
     moveq #0,%d2
@@ -393,7 +262,8 @@ mh_direct:
     tst.l %d5
     beq.s .gen_own
     move.l %d7,%d0
-    bsr.w mh_source
+    move.l 36(%sp),%d1
+    bsr.w mh_source_at
     cmp.l %d7,%d0
     beq.s .gen_own
     move.l %d7,%d1
@@ -418,7 +288,8 @@ mh_direct:
     bhi.w .gen_invalid
     move.l %d2,%d0
     move.l %d7,%d1
-    bsr.w mh_quant
+    move.l 36(%sp),%d2
+    bsr.w mh_quant_at
     move.l %d0,%d2
     move.b %d2,(%a1)
     move.b %d2,1(%a1)
@@ -426,7 +297,10 @@ mh_direct:
     move.b %d2,3(%a1)
     move.l %d7,%d0
     move.l %d2,%d1
-    bsr.w mh_chord_scale
+    move.l 36(%sp),%d2
+    bsr.w mh_chord_scale_at
+    moveq #0,%d2
+    move.b (%a1),%d2
     move.l %d0,%d5
     lsr.l #6,%d0
     lea mh_masks,%a0
@@ -441,10 +315,6 @@ mh_direct:
     lea ch_current,%a0
     moveq #0,%d1
     move.b (%a0,%d7.l),%d1
-    cmpi.l #3,%d6 /* legacy seventh, until project migration */
-    bne.s .gen_quality
-    moveq #1,%d1
-.gen_quality:
     move.l %d2,%d0
     move.l %d4,%d2
     move.l %d5,%d3
@@ -545,6 +415,24 @@ mh_prepare:
     .global mh_final,mh_output
 mh_final:
     jmp ch_final
+    .global mh_final_ui
+mh_final_ui:
+    lea -8(%sp),%sp
+    movem.l %d2/%a0,(%sp)
+    lea ch_current,%a0
+    moveq #0,%d2
+    move.b (%a0,%d1.l),%d2
+    cmpi.l #5,%d2
+    bcs.s .final_ui_scale
+    cmpi.l #7,%d2
+    bhi.s .final_ui_scale
+    movem.l (%sp),%d2/%a0
+    addq.l #8,%sp
+    rts
+.final_ui_scale:
+    movem.l (%sp),%d2/%a0
+    addq.l #8,%sp
+    bra.w mh_quant_ui
 
 /* Sequenced pools already contain TRAN from chord generation; do not add it
  * twice. Live pools contain absolute keyboard pitches, so their arp output
@@ -605,14 +493,8 @@ mh_output:
     add.l %d3,%d0
     jmp 0x4009fb8c
 
+/* Settings live in native Parts. These hooks reset runtime state only. */
 mh_reset:
-    clr.l ch_legacy7_mask
-    lea MH_NV,%a0
-    clr.l (%a0)
-    clr.l 4(%a0)
-    clr.b 8(%a0)
-    moveq #0x4f,%d0
-    move.b %d0,MH_VERSION
     jsr mh_voice_clear
     rts
 mh_defaults:
@@ -625,333 +507,15 @@ mh_defaults:
     jmp 0x40025ace
 mh_boot:
     jsr ch_lock_init
-    lea -16(%sp),%sp
-    movem.l %d0-%d2/%a0,(%sp)
-    move.b MH_VERSION,%d1
-    cmpi.b #0x4f,%d1
-    beq.s .boot_valid
-    moveq #127,%d0 /* previous Harmony packing, including OMIT */
-    cmpi.b #0x4d,%d1
-    beq.s .boot_migrate_start
-    moveq #59,%d0 /* 0x4c: manual inversions, add OMIT OFF. */
-    cmpi.b #0x4c,%d1
-    beq.s .boot_migrate_start
-    moveq #11,%d0 /* 0x4b: preserve TYPE/SPRD/AUTO, add root inversion. */
-    cmpi.b #0x4b,%d1
-    beq.s .boot_migrate_start
-    moveq #3,%d0 /* 0x4a: preserve TYPE/AUTO, add CLOSE/root inversion. */
-    cmpi.b #0x4a,%d1
-    bne.s .boot_reset
-.boot_migrate_start:
-    lea MH_NV,%a0
-    moveq #8,%d2
-.boot_migrate:
-    moveq #0,%d1
-    move.b (%a0),%d1
-    cmp.l %d0,%d1
-    bhi.s .boot_migrate_bad
-    andi.l #15,%d1
-    cmpi.l #11,%d1
-    bls.s .boot_migrate_next
-.boot_migrate_bad:
-    clr.b (%a0)
-.boot_migrate_next:
-    addq.l #1,%a0
-    subq.l #1,%d2
-    bne.s .boot_migrate
-    moveq #0x4f,%d1
-    move.b %d1,MH_VERSION
-    jsr ch_migrate_settings
-    bra.s .boot_valid
-.boot_reset:
+    lea -12(%sp),%sp
+    movem.l %d0-%d1/%a0,(%sp)
     bsr.w mh_reset
-.boot_valid:
-    moveq #0,%d2
-.boot_track:
-    move.l %d2,%d0
-    lea MH_NV,%a0
-    move.b (%a0,%d2.l),%d1
-    andi.l #15,%d1
-    cmpi.l #11,%d1
-    bhi.s .boot_track_bad
-    andi.l #3,%d1
-    cmpi.l #2,%d1
-    bls.s .boot_next
-.boot_track_bad:
-    clr.b (%a0,%d2.l)
-.boot_next:
-    addq.l #1,%d2
-    cmpi.l #8,%d2
-    bne.s .boot_track
-    jsr mh_voice_clear
-    movem.l (%sp),%d0-%d2/%a0
-    lea 16(%sp),%sp
+    movem.l (%sp),%d0-%d1/%a0
+    lea 12(%sp),%sp
     move.b 0x100b14ae,%d0
     extb.l %d0
     jmp 0x4001022a
 
-/* Comments are ignored by stock firmware. Parse-only passes never write.
- * Adjacent, non-overlapping hooks coexist with Quantizer's project hooks.
- */
-mh_load:
-    cmpi.l #35,%d0
-    bne.w .load_stock
-    lea -32(%sp),%sp
-    movem.l %d0-%d3/%d5/%a0-%a1,(%sp)
-    clr.l 28(%sp) /* 0=TYPE, 1=VOIC, 2=SPRD, 3=legacy OMIT, 4=legacy seventh, 5=ROOT */
-    move.l %d3,%a0
-    lea mh_key,%a1
-.load_prefix:
-    moveq #0,%d0
-    move.b (%a1)+,%d0
-    beq.s .load_track
-    cmp.b (%a0)+,%d0
-    bne.s .load_other_prefix
-    bra.s .load_prefix
-.load_other_prefix:
-    addq.l #1,28(%sp)
-    move.l 28(%sp),%d5
-    cmpi.l #5,%d5
-    bhi.w .load_done
-    move.l %d3,%a0
-    lea mh_root_key,%a1
-    beq.s .load_prefix
-    cmpi.l #4,%d5
-    lea ch_legacy_key,%a1
-    beq.s .load_prefix
-    cmpi.l #3,%d5
-    lea mh_omit_key,%a1
-    beq.s .load_prefix
-    cmpi.l #2,%d5
-    lea mh_sprd_key,%a1
-    beq.s .load_prefix
-    lea mh_voic_key,%a1
-    bra.s .load_prefix
-.load_track:
-    moveq #0,%d2
-    move.b (%a0)+,%d2
-    subi.l #49,%d2
-    cmpi.l #7,%d2
-    bhi.w .load_done
-    move.b (%a0)+,%d0
-    cmpi.b #61,%d0
-    bne.w .load_done
-    moveq #0,%d1
-    moveq #0,%d3
-.load_digit:
-    moveq #0,%d0
-    move.b (%a0)+,%d0
-    subi.l #48,%d0
-    cmpi.l #9,%d0
-    bhi.s .load_end
-    addq.l #1,%d3
-    cmpi.l #3,%d3
-    bhi.w .load_done
-    move.l %d1,%d5
-    lsl.l #2,%d1
-    add.l %d5,%d1
-    add.l %d1,%d1
-    add.l %d0,%d1
-    bra.s .load_digit
-.load_end:
-    tst.l %d3
-    beq.w .load_done
-    addi.l #48,%d0
-    beq.s .load_validate
-    cmpi.l #13,%d0
-    beq.s .load_validate
-    cmpi.l #10,%d0
-    bne.w .load_done
-.load_validate:
-    cmpi.l #4,%d1
-    bhi.w .load_done
-    tst.l 90(%sp) /* loader's parse-only flag at original sp+58 */
-    bne.w .load_done
-    move.l %d2,%d0
-    tst.l 28(%sp)
-    beq.s .load_type
-    move.l 28(%sp),%d5
-    cmpi.l #5,%d5
-    beq.s .load_root
-    cmpi.l #4,%d5
-    beq.s .load_legacy
-    cmpi.l #3,%d5
-    beq.s .load_omit
-    cmpi.l #2,%d5
-    beq.s .load_sprd
-    bsr.w mh_voic_set /* independently validates 0..4; 0/1 retain their meaning */
-    bra.s .load_done
-.load_root:
-    bsr.w mh_root_set
-    bra.s .load_done
-.load_omit:
-    bsr.w mh_omit_set
-    bra.s .load_done
-.load_sprd:
-    bsr.w mh_sprd_set /* independently validates 0..2 */
-    bra.s .load_done
-.load_legacy:
-    jsr ch_legacy_set
-    bra.s .load_done
-.load_type:
-    cmpi.l #3,%d1
-    bne.s .load_type_new
-    moveq #1,%d1
-    jsr ch_legacy_set
-    moveq #2,%d1
-.load_type_new:
-.ifdef HAVE_DEGREES
-    bsr.w mh_set_native
-.else
-    bsr.w mh_set
-.endif
-.load_done:
-    movem.l (%sp),%d0-%d3/%d5/%a0-%a1
-    lea 32(%sp),%sp
-    jmp 0x40088224
-.load_stock:
-    cmp.l %d0,%d5
-    beq.s .load_comment
-    jmp 0x400867b0
-.load_comment:
-    jmp 0x40088224
-
-mh_save:
-    move.l %d7,-(%sp)
-    moveq #0,%d7
-.save_track:
-    move.l %d7,%d0
-    bsr.w mh_get
-    move.l %d0,-(%sp)
-    move.l %d7,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea mh_fmt
-    move.l %d2,-(%sp)
-    jsr (%a4)
-    move.l %d2,-(%sp)
-    jsr (%a3)
-    move.l %d0,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d3,-(%sp)
-    jsr (%a2)
-    lea 32(%sp),%sp
-    tst.l %d0
-    bmi.w .save_fail
-    move.l %d7,%d0
-    bsr.w mh_voic_get
-    move.l %d0,-(%sp)
-    move.l %d7,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea mh_voic_fmt
-    move.l %d2,-(%sp)
-    jsr (%a4)
-    move.l %d2,-(%sp)
-    jsr (%a3)
-    move.l %d0,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d3,-(%sp)
-    jsr (%a2)
-    lea 32(%sp),%sp
-    tst.l %d0
-    bmi.w .save_fail
-    move.l %d7,%d0
-    bsr.w mh_sprd_get
-    move.l %d0,-(%sp)
-    move.l %d7,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea mh_sprd_fmt
-    move.l %d2,-(%sp)
-    jsr (%a4)
-    move.l %d2,-(%sp)
-    jsr (%a3)
-    move.l %d0,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d3,-(%sp)
-    jsr (%a2)
-    lea 32(%sp),%sp
-    tst.l %d0
-    bmi.w .save_fail
-    move.l %d7,%d0
-    bsr.w mh_omit_get
-    move.l %d0,-(%sp)
-    move.l %d7,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea mh_omit_fmt
-    move.l %d2,-(%sp)
-    jsr (%a4)
-    move.l %d2,-(%sp)
-    jsr (%a3)
-    move.l %d0,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d3,-(%sp)
-    jsr (%a2)
-    lea 32(%sp),%sp
-    tst.l %d0
-    bmi.w .save_fail
-    move.l %d7,%d0
-    bsr.w mh_root_get
-    move.l %d0,-(%sp)
-    move.l %d7,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea mh_root_fmt
-    move.l %d2,-(%sp)
-    jsr (%a4)
-    move.l %d2,-(%sp)
-    jsr (%a3)
-    move.l %d0,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d3,-(%sp)
-    jsr (%a2)
-    lea 32(%sp),%sp
-    tst.l %d0
-    bmi.w .save_fail
-    move.l ch_legacy7_mask,%d0
-    lsr.l %d7,%d0
-    andi.l #1,%d0
-    move.l %d0,-(%sp)
-    move.l %d7,%d0
-    addq.l #1,%d0
-    move.l %d0,-(%sp)
-    pea ch_legacy_fmt
-    move.l %d2,-(%sp)
-    jsr (%a4)
-    move.l %d2,-(%sp)
-    jsr (%a3)
-    move.l %d0,-(%sp)
-    move.l %d2,-(%sp)
-    move.l %d3,-(%sp)
-    jsr (%a2)
-    lea 32(%sp),%sp
-    tst.l %d0
-    bmi.w .save_fail
-    addq.l #1,%d7
-    cmpi.l #8,%d7
-    bne.w .save_track
-    move.l (%sp)+,%d7
-    move.b 0x8000004e,%d0
-    extb.l %d0
-    jmp 0x40088888
-.save_fail:
-    move.l (%sp)+,%d7
-    jmp 0x40089638
-ch_legacy_key: .asciz "#MIDI_HARMONY_LEGACY7_V1_T"
-ch_legacy_fmt: .asciz "#MIDI_HARMONY_LEGACY7_V1_T%d=%d\r\n"
-mh_key: .asciz "#MIDI_HARMONY_TYPE_V1_T"
-mh_fmt: .asciz "#MIDI_HARMONY_TYPE_V1_T%d=%d\r\n"
-mh_sprd_key: .asciz "#MIDI_HARMONY_SPRD_V1_T"
-mh_sprd_fmt: .asciz "#MIDI_HARMONY_SPRD_V1_T%d=%d\r\n"
-mh_root_key: .asciz "#MIDI_HARMONY_ROOT_V1_T"
-mh_root_fmt: .asciz "#MIDI_HARMONY_ROOT_V1_T%d=%d\r\n"
-mh_omit_key: .asciz "#MIDI_HARMONY_OMIT_V1_T"
-mh_omit_fmt: .asciz "#MIDI_HARMONY_OMIT_V1_T%d=%d\r\n"
-mh_voic_key: .asciz "#MIDI_HARMONY_VOIC_V1_T"
-mh_voic_fmt: .asciz "#MIDI_HARMONY_VOIC_V1_T%d=%d\r\n"
-    .balign 2
 /* NOTE SETUP F TYPE. Follow's shared callback forwards every non-D knob
  * here; without Follow the stock callback pointer already names this entry.
  */
@@ -1042,7 +606,7 @@ mh_arp_encoder:
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     move.l %d0,%d1
-    bsr.w mh_source
+    bsr.w mh_source_ui
     cmp.l %d1,%d0
     beq.s .arp_local
     movem.l (%sp),%d0-%d1/%a0
@@ -1091,7 +655,7 @@ mh_keyboard:
     beq.w .keyboard_done
 .keyboard_new:
     move.l %d2,%d0
-    bsr.w mh_active
+    jsr mh_get
     beq.w .keyboard_passthrough
     move.l %d0,%d6
     tst.l %d4
@@ -1109,13 +673,13 @@ mh_keyboard:
     moveq #0,%d0
     move.b (%a2),%d0
     move.l %d2,%d1
-    bsr.w mh_final
+    bsr.w mh_final_ui
     bsr.w mh_latch_key_root
 .endif
     /* The root latch above must see the musical root, never the inversion. */
     move.l %d2,%d0
     move.l %a2,%a0
-    bsr.w mh_voice
+    bsr.w mh_voice_ui
     /* Record the physical key once, independently of snapping/live voices. */
     move.l %d5,-(%sp)
     move.l %d4,-(%sp)
@@ -1128,7 +692,7 @@ mh_keyboard:
     moveq #0,%d0
     move.b (%a2,%d6.l),%d0
     move.l %d2,%d1
-    bsr.w mh_final
+    bsr.w mh_final_ui
     moveq #-1,%d1
     move.b %d1,(%a3,%d6.l)
     cmpi.l #127,%d0
@@ -1194,7 +758,7 @@ mh_keyboard:
     tst.l %d4
     beq.s .keyboard_stock
     move.l %d2,%d0
-    bsr.w mh_active
+    jsr mh_get
     beq.s .keyboard_passthrough
     /* Repeated press: release the old stock note before changing ownership. */
     move.l %d5,-(%sp)
@@ -1362,12 +926,12 @@ mh_draw_key:
     movem.l %d0-%d1/%a0,(%sp)
     moveq #0,%d0
     move.b 0x100b14cc,%d0
-    bsr.w mh_source
+    move.l %d0,-(%sp)
+    jsr mp_ui_context
     move.l %d0,%d1
-    lsl.l #6,%d0
-    lea 0x46c76df1,%a0
-    adda.l %d0,%a0
-    move.b (%a0,%d1.l*4),%d4
+    move.l (%sp)+,%d0
+    bsr.w mh_raw_key_at
+    move.l %d0,%d4
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
 .draw_key_done:

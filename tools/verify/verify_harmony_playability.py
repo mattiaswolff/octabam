@@ -42,7 +42,7 @@ def machine():
                 for key in range(12):
                     for quality in qualities:
                         m.setting(0,2 if 'ch_current' in m.sym else quality+2,key,max(0,mode))
-                        if mode<0:u.mem_write(0x46c76df1,b'\0')
+                        if mode<0:m.set_key(0,0)
                         if 'ch_current' in m.sym:u.mem_write(m.sym['ch_current'],bytes((quality,)))
                         m.call('mh_voic_set',0,1);m.call('mh_sprd_set',0,spread)
                         m.call('mh_width_set',0,width)

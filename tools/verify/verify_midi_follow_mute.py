@@ -51,9 +51,6 @@ def port_gate(image, project, out):
         harmony = mode.startswith('harmony') or mode == 'chord-locks'
         for path in (work/'project').glob('project.*'):
             data = re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n', b'', path.read_bytes(), flags=re.M)
-            if harmony:
-                follower_type = 0 if mode == 'chord-locks' else 2
-                data += f'\r\n#MIDI_HARMONY_TYPE_V1_T{leader+1}=2\r\n#MIDI_HARMONY_TYPE_V1_T2={follower_type}\r\n'.encode()
             path.write_bytes(data)
         for path in (work/'project').glob('bank*.work'):
             def setup(data):
@@ -61,6 +58,7 @@ def port_gate(image, project, out):
                     base = otp.PART_BASE + part*otp.PART_STRIDE + 9
                     for track in range(8):
                         data[base+0x4e2+36*track+17] = 1 if harmony else 0
+                        data[base+0x4e2+36*track+5] = (2 if track==leader or (track==1 and mode!='chord-locks') else 0) if harmony else 0
                     if mode == 'scales':
                         data[base+0x4e2+36*leader+17] = 25
                     if harmony and arp:
@@ -87,7 +85,7 @@ def port_gate(image, project, out):
                          '--step', '2500:poke:0x8000000e=0']
             if mode in ('scales', 'chord-locks'):
                 # Change source KEY during the mute interval in all controls.
-                args += ['--step', f'1600:poke:{0x46c76df1+68*leader:#x}=2']
+                args += ['--step', f'1600:poke:{0x46c76df1+68*leader:#x}=2;{0x400e21e0+0x8ed80+0x4e2+36*leader+17:#x}=2;{0x100a4ece+0x4e2+36*leader+17:#x}=2']
             if mode == 'chord-locks':
                 table = sym['ch_lock_table'] + leader*64
                 args += ['--step', f'-:poke:{table+2:#x}=1;{table+4:#x}=5;{table+8:#x}=7']

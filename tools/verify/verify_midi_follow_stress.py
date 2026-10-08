@@ -32,19 +32,19 @@ def machine(seed=20261008, steps=12000):
         graph = [0]*8
         for a,b in zip(order,order[1:]):
             graph[a] = b+1
-        u.mem_write(s['bf_sources'],bytes(graph))
+        m.follow_write('source',bytes(graph),0)
         # Closing the eight-node chain must never be accepted by the selector.
         m.call('bf_select',order[-1],8)
-        changed = list(u.mem_read(s['bf_sources'],8))
+        changed = list(m.follow_read('source',8,0))
         assert changed == graph, (seed,order,changed)
         count += 1
     graph = [0]*8
-    u.mem_write(s['bf_sources'],bytes(graph))
+    m.follow_write('source',bytes(graph),0)
     for i in range(steps):
         t,delta = rng.randrange(8),rng.choice((-2147483648,-8,-1,0,1,8,2147483647))
-        before = list(u.mem_read(s['bf_sources'],8))
+        before = list(m.follow_read('source',8,0))
         m.call('bf_select',t,delta & 0xffffffff)
-        graph = list(u.mem_read(s['bf_sources'],8))
+        graph = list(m.follow_read('source',8,0))
         assert all(source(graph,j) is not None for j in range(8)),(seed,i,graph)
         assert all(graph[j]==before[j] for j in range(8) if j!=t),(seed,i,graph)
         if i%8==0:
@@ -56,14 +56,14 @@ def machine(seed=20261008, steps=12000):
     for graph in graphs:
         roots = [rng.randrange(128) for _ in range(8)]
         roots[rng.randrange(8)] = 255
-        u.mem_write(s['bf_sources'],bytes(graph))
+        m.follow_write('source',bytes(graph),0)
         u.mem_write(s['bf_pitches'],bytes(roots))
         u.mem_write(s['bf_roots'],bytes(36+n%12 if n<128 else 255 for n in roots))
         modes = [rng.randrange(2) for _ in range(8)]
         fixed = [rng.randrange(11) for _ in range(8)]
         offsets = [rng.randrange(-2,3) for _ in range(8)]
-        for name,values in [('bf_reg_modes',modes),('bf_reg_fixed',fixed),('bf_reg_offsets',offsets)]:
-            u.mem_write(s[name],bytes(v&255 for v in values))
+        for name,values in [('mode',modes),('fixed',fixed),('offset',offsets)]:
+            m.follow_write(name,bytes(v&255 for v in values))
         for t in range(8):
             ultimate = source(graph,t)
             if 'mh_source' in s:
@@ -84,7 +84,7 @@ def machine(seed=20261008, steps=12000):
                 assert u.mem_read(m.scratch,1)[0]==expected,(seed,graph,t,slot,original,tran,expected)
                 assert all(m.stack-192<=a and a+n<=m.stack+4 or a==m.scratch and n==1 for a,n in m.writes),m.writes
                 outputs += 1
-        assert list(u.mem_read(s['bf_sources'],8))==graph
+        assert list(m.follow_read('source',8,0))==graph
     print(f'[ok] {count} full-chain permutations, {steps} live graph edits, {outputs} routed outputs; bounded cycles, register/TRAN and write guards',flush=True)
     return dict(seed=seed,chain_permutations=count,edits=steps,outputs=outputs)
 

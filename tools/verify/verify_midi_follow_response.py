@@ -10,7 +10,7 @@ def fixture(pitches=(36,), response=1, receiver=1, source=0):
     m=Machine();u=m.uc;s=m.sym;m.events=[]
     u.mem_write(0x46c78152,b'\xff'*2048)
     u.mem_write(0x46c77a16,b'\xff'*256)
-    u.mem_write(s['bf_sources']+receiver,bytes((source+1,)))
+    m.follow_write('source',bytes((source+1,)),receiver)
     u.mem_write(s['bf_roots']+source,b'\x24')
     u.mem_write(s['bf_pitches']+source,b'\x3c')
     u.mem_write(0x46c76fe0+receiver*32+12,b'\x40')
@@ -71,12 +71,12 @@ def machine():
         source=(receiver+1)%8;m=fixture(receiver=receiver,source=source)
         assert m.change()==[(0x90+receiver,36,0),(0x90+receiver,41,91)]
     m=fixture();s=m.sym
-    m.uc.mem_write(s['bf_sources']+1,b'\x03')
-    m.uc.mem_write(s['bf_sources']+2,b'\x01')
+    m.follow_write('source',b'\x03',1)
+    m.follow_write('source',b'\x01',2)
     assert m.change()==[(0x91,36,0),(0x91,41,91)],'ultimate source chain'
     m=fixture();assert m.change(72)==[],'FIXED ignores source octaves'
     m=fixture(pitches=(60,));s=m.sym
-    m.uc.mem_write(s['bf_reg_modes']+1,b'\x01')
+    m.follow_write('mode',b'\x01',1)
     m.call('bf_response_observe',regs={UC_M68K_REG_D7:1,UC_M68K_REG_D4:0,UC_M68K_REG_A2:m.scratch})
     assert m.change(72)==[(0x91,60,0),(0x91,72,91)]
     m=fixture();m.uc.mem_write(0x46c76fe0+32+12,b'\x47')
@@ -87,6 +87,28 @@ def machine():
     assert m.change()==[],'setting switch must arm at next ordinary trig'
     m.call('bf_response_observe',regs={UC_M68K_REG_D7:1,UC_M68K_REG_D4:0,UC_M68K_REG_A2:m.scratch})
     assert m.change(67)==[],'arp-only output cannot arm an unknown cached pool'
+    # New Parts and same-slot native replacement must not retune old voices.
+    # An unrelated Part replacement must leave this receiver's anchor intact.
+    from verify_midi_part_settings import symbols, B, PS
+    for operation in ('switch','replace','unrelated'):
+        m=fixture();m.sym.update(symbols());u=m.uc
+        part0=B+0x8ed80
+        source=0x47002000
+        u.mem_write(source,bytes(u.mem_read(part0,PS)))
+        if operation=='switch':
+            u.mem_write(part0+PS,bytes(u.mem_read(part0,PS)))
+            u.mem_write(0x80001832+1,b'\x01')
+        else:
+            dest=part0+(3*PS if operation=='unrelated' else 0)
+            u.mem_write(m.stack+4,b''.join(v.to_bytes(4,'big') for v in (dest,source,PS)))
+            m.call('mp_native_copy')
+        events=m.change()
+        if operation=='unrelated':
+            assert events==[(0x91,36,0),(0x91,41,91)]
+        else:
+            assert events==[],operation
+            assert int.from_bytes(u.mem_read(0x46c77a3a,4),'big')==36,'old release pitch changed'
+    print('[ok] Part switch/same-slot replacement disarm LIVE until a native trig; unrelated Parts preserve held response')
     print('[ok] TRIG identity; LIVE held root/voices, repeated roots, rests, scheduled edges, mute/enable/channel gates, ownership collisions, MIDI bounds, all receivers and unchanged release deadlines')
 
 if __name__=='__main__':

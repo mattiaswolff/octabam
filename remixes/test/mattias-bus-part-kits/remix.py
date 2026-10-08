@@ -1,14 +1,25 @@
-"""OCTABAM2 selection plus MIDI Follow, Scales and Harmony, isolated compatibility candidate."""
+"""Native MIDI Part settings with KITS on the personal bus selection.
+
+The FX2 layout is deliberately a send/return rig: BusDelay on T1, BusVerb
+on T5, SEND on the other sound tracks, and stock DELAY on the T8 master.
+FX1 is deliberately a compact station bank: Spectrum, Character and
+Modulation replace the stock chooser's Filter, Lo-Fi and Chorus positions.
+
+This is a source selection only.  It must pass `make check REMIX=mattias-bus`
+on a setup containing the user's own 1.40C before an image is considered for
+flashing.
+"""
+
 from remix.schema import Proof, Remix
 
 
 REMIX = Remix(
-    name="mattias-midi-harmony",
+    name="mattias-bus-part-kits",
     family="mods",
-    proof=Proof.PORT,
-    proof_note="local OCTABAM2 compatibility candidate; not flashed",
+    proof=Proof.CHECK,
+    proof_note="Combined development candidate; full checks and hardware acceptance pending",
     doc=("Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and "
-         "Modulation on FX1; Mode Defaults, RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony."),
+         "Modulation on FX1; RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony with Chord Play."),
     modules=(
         # Fixed FX2 send/return layout.
         "REVERB SERVER",
@@ -31,6 +42,7 @@ REMIX = Remix(
         "RLEN PLEN",
         "TUNER",
         "MIDI PART STATE", "MIDI FOLLOW",
+        "KITS",
         "MIDI SCALES",
         "MIDI HARMONY",
     ),

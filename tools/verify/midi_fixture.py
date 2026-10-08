@@ -30,6 +30,10 @@ def fixture(source, dest, arp=False, leader=0, offsets=None):
                         data[at+12] = 71  # whole-track TRAN +7; unlocked steps inherit
                     channel = {7: 13, 1: 5, 2: 3}.get(t, 0) if leader == 7 else t + 1
                     data[base + 0x4e2 + 36*t] = channel if t in steps else 0
+                    # Fresh native custom settings, independent of the template.
+                    # The stock control ignores/clamps these blank SETUP fields.
+                    for field,value in ((3,0),(5,0),(12,0),(13,3),(15,2),(16,0),(18,0),(19,0)):
+                        data[base + 0x4e2 + 36*t + field] = value
             for p in range(16):
                 # Explicit normal scale mode, 64-step cycle at 1x. Otherwise
                 # an advanced-mode template can wrap during the MIDI capture.
