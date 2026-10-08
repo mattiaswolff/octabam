@@ -36,7 +36,8 @@ MODULE = Module(
              Detour(0x4009FB80, bytes.fromhex("12126d0001a6"),
                    "bassfollow", "bf_note",
                    "resolve root before the sequencer records the emitted note"),),
-    gates=(Gate("tools/verify/verify_midi_follow_response.py", stage="image", venv=True),
+    gates=(Gate('tools/verify/verify_midi_follow_stress.py', stage='image', venv=True),
+           Gate("tools/verify/verify_midi_follow_response.py", stage="image", venv=True),
            Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),
            Gate("tools/verify/verify_midi_follow_register.py", stage="image", venv=True)),
 )
