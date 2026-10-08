@@ -187,6 +187,6 @@ The branch setup and an assembled image do not establish hardware readiness.
    and prepare a new numbered candidate. Keep the earlier record unchanged.
 
 Chord Play adds project companion files. Back up the whole project with its
-companions, and review [Harmony's storage notes](../../modules/midi-harmony/README.md#chrd-storage-and-migration)
+companions, and review [Harmony's storage notes](../../modules/midi-harmony/README.md#chrd-storage)
 before testing save, reload, or migration. No existing card or hardware
 project is modified by setting up these branches.

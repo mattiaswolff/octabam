@@ -1,4 +1,4 @@
-/* OS 1.40C. All new state is module-owned volatile DRAM. */
+/* OS 1.40C. Routing settings belong to native Parts; root history is volatile. */
     .text
     .include "remix.inc"
     .global bf_capture, bf_note, bf_roots, bf_pre_capture

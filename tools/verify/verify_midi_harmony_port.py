@@ -417,6 +417,8 @@ def persistence(source,voic=1,omit=0):
     for track in range(8):
         at=0x4e2+36*track
         assert state[at+5]==state[at+16]==state[at+12]==0
+        if follow_settings:
+            assert (state[at+3],state[at+13],state[at+15])==(0,3,2)
     print('  [ok] UART Harmony controls including WIDTH, native bank SAVE, disk reload, CS1 warm boot and fresh-project defaults',flush=True)
     return {work.name:'pass'}
 

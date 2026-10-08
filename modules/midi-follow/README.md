@@ -300,14 +300,15 @@ signed octave. Register values and behavior are unchanged.
 Press D on MIDI NOTE SETUP to open RFOL, then turn D inside the window
 (**UPDT**, lower left). A/B/C remain RFOL, MODE and OCT.
 
-- **TRIG** is the boot default and keeps the original behavior: the receiver
+- **TRIG** is the fresh-Part default and keeps the original behavior: the receiver
   uses the latest source root on its next scheduled note.
 - **LIVE** also moves an already-sounding sequenced bass when the ultimate
   source changes root. It sends note-off for the old pitch and note-on for
   the new one, restarting the synth envelope. Rests stay silent. The original
   release deadline and the next programmed trig stay in place.
 
-The setting is per receiver, volatile, and takes effect from its next ordinary trig (not an arp-only tick).
+The setting belongs to each receiver in the native Part and takes effect
+from its next ordinary trig (not an arp-only tick).
 Live source-key changes are handled on the next sequencer service pass, not
 held until the next receiver trig. This is not a measured zero-latency claim.
 A source change coinciding with a scheduled receiver event does not add an

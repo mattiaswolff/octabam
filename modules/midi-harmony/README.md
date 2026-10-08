@@ -81,7 +81,7 @@ NOTE and snaps when Harmony plays it. Shared chord tones do not suppress
 a new key's recording. Playback regenerates the chord from NOTE, including
 when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
 
-HARM, VOIC, SPRD and ROOT are native Part settings for each MIDI track,
+HARM, VOIC, SPRD, ROOT and WIDTH are native Part settings for each MIDI track,
 alongside KEY. UI edits address the selected working Part; playback reads each
 track's playing Part. MIDI Follow stores its source, register choices and
 response in that same native Part. KITS carries these bytes through ordinary
@@ -103,7 +103,7 @@ and become available again with HARM OFF. Turning D alone selects the live
 chord. The CHRD knob displays this base value during performance; temporary
 extensions appear in the sounding-chord guide. Hold one or more sequencer steps and turn D to edit their CHRD locks;
 press D while holding steps to toggle their locks. Unlocked steps display
-and play TRI, independently of the live selection or the previous step.
+and play the current Part's base CHRD, independently of the previous step.
 
 Choose CHORD PLAY with the normal FUNC + UP/DOWN mode selector. Outside grid
 recording, trigs 1–8 play the selected scale from tonic through the next octave.
@@ -152,12 +152,12 @@ track-wide controls in the Harmony window; they are not CHRD locks. Follow
 inherits roots and scales as before, while every follower resolves its own
 CHRD. Live playing does not take over a running leader pattern.
 
-## CHRD storage and migration
+## CHRD storage
 
 Bank-load companion handling runs after the native load calls return. Their
 original callsites and return addresses remain intact so caller-sensitive
 modules such as KITS can distinguish project load, bank reload and resume.
-This does not put CHRD locks or Harmony settings inside Kits.
+CHRD locks stay with patterns; Part-owned settings and base CHRD travel with Kits.
 The `verify_chord_storage.py` gate checks all four load continuations, including
 negative native results. Run `verify_chord_play_port.py --project <copy>
 --load-lifecycle-only` for recorded CHRD save/load/resume/reload coverage.
@@ -169,13 +169,13 @@ the project when copying or backing it up:
 
 - `chrd01.work` through `chrd16.work` accompany working banks.
 - `.strd` companions follow project store/reload and Save As copies.
-- Version 1 has a 32-byte big-endian header: CHRD magic, version, bank index,
+- Version 2 has a 32-byte big-endian header: CHD2 magic, version, bank index,
   payload length, FNV-1a payload checksum, native NOTE/trig fingerprint, and
   two zero reserved words. Payload length is exactly 8192 bytes.
-- A 32-byte CHNO marker with zero remaining words explicitly represents an
-  older stored bank without companion data; it replaces any stale target.
+- A 32-byte CHD0 marker with zero remaining words explicitly represents a
+  stored bank without companion data; it replaces any stale target.
 
-Missing companions mean unlocked TRI in ordinary projects. Bad size, version,
+Missing companions mean unlocked steps that inherit native base CHRD. Bad size, version,
 checksum or value range is rejected before any table byte is published. A
 native NOTE/trig fingerprint mismatch also rejects the companion. The main
 NOTE label becomes CH!, and the CHORD PLAY guide identifies a bad file,
@@ -185,12 +185,8 @@ bad companion from a local project copy and reload it to explicitly discard
 its locks. The fingerprint checks NOTE roots and note-trig placement, not all
 unrelated CC/Part contents or project identity.
 
-Old HARM TRI becomes CHORD. Old HARM 7TH becomes CHORD and existing note trigs
-receive explicit 7TH locks when their bank has no companion. Newly placed or
-unlocked trigs still use TRI. A versioned legacy eligibility comment allows
-an old stored bank to migrate when reloaded later. VOIC/SPRD and root handling are retained.
-A valid new companion is authoritative; corrupt files are never guessed from
-legacy settings.
+The greenfield companion has no decoder for earlier formats. Native Part
+defaults are neither stored in the companion nor covered by its fingerprint.
 
 The current bank has a dense checksummed battery-RAM mirror at 0x100f8600
 (8224 bytes including its header). It retains all 8192 locks without a sparse
@@ -241,13 +237,13 @@ After a separately authorized firmware transfer, use a disposable project:
    with notes held: no note should remain sounding.
 4. Record the Cm/Cm7/Csus4/Fm gesture. Replay it; inspect native NOTE and
    CHRD locks. Turn D live to another quality: recorded locks remain intact.
-   Clear one CHRD lock after a different-quality step: it must play TRI.
+   Clear one CHRD lock after a different-quality step: it must inherit base CHRD.
    Hold a step and turn/push D; check its lock without changing NOT2–4.
 5. Copy/paste and clear/undo steps, tracks and patterns, including another
    bank. Save, edit, reload the current bank and project; use Save To New and
    load that copy. Keep bank files and companions together in backups.
 6. With an unsaved current-bank CHRD edit, perform a normal power cycle and
-   confirm retention. Use a backup copy to check old seventh-project migration.
+   confirm retention.
    Check HARM OFF restores the original notes, NOT2–4 and CC behavior.
 
 Emulation does not prove physical LED colors/brightness, audio load under
@@ -368,8 +364,7 @@ At the high MIDI limit, ROOT placement acts on the available tones, retaining
 the generator's omission of unavailable upper voices. An empty OMIT result
 remains silent with balanced key/recording ownership and a safe arp pool.
 
-Existing OMIT OFF/ROOT settings migrate to ROOT KEEP/OMIT. ROOT remains a
-per-track project setting, not a parameter-lock destination.
+ROOT is a per-track Part setting, not a parameter-lock destination.
 
 ## Implementation boundaries
 
@@ -390,29 +385,13 @@ recorded. Explicit MAJ, MIN and DOM7 qualities retain their selected intervals. 
 its old final bass-only
 replacement when Harmony is active. Each module also builds independently.
 
-Battery RAM 0x100b14e2..e9 stores one byte per track: TYPE in bits 0–1,
-SPRD in bits 2–3 (0 CLOSE, 1 OPEN, 2 WIDE), manual inversion in bits 4–5
-(0 root, 1 first, 2 second, 3 third), and ROOT in bits 6–7 (0 KEEP, 1 OMIT,
-2 -1 OCT, 3 -2 OCT). ea retains one AUTO bit per track; eb is version 0x4f.
-Fresh projects are the target for this combined development build; the
-intermediate 0x4e development layout resets. Existing support for older
-versions is retained: boot migrates 0x4d preserving the former OMIT bit; its formerly invalid bit-7
-values reset rather than becoming accidental octave drops. Versions 0x4c,
-0x4b and 0x4a retain their supported settings with ROOT KEEP. Invalid spread
-encodings reset the affected track. Quantizer's ec..ee bytes stay separate.
-
-Project comments write TYPE_V1 (0..2), VOIC_V1 (0..4) and SPRD_V1 (0..2).
-The reader also accepts historical TYPE_V1=3 as CHORD with a seventh default.
-`#MIDI_HARMONY_ROOT_V1_T1=0` through T8 store ROOT (0..3). Old
-`#MIDI_HARMONY_OMIT_V1_T1=0` through T8 are still read as KEEP/OMIT; save
-writes a legacy OMIT value first, then the full ROOT value, for each track.
-The legacy value is 1 only for OMIT; older firmware falls back to KEEP for
-an octave-drop selection. Parse-only loads never write settings. Missing
-comments default to HARM OFF, VOIC ROOT, SPRD CLOSE and ROOT KEEP.
-Native Part/pattern formats are unchanged. Older firmware resets Harmony's
-battery state on a version mismatch; reload a saved project after rollback
-to restore the settings that firmware supports. Voice-leading history and
-window state are volatile module DRAM, not project data.
+Native MIDI SETUP stores HARM at offset 5; VOIC/SPRD/ROOT share offset 16
+(bits 0–2 / 3–4 / 5–6). WIDTH uses bit 2 of the shared offset-12 flags byte,
+alongside Follow MODE/response. Base CHRD uses offset 18. These fields have
+explicit native ranges and defaults and use the shared Part access helpers.
+No project-comment or private battery settings store is used. The native
+Part lifecycle owns persistence; held-note identity, voice-leading history
+and window state remain runtime-only.
 
 ## Reusable verification
 
