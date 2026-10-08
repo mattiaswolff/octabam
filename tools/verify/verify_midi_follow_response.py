@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Linked-code tests for the temporary Follow NEXT/CHANGE response control."""
+"""Linked-code tests for the Follow TRIG/LIVE update control."""
 import argparse
 from midi_machine import Machine
 from unicorn import UC_HOOK_CODE
@@ -87,7 +87,7 @@ def machine():
     assert m.change()==[],'setting switch must arm at next ordinary trig'
     m.call('bf_response_observe',regs={UC_M68K_REG_D7:1,UC_M68K_REG_D4:0,UC_M68K_REG_A2:m.scratch})
     assert m.change(67)==[],'arp-only output cannot arm an unknown cached pool'
-    print('[ok] NEXT identity; CHANGE held root/voices, repeated roots, rests, scheduled edges, mute/enable/channel gates, ownership collisions, MIDI bounds, all receivers and unchanged release deadlines')
+    print('[ok] TRIG identity; LIVE held root/voices, repeated roots, rests, scheduled edges, mute/enable/channel gates, ownership collisions, MIDI bounds, all receivers and unchanged release deadlines')
 
 if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.parse_args()
