@@ -16,12 +16,12 @@ Knob **D: ROOT** selects **KEEP** (default), **OMIT**, **-1 OCT** or **-2 OCT**.
 The controls use the stock PLAYBACK selector graphics: three positions for
 HARM, five for VOIC, three for SPRD and four for ROOT, with the value printed underneath.
 HARM, VOIC and SPRD occupy the top row of a six-cell grid, matching the
-physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; E and F are inactive;
-the footer identifies HARMONY and the MIDI track, beside NO:BACK.
+physical encoder positions without letter prefixes. ROOT occupies the lower-left
+cell; E and F are inactive. The footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The footer identifies
 the track being edited. Transport and chromatic trig keys remain usable.
-Encoder E remains inactive. Turning F on NOTE SETUP still edits HARM directly.
+Turning F on NOTE SETUP still edits HARM directly.
 
 Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
 Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales

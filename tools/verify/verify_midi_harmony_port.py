@@ -465,7 +465,8 @@ def auto_voicing(source):
     assert state[0x4e2+5]==2 and state[0x4e2+16]==9
     assert int.from_bytes((work/'window.bin').read_bytes(),'big')!=0
     balanced(events)
-    assert [e[2] for e in events if e[0]=='on']==[48,55,64,48,57,65],events
+    # OPEN AUTO must retain each generated root, including F3 (53).
+    assert [e[2] for e in events if e[0]=='on']==[48,55,64,45,53,60],events
     subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True)
     results['harmony-page']='pass'
     return results
