@@ -122,6 +122,33 @@ int main(int _argc, char** _argv)
 		static_cast<unsigned long long>(m.unmappedCount()),
 		static_cast<unsigned long long>(m.autoMappedPages()));
 
+	// Repeated injected C calls must perform the caller's argument cleanup.
+	// Without it a four-argument MIDI stress event leaked 16 bytes; hundreds
+	// of events walked main's stack into firmware state and crashed the port.
+	{
+		const bool parked = rtos.runToMainSpin() == ot::Rtos::Stop::Gate;
+		check("main parks for repeated C calls", parked, rtos.why());
+		if(parked)
+		{
+			// Synthetic C ABI: move.l 4(sp),d0; add.l 8(sp),d0; rts.
+			// No firmware bytes are embedded in this fixture.
+			constexpr uint32_t code = 0x47001000;
+			m.poke32(code, 0x202f0004);
+			m.poke32(code + 4, 0xd0af0008);
+			m.poke32(code + 8, 0x4e754e71);
+			const auto initialSp = m.getA7();
+			bool stable = true;
+			for(uint32_t i = 0; i < 2048 && stable; ++i)
+			{
+				uint32_t result = 0;
+				stable = rtos.callAsMain(code, {i, 7, 11, 13}, result)
+					&& result == i + 7 && m.getA7() == initialSp;
+			}
+			check("2048 four-argument calls return correct values without stack growth", stable,
+				"initial SP " + std::to_string(initialSp) + ", final SP " + std::to_string(m.getA7()));
+		}
+	}
+
 	std::printf("%s\n", g_failures ? "RTOS GATE FAILED" : "rtos gate passed.");
 	return g_failures ? 1 : 0;
 }

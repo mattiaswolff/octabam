@@ -320,3 +320,15 @@ release deadlines, silence gates and MIDI ownership. The companion
 `tools/verify/verify_midi_follow_response_port.py --project /path/to/project`
 operates physical encoder D and captures the full firmware's MIDI output.
 These tests do not establish physical MIDI latency or external-synth timing.
+
+
+## Eight-track routing stress
+
+`tools/verify/verify_midi_follow_stress.py` is an image gate. It tests all
+40,320 permutations of a full eight-track chain, 12,000 seeded live routing
+edits, and 56,080 routed outputs with register/transpose extremes, unknown
+roots, cycles and invalid links. The independent graph model checks that
+editing one receiver cannot change another, no selectable route introduces
+a cycle, and runtime fallback terminates without writing outside its scratch
+and stack. Run it on both standalone Follow and the combined Harmony image.
+This exercises linked ColdFire code, not physical outgoing-MIDI timing.
