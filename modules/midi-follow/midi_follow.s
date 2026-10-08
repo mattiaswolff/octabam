@@ -1,4 +1,4 @@
-/* OS 1.40C. All new state is module-owned volatile DRAM. */
+/* OS 1.40C. Module-owned DRAM; settings.s persists routing/register choices. */
     .text
     .include "remix.inc"
     .global bf_capture, bf_note, bf_roots, bf_sources, bf_pre_capture
