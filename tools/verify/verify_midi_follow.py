@@ -67,7 +67,7 @@ def machine_gate(image):
                    (pitch, pitch + 4), (stack - stack_budget, stack),
                    (0x47004000 - 43, 0x47004000 - 42))
         if selecting:
-            allowed += ((0x100f85e8, 0x100f8600), (stack-80, stack))
+            allowed += ((0x100f85e8, 0x100f8600),)
         if not any(lo <= address and address + size <= hi for lo, hi in allowed):
             unexpected_writes.append((hex(address), size, hex(value)))
 
