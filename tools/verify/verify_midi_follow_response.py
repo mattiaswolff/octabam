@@ -30,6 +30,7 @@ def fixture(pitches=(36,), response=1, receiver=1, source=0):
         u.mem_write(at,((0xffffff90+receiver)&0xffffffff).to_bytes(4,'big')+pitch.to_bytes(4,'big'))
         u.mem_write(0x46c78152+receiver*128+pitch,bytes((receiver*4+slot,)))
     m.call('bf_response_set',receiver,response)
+    m.call('bf_response_tick',1<<receiver,0)
     u.mem_write(m.scratch,b'\x24')
     m.call('bf_response_observe',regs={UC_M68K_REG_D7:receiver,UC_M68K_REG_D4:0,UC_M68K_REG_A2:m.scratch})
     def change(pitch=65,mask=0,mute=0):
@@ -53,6 +54,8 @@ def machine():
     assert fixture(pitches=()).change()==[]
     for bit in (1,1<<8,1<<16):assert fixture().change(mask=bit<<1)==[]
     assert fixture().change(mute=2)==[]
+    m=fixture();assert m.change(65,mute=2)==[]
+    assert m.change(67)==[(0x91,36,0),(0x91,43,91)],'muted root must not move the sounding anchor'
     for addr,value in ((0x80006677,255),(0x8000666f,255),(0x46c76de0+68,0)):
         m=fixture();m.uc.mem_write(addr,bytes((value,)));assert m.change()==[]
     m=fixture(pitches=(36,40,43))
@@ -81,7 +84,9 @@ def machine():
     assert m.change(65)==[(0x91,36,0),(0x91,48,91)]
     m=fixture();s=m.sym
     m.call('bf_response_set',1,0);m.call('bf_response_set',1,1)
-    assert m.change()==[],'setting switch must arm at next receiver note'
+    assert m.change()==[],'setting switch must arm at next ordinary trig'
+    m.call('bf_response_observe',regs={UC_M68K_REG_D7:1,UC_M68K_REG_D4:0,UC_M68K_REG_A2:m.scratch})
+    assert m.change(67)==[],'arp-only output cannot arm an unknown cached pool'
     print('[ok] NEXT identity; CHANGE held root/voices, repeated roots, rests, scheduled edges, mute/enable/channel gates, ownership collisions, MIDI bounds, all receivers and unchanged release deadlines')
 
 if __name__=='__main__':
