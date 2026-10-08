@@ -114,6 +114,23 @@ KITS. This task owns any such degree-only native-copy detour; the shared
 `part.s` access layer does not need to depend on degree code. The concrete
 detour and evidence will be posted before integration.
 
+The proposed Harmony getter convention has also been read and accepted:
+`mh_get` and voicing/spread/root getters are UI forms, `mh_active` is playback,
+and the corresponding `_at` entries take explicit context in d1. CHRD callers
+here will select those deliberately; they will not substitute UI for playback.
+
+The first production conversion component is `roots.c`/`roots.h`, with
+generated ColdFire assembly and `verify_harmony_degree_roots.py`. Each
+pattern/track owns 64 degrees, 64 native edit snapshots, representation,
+outgoing scale and last Part context (131 bytes). Detaching a replaced Part
+captures its final scale and invalidates the physical-slot association; it
+does **not** convert inactive patterns merely because they name that slot.
+Conversion occurs when a pattern next uses an explicit incoming context.
+The initial component gate passes 84 scale/tonic combinations, 128 independent
+pattern/track records, the same-slot C3 boundary, native edit/clear behavior,
+15 rejected invalid publications, and C ABI preservation. Native hooks,
+companion publication and the composed candidate are not yet integrated.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.
