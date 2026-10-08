@@ -43,7 +43,18 @@ ms_raw_ui:
     lea 12(%sp),%sp
     rts
 .else
-    bra.s ms_raw
+.ifdef HAVE_HARMONY
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr mp_ui_context
+    move.l %d0,%d1
+    move.l (%sp)+,%d0
+    jsr mp_read_key
+    move.l (%sp)+,%d1
+    rts
+.else
+    bra.w ms_raw
+.endif
 .endif
 /* d0 track -> effective native KEY byte. */
 ms_raw:

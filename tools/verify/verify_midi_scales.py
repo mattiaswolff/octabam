@@ -42,6 +42,14 @@ def machine_gate():
         m.follow_write('source',bytes((0,1,0,0,0,0,0,0)),0)
         u.mem_write(0x100b14cc,b'\x01')
         m.call('ms_encoder',5,stop=0x4007a6ba,regs={UC_M68K_REG_D5:1})
+    if 'mh_get' in m.sym and 'bf_source_get' not in m.sym:
+        # Harmony without Follow still separates the UI Part from playback.
+        u.mem_write(0x100b14cf,b'\x01')
+        u.mem_write(0x400e21e0+0x8ed80+0x18b2+0x4e2+17,b'\x06')
+        u.mem_write(0x46c76df1,b'\x01')
+        assert m.call('ms_raw_ui',0)==6
+        assert m.call('ms_raw',0)==1
+        print('  [ok] no-Follow Harmony KEY editor reads selected Part independently of playback')
     print('  [ok] scale encoder order, both end clamps, stock-control pass-through and inherited KEY guard')
     print('  [ok] linked MIDI Scales: 84 combinations x 128 pitches, native IDs preserved, OFF/invalid, formatter guards')
 
