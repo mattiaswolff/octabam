@@ -51,6 +51,9 @@ post-FX1 dry input to the shared engines.
 
 ## Validation boundary
 
+See [the concert stress report](CONCERT_TESTS.md) for the eight-track/flood
+scenarios, reproduced ownership failures, fixes and verification limits.
+
 The selection has the source/emulator verification recorded below. No real
 Octatrack, CompactFlash project, or firmware flash is part of this verification. Before any device use, back up the CompactFlash card
 and follow the recovery process in `docs/guide/BUILDING.md`.
