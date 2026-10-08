@@ -72,6 +72,11 @@ The candidate supports native Parts. KITS and MIDI SCENES require their own
 degree-aware storage/interpolation contracts; the composition ledger rejects
 those combinations. The personal-bus candidate does not select either module.
 
+The planned combined successor moves custom musical settings to Parts/Kits,
+including DEG and CHRD defaults. See [the shared integration plan](KITS.md).
+Its revised ownership supersedes the project-wide HARM assumption above for
+that successor; D0 and the current implementation still have that assumption.
+
 ## Implementation and evidence plan
 
 1. Isolated feature branch, opt-in module selection, standalone and personal-bus
