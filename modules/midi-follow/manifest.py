@@ -1,5 +1,5 @@
-"""Per-MIDI-track root follower with a volatile NOTE SETUP D selector."""
-from remix.schema import Category, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
+"""Per-MIDI-track root follower with project-scoped NOTE SETUP D settings."""
+from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
 
 def harmony_inc(modules):
     return ('.set HAVE_HARMONY,1\n' if 'MIDI HARMONY' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '')
@@ -10,9 +10,11 @@ MODULE = Module(
     category=Category.MIDI_USB, author="Mattias Wolff", author_url="https://github.com/mattiaswolff/octabam",
     proof=Proof.PORT, proof_note="verify_midi_follow: stock/patched MIDI capture; not flashed",
     doc="RFOL selects a source; press D for fixed or source-relative octave, then follower TRAN/P-locks.",
+    claims=Claims(sram=((0x100f85e8, 24, "MIDI Follow project settings resume record"),)),
     linked=(Linked("bassfollow", "modules/midi-follow/midi_follow.s", dram=True, include=harmony_inc),
             Linked("followresponse", "modules/midi-follow/response.s", dram=True, include=harmony_inc),
             Linked("followregister", "modules/midi-follow/register.s", dram=True),
+            Linked("followsettings", "modules/midi-follow/settings.s", dram=True),
             Linked("followpage", "modules/midi-follow/page.s", dram=True)),
     symbol_refs=(
         SymbolRef(0x400bc5a4, 0x4004ae08, "followpage", "bf_page_open", "RFOL D press opens register settings"),
@@ -26,7 +28,15 @@ MODULE = Module(
         Poke(0x400D3EFC, bytes.fromhex("00000080"), bytes.fromhex("00000009"), "RFOL nine values"),
         Poke(0x400D3FCB, b"\x01", b"\x11", "enable NOTE SETUP D only"),
     ),
-    detours=(Detour(0x4009F986, bytes.fromhex("41f980006676"),
+    detours=(Detour(0x4008679a, bytes.fromhex("588f4a806f001a92"),
+                    "followsettings", "bf_load", "Follow project comments before Quantizer/Harmony", pad_to=8),
+             Detour(0x4008885a, bytes.fromhex("73398000004d"),
+                    "followsettings", "bf_save", "serialize Follow project settings"),
+             Detour(0x40025ace, bytes.fromhex("13c0100b14dc"),
+                    "followsettings", "bf_defaults", "reset Follow before a storing project load"),
+             Detour(0x4001023a, bytes.fromhex("4a39100b14af"),
+                    "followsettings", "bf_boot", "restore Follow from battery-backed settings"),
+             Detour(0x4009F986, bytes.fromhex("41f980006676"),
                     "bassfollow", "bf_pre_capture", "capture all ordinary source triggers before any track emits"),
              Detour(0x40036674, bytes.fromhex("261524047003"),
                     "bassfollow", "bf_draw_value", "draw RFOL from per-track module RAM"),
@@ -36,7 +46,8 @@ MODULE = Module(
              Detour(0x4009FB80, bytes.fromhex("12126d0001a6"),
                    "bassfollow", "bf_note",
                    "resolve root before the sequencer records the emitted note"),),
-    gates=(Gate('tools/verify/verify_midi_follow_stress.py', stage='image', venv=True),
+    gates=(Gate("tools/verify/verify_midi_follow_settings.py", stage="image", venv=True),
+           Gate('tools/verify/verify_midi_follow_stress.py', stage='image', venv=True),
            Gate("tools/verify/verify_midi_follow_response.py", stage="image", venv=True),
            Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),
            Gate("tools/verify/verify_midi_follow_register.py", stage="image", venv=True)),

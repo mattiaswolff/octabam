@@ -54,6 +54,7 @@ def machine_gate(image):
     uc.mem_map(0x80000000, 0x10000)
     pitch, stack = 0x47001000, 0x47008000
     stack_budget = 192 if "mh_get" in subprocess.check_output(["m68k-elf-nm", str(ROOT/"out/platform/runtime/runtime.elf")], text=True) else 64
+    selecting = False
     arrivals = []
     unexpected_writes = []
     written_addresses = set()
@@ -65,6 +66,8 @@ def machine_gate(image):
         allowed = ((root, root + 8), (sym["bf_pitches"], sym["bf_pitches"] + 8), (sources, sources + 8),
                    (pitch, pitch + 4), (stack - stack_budget, stack),
                    (0x47004000 - 43, 0x47004000 - 42))
+        if selecting:
+            allowed += ((0x100f85e8, 0x100f8600),)
         if not any(lo <= address and address + size <= hi for lo, hi in allowed):
             unexpected_writes.append((hex(address), size, hex(value)))
 
@@ -118,6 +121,8 @@ def machine_gate(image):
         return uc.mem_read(root + track, 1)[0]
 
     def select(track, delta):
+        nonlocal selecting
+        selecting = True
         uc.reg_write(UC_M68K_REG_A7, stack)
         uc.reg_write(UC_M68K_REG_D0, track)
         uc.reg_write(UC_M68K_REG_D1, delta & 0xffffffff)
@@ -126,6 +131,7 @@ def machine_gate(image):
         uc.emu_start(sym['bf_select'], 0, count=2000)
         assert arrivals == [done]
         assert uc.reg_read(UC_M68K_REG_A7) == stack + 4
+        selecting = False
         return uc.mem_read(sources, 8)
 
     assert uc.mem_read(root, 8) == b'\xff' * 8
