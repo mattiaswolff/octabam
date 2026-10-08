@@ -1,16 +1,23 @@
+    .include "remix.inc"
 /* Dedicated NOTE-page CHRD presentation. The descriptor is a runtime copy
  * of the composed NOTE descriptor. No native Part or NOT2-4 byte is edited.
  */
     .text
     .global ch_descriptor,ch_draw_value,ch_encoder,ch_step_encoder
+    .global ch_ui_dirty,ch_ui_redraw
 ch_descriptor:
     tst.l 8(%fp)
     bne.w .desc_return
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     jsr mh_get
+    .ifdef HAVE_DEGREES
+    tst.l %d0
+    beq.w .desc_stock
+    .else
     cmpi.l #2,%d0
     bcs.w .desc_stock
+    .endif
     lea 0x400d3e3e,%a0
     lea ch_note_descriptor,%a1
     move.l #402/2,%d0
@@ -19,6 +26,15 @@ ch_descriptor:
     subq.l #1,%d0
     bne.s .desc_copy
     lea ch_note_descriptor,%a0
+    .ifdef HAVE_DEGREES
+    jsr hd_descriptor
+    moveq #0,%d0
+    move.b 0x100b14cc,%d0
+    jsr mh_get
+    cmpi.l #1,%d0
+    beq.w .desc_degree_return
+    lea ch_note_descriptor,%a0
+    .endif
     move.l #0x43485244,%d0
     move.l %d0,0x28(%a0) /* CHRD */
     moveq #0,%d0
@@ -48,6 +64,9 @@ ch_descriptor:
     move.l ch_note_descriptor+0x18e,%d0
     andi.l #0xff00ffff,%d0
     move.l %d0,ch_note_descriptor+0x18e /* disable E/F only */
+    .ifdef HAVE_DEGREES
+.desc_degree_return:
+    .endif
     move.l #ch_note_descriptor,%d0
     bra.s .desc_return
 .desc_stock:
@@ -65,6 +84,19 @@ ch_draw_value:
     movem.l %d0-%d3/%a0-%a1,(%sp)
     tst.l 8(%fp)
     bne.w .draw_restore
+    .ifdef HAVE_DEGREES
+    tst.l %a4
+    bne.s .draw_chord
+    moveq #0,%d0
+    move.b 0x100b14cc,%d0
+    jsr mh_get
+    tst.l %d0
+    beq.w .draw_restore
+    jsr hd_draw
+    move.l %d0,(%sp)
+    bra.w .draw_restore
+.draw_chord:
+    .endif
     cmpa.l #3,%a4
     bne.w .draw_restore
     moveq #0,%d0
@@ -116,6 +148,18 @@ ch_draw_value:
 
 /* Both stock editors take (slot, delta). Only main NOTE D/E/F are owned. */
 ch_encoder:
+    .ifdef HAVE_DEGREES
+    move.l 4(%sp),%d1
+    jsr hd_ui_owned
+    tst.l %d0
+    beq.s .ch_encoder_ordinary
+    jmp hd_encoder
+.ch_encoder_ordinary:
+    move.l 4(%sp),%d1
+    jsr hd_ui_disabled
+    tst.l %d0
+    bne.w .edit_done
+    .endif
     move.l 4(%sp),%d1
     bsr.w ch_ui_owned
     tst.l %d0
@@ -150,6 +194,18 @@ ch_encoder:
     rts
 
 ch_step_encoder:
+    .ifdef HAVE_DEGREES
+    move.l 4(%sp),%d1
+    jsr hd_ui_owned
+    tst.l %d0
+    beq.s .ch_step_encoder_ordinary
+    jmp hd_step_encoder
+.ch_step_encoder_ordinary:
+    move.l 4(%sp),%d1
+    jsr hd_ui_disabled
+    tst.l %d0
+    bne.w .edit_done
+    .endif
     move.l 4(%sp),%d1
     bsr.w ch_ui_owned
     tst.l %d0
@@ -302,6 +358,20 @@ ch_note_descriptor: .space 402
     .text
     .global ch_step_push
 ch_step_push:
+    .ifdef HAVE_DEGREES
+    move.l 4(%sp),%d1
+    subi.l #56,%d1
+    jsr hd_ui_owned
+    tst.l %d0
+    beq.s .ch_step_push_ordinary
+    jmp hd_step_push
+.ch_step_push_ordinary:
+    move.l 4(%sp),%d1
+    subi.l #56,%d1
+    jsr hd_ui_disabled
+    tst.l %d0
+    bne.w .push_done
+    .endif
     move.l 4(%sp),%d1
     subi.l #56,%d1
     bsr.w ch_ui_owned

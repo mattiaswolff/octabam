@@ -112,6 +112,10 @@ bf_latch:
     move.l %d7,%d1
     jsr mh_prepare
     move.l (%sp)+,%d1
+    .ifdef HAVE_DEGREES
+    cmpi.l #127,%d0
+    bhi.w .latch_return
+    .endif
     move.l %d0,-(%sp)
     move.l %d1,-(%sp)
     move.l %d7,%d0

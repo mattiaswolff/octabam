@@ -1,0 +1,67 @@
+#ifndef HARMONY_DEGREES_CORE_H
+#define HARMONY_DEGREES_CORE_H
+#include <stdint.h>
+
+enum { HD_BANKS = 16, HD_PATTERNS = 16, HD_TRACKS = 8, HD_STEPS = 64,
+       HD_LOCKS = 8192, HD_BASES = 64, HD_NONE = 255, HD_CODES = 84 };
+
+/* Exact byte layout is the durable payload. Both architectures have no
+ * padding because every member is a byte. Native-note snapshots detect edits
+ * that arrive through a native path; they are not a second playable sequence. */
+typedef struct {
+    uint8_t degree[HD_LOCKS];
+    uint8_t note[HD_LOCKS];
+    uint8_t base[HD_BASES];
+    uint8_t base_note[HD_BASES];
+    uint8_t active[HD_TRACKS];
+    uint8_t valid[HD_TRACKS];
+} HdBank;
+_Static_assert(sizeof(HdBank) == 16528, "degree companion ABI");
+
+extern HdBank hd_banks[HD_BANKS];
+extern volatile uint8_t hd_busy[HD_TRACKS];
+extern volatile uint8_t hd_target[HD_TRACKS];
+extern int hd_encode_c(int note, int scale);
+extern int hd_decode_c(int degree, int scale);
+extern unsigned hd_type_c(unsigned track);
+extern unsigned hd_source_c(unsigned track);
+
+void hd_reset_c(void);
+void hd_bank_reset_c(unsigned bank);
+void hd_bank_loaded_c(unsigned bank);
+void hd_ready_all_c(void);
+void hd_mode_c(unsigned track, unsigned mode);
+int hd_degree_c(unsigned bank, unsigned pattern, unsigned track, unsigned step);
+int hd_base_c(unsigned bank, unsigned part, unsigned track);
+int hd_resolve_c(unsigned bank, unsigned pattern, unsigned track, unsigned step);
+int hd_scale_c(unsigned bank, unsigned part, unsigned track);
+void hd_record_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree);
+void hd_edit_base_c(unsigned bank, unsigned part, unsigned track, int degree);
+void hd_edit_step_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree);
+int hd_lock_c(unsigned bank, unsigned pattern, unsigned track, unsigned step);
+void hd_copy_note_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree, int note);
+void hd_copy_base_c(unsigned bank, unsigned part, unsigned track, int degree, int note);
+int hd_validate_c(const HdBank *bank);
+void hd_events_reset_c(void);
+void hd_event_stage_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int slot);
+void hd_event_copy_c(unsigned track);
+int hd_event_fire_c(unsigned slot, unsigned track);
+void hd_events_mode_c(unsigned track, unsigned mode);
+int hd_prepare_c(int native_note, unsigned track);
+int hd_payload_valid_c(const uint8_t *payload);
+uint32_t hd_payload_hash_c(const uint8_t *payload);
+void hd_export_c(unsigned bank, uint8_t *payload);
+void hd_import_c(unsigned bank, const uint8_t *payload);
+uint32_t hd_native_hash_c(unsigned bank, uint32_t hash);
+void hd_nv_save_c(unsigned bank);
+int hd_nv_restore_c(unsigned bank);
+int hd_ui_value_c(int step);
+int hd_ui_edit_c(int delta, int toggle, int steps);
+void hd_copy_before_c(uintptr_t destination, uintptr_t source, unsigned length);
+int hd_copy_after_c(void);
+void hd_operations_reset_c(void);
+void hd_part_reset_c(uintptr_t part);
+void hd_step_copy_c(uintptr_t buffer, unsigned pattern, unsigned track, unsigned page, unsigned mask);
+int hd_step_paste_c(uintptr_t buffer, unsigned slot, unsigned pattern, unsigned track, unsigned step);
+void hd_forget_c(unsigned bank, unsigned pattern, unsigned track, unsigned step);
+#endif

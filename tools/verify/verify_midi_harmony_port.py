@@ -132,7 +132,11 @@ def sequence(source):
         if not arp:
             assert lead==[62,65,69,65,69,72,67,71,74],lead
             if has_follow:
-                assert bass==[48,52,55,59,38,41,45,48,38,41,45,48,41,45,48,52,43,47,50,53,43,47,50,53],bass
+                # Before the leader has triggered, Follow uses the receiver's
+                # own root. DEG entered C# minor as degree 7 (C ties down to B);
+                # selecting a C-major source preserves that degree identity.
+                initial=[47,50,53,57] if 'hd_banks' in sym else [48,52,55,59]
+                assert bass==initial+[38,41,45,48,38,41,45,48,41,45,48,52,43,47,50,53,43,47,50,53],bass
         else:
             assert {62,65,69,72,67,71,74}<=set(lead),lead
             if has_follow:assert {38,41,45,48,43,47,50,53}<=set(bass),bass

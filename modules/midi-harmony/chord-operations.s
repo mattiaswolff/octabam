@@ -1,3 +1,4 @@
+    .include "remix.inc"
 /* CHRD mirrors native MIDI editing operations and their clipboard/undo
  * destinations. Audio-track copies deliberately have no CHRD counterpart.
  */
@@ -24,6 +25,9 @@ ch_place:
     moveq #0,%d2
     move.b 0x100b14cc,%d2
     move.l #255,%d4
+    .ifdef HAVE_DEGREES
+    jsr hd_forget
+    .endif
     jsr ch_lock_set
     movem.l (%sp),%d0-%d2/%d4/%a0
     lea 20(%sp),%sp
@@ -53,6 +57,17 @@ ch_clear_locks:
     cmpi.l #63,%d0
     bhi.s .clear_locks_next
     move.b %d4,(%a0,%d0.l)
+    .ifdef HAVE_DEGREES
+    lea -20(%sp),%sp
+    movem.l %d0-%d3/%a0,(%sp)
+    move.l %d0,%d3
+    bsr.w .ui_bank
+    move.l 56(%sp),%d1
+    move.l 60(%sp),%d2
+    jsr hd_forget
+    movem.l (%sp),%d0-%d3/%a0
+    lea 20(%sp),%sp
+    .endif
 .clear_locks_next:
     addq.l #1,%d3
     cmpi.l #16,%d3
@@ -83,6 +98,17 @@ ch_clear_track:
     move.l %d0,(%a0)+
     subq.l #1,%d1
     bne.s .clear_track_loop
+    .ifdef HAVE_DEGREES
+    bsr.w .ui_bank
+    move.l 24(%sp),%d1
+    move.l 28(%sp),%d2
+    moveq #0,%d3
+.clear_degrees_loop:
+    jsr hd_forget
+    addq.l #1,%d3
+    cmpi.l #64,%d3
+    bne.s .clear_degrees_loop
+    .endif
     bsr.w .touch
 .clear_track_done:
     movem.l (%sp),%d0-%d3/%a0
@@ -103,6 +129,9 @@ ch_clear_track:
 .buf_done:
     rts
 ch_step_copy:
+    .ifdef HAVE_DEGREES
+    jsr hd_step_copy
+    .endif
     lea -36(%sp),%sp
     movem.l %d0-%d6/%a0-%a1,(%sp)
     bsr.w .ui_bank
@@ -260,7 +289,11 @@ ch_memcpy:
     movem.l (%sp),%d2-%d5/%a2-%a3
     lea 24(%sp),%sp
 .copy_stock:
+    .ifdef HAVE_DEGREES
+    jmp hd_memcpy
+    .else
     jmp 0x40020898
+    .endif
     .bss
     .balign 4
 ch_clip: .space 512

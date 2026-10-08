@@ -12,6 +12,7 @@ A remix is a named selection of modules; `make image REMIX=<name> BUILD=<n>` bui
 |---|---|---|
 | [`bottleservice`](bottleservice/README.md) | The delay and reverb bus (BusDelay on T1's FX2, BusVerb on T5's FX2, SEND on every other track's FX2, the stock DELAY on T8) + SPECTRUM, CHARACTER and MODULATION on FX1 + USB MIDI + USB AUDIO OUT MASTER (T8 to the computer) + KITS. | on hardware: Sam's MKII (image A6 with KITS, 6 Oct 2026; images A0-A3 with Octakit, 4 Oct 2026) |
 | [`mattias-bus`](mattias-bus/README.md) | Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and Modulation on FX1; RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony with Chord Play. | `make check`: Combined development candidate; full checks and hardware acceptance pending |
+| [`mattias-bus-degrees`](mattias-bus-degrees/README.md) | Personal bus selection plus degree/register Harmony roots. | `make check`: Production replacement candidate; verification in progress |
 
 ## Effects
 

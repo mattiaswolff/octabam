@@ -1,3 +1,4 @@
+    .include "remix.inc"
 /* CHORD PLAY, mode 6. Stock dispatch reaches ch_play_key only in the
  * playing layout; grid recording retains its sequencer key layer.
  * Root keys retain pitch AND track until release. Variations are held

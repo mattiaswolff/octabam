@@ -1,3 +1,4 @@
+    .include "remix.inc"
 /* CHRD companion files. File I/O follows the repository's PLOCKS P2
  * APIs, with dedicated storage, validated bank/version/size/value range,
  * payload checksum and native NOTE/trig fingerprint before publication.
@@ -13,6 +14,15 @@
         .set    IOB_LEN,    0x1000
 
     .set BANK_B,8192
+.ifdef HAVE_DEGREES
+    .set FILE_B,24720
+    .set FILE_MAGIC,0x48444547 /* HDEG */
+    .set FILE_NONE,0x48444e4f  /* HDNO */
+.else
+    .set FILE_B,8192
+    .set FILE_MAGIC,0x43485244
+    .set FILE_NONE,0x43484e4f
+.endif
     .text
     .global ch_saveb,ch_loadall,ch_loadmask,ch_tocs1,ch_fromcs1
     .global ch_newproj,ch_newproj2,ch_fcopy
@@ -69,7 +79,11 @@ bank_at:
         rts
 
 | blank: d0 = bank -> its CHRD bank all 0xff. Keeps d2-d7/a2-a6.
-blank:  bsr.w   bank_at
+blank:
+.ifdef HAVE_DEGREES
+        jsr hd_bank_reset
+.endif
+        bsr.w   bank_at
         moveq   #-1,%d0
         movel   #BANK_B/4,%d1
 bl_loop:
@@ -80,11 +94,11 @@ bl_loop:
 
 | hdr: d0 = bank -> HDR filled.
 hdr:    lea     HDR,%a0
-        movel   #0x43485244,%a0@       | 'CHRD'
+        movel   #FILE_MAGIC,%a0@
         moveq   #1,%d1
         movel   %d1,%a0@(4)
         movel   %d0,%a0@(8)
-        movel   #BANK_B,%d1
+        movel   #FILE_B,%d1
         movel   %d1,%a0@(12)
         rts
 
@@ -118,10 +132,17 @@ rn_copy:
         bra.s   rn_copy
 rn_end: movel   %a3,%d0
         beq.s   rn_none
+.ifdef HAVE_DEGREES
+        moveb   #'h',%a3@+
+        moveb   #'d',%a3@+
+        moveb   #'e',%a3@+
+        moveb   #'g',%a3@
+.else
         moveb   #'c',%a3@+
         moveb   #'h',%a3@+
         moveb   #'r',%a3@+
         moveb   #'d',%a3@
+.endif
         moveal  %sp@+,%a1
         moveq   #1,%d0
         rts
@@ -135,6 +156,9 @@ rn_none:
  * Unrelated CC edits and native transient/dirty fields do not invalidate it.
  */
 ch_native_hash:
+.ifdef HAVE_DEGREES
+    move.l %d0,-(%sp)
+.endif
     lea -28(%sp),%sp
     movem.l %d1-%d5/%a0-%a1,(%sp)
     move.l #0x9b340,%d1
@@ -175,9 +199,20 @@ ch_native_hash:
     bne.s .hash_pattern
     movem.l (%sp),%d1-%d5/%a0-%a1
     lea 28(%sp),%sp
+.ifdef HAVE_DEGREES
+    move.l %d1,-(%sp)
+    move.l %d0,%d1
+    move.l 4(%sp),%d0
+    jsr hd_native_hash
+    move.l (%sp)+,%d1
+    addq.l #4,%sp
+.endif
     rts
 /* a0 payload -> d0 checksum, d1=1 valid byte range / 0 invalid. */
 .payload_hash:
+.ifdef HAVE_DEGREES
+    jmp hd_payload_hash
+.endif
     lea -16(%sp),%sp
     movem.l %d2-%d4/%a0,(%sp)
     move.l #0x811c9dc5,%d0
@@ -229,6 +264,11 @@ ch_file_write:
     move.l (%a0)+,(%a1)+
     subq.l #1,%d0
     bne.s .wr_snapshot
+.ifdef HAVE_DEGREES
+    move.l %d2,%d0
+    lea PAYLOAD+8192,%a0
+    jsr hd_export
+.endif
     lea PAYLOAD,%a0
     bsr.w .payload_hash
     move.l %d0,HDR+16
@@ -250,7 +290,7 @@ ch_file_write:
     cmpi.l #1,%d0
     bne.s .wr_close
     lea PAYLOAD,%a0
-    move.l #8192,%d0
+    move.l #FILE_B,%d0
     lea F_WRITE,%a1
     bsr.w fio
     move.l %d0,%d3
@@ -301,9 +341,9 @@ ch_file_read:
     cmpi.l #1,%d0
     bne.w .rd_bad
     move.l HDR,%d0
-    cmpi.l #0x43484e4f,%d0 /* CHNO: stored bank predates companions */
+    cmpi.l #FILE_NONE,%d0 /* CHNO: stored bank predates companions */
     beq.w .rd_none
-    cmpi.l #0x43485244,%d0
+    cmpi.l #FILE_MAGIC,%d0
     bne.w .rd_bad
     move.l HDR+4,%d0
     cmpi.l #1,%d0
@@ -311,7 +351,7 @@ ch_file_read:
     cmp.l HDR+8,%d2
     bne.w .rd_bad
     move.l HDR+12,%d0
-    cmpi.l #8192,%d0
+    cmpi.l #FILE_B,%d0
     bne.w .rd_bad
     move.l HDR+24,%d0
     or.l HDR+28,%d0
@@ -319,10 +359,10 @@ ch_file_read:
     pea FOBJ
     jsr 0x400148d4 /* actual byte length, not buffered sector EOF */
     addq.l #4,%sp
-    cmpi.l #8224,%d0
+    cmpi.l #FILE_B+32,%d0
     bne.w .rd_bad
     lea PAYLOAD,%a0
-    move.l #8192,%d0
+    move.l #FILE_B,%d0
     lea F_READ,%a1
     bsr.w fio
     cmpi.l #1,%d0
@@ -347,6 +387,11 @@ ch_file_read:
     move.l (%a1)+,(%a0)+
     subq.l #1,%d0
     bne.s .rd_publish
+.ifdef HAVE_DEGREES
+    move.l %d2,%d0
+    lea PAYLOAD+8192,%a0
+    jsr hd_import
+.endif
     moveq #1,%d3
     bra.s .rd_status
 .rd_none:
@@ -374,6 +419,10 @@ ch_file_read:
     move.l %d2,%d0
     jsr ch_migrate_bank
 .rd_no_migration:
+.ifdef HAVE_DEGREES
+    move.l %d2,%d0
+    jsr hd_bank_loaded
+.endif
     lea ch_lock_status,%a0
     move.b %d3,(%a0,%d2.l)
     movem.l (%sp),%d2-%d3/%a2
@@ -500,11 +549,24 @@ ch_fromcs1:
     addq.l #8,%sp
     rts
 ch_newproj:
+    .ifdef HAVE_DEGREES
+    bsr.w .new_project
+    .else
     bsr.s .new_project
+    .endif
+    .ifdef HAVE_DEGREES
+    jsr 0x400909d8
+    jsr hd_ready_all
+    rts
+    .else
     jmp 0x400909d8
+    .endif
 ch_newproj2:
     bsr.s .new_project
     jsr 0x400909d8
+    .ifdef HAVE_DEGREES
+    jsr hd_ready_all
+    .endif
     move.l %d3,%d0
     jmp 0x400915a0
 .new_project:
@@ -526,6 +588,9 @@ ch_newproj2:
     clr.l 8(%a0)
     clr.l 12(%a0)
     clr.l 0x100f8600
+.ifdef HAVE_DEGREES
+    jsr hd_reset
+.endif
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
     rts
@@ -585,7 +650,7 @@ ch_fcopy:
     clr.l 20(%a0)
     clr.l 24(%a0)
     clr.l 28(%a0)
-    move.l #0x43484e4f,%d0
+    move.l #FILE_NONE,%d0
     move.l %d0,(%a0)
     moveq #32,%d0
     lea F_WRITE,%a1
@@ -614,7 +679,11 @@ ch_d5_f2a6:
 ch_d5_f33a:
     move.l #ch_fcopy,%d5
     jmp 0x4008f340
+.ifdef HAVE_DEGREES
+FMT_WORK: .asciz "%s/hdeg%02d.work"
+.else
 FMT_WORK: .asciz "%s/chrd%02d.work"
+.endif
 MODE_R: .asciz "r"
 MODE_W: .asciz "w"
     .balign 4
@@ -626,7 +695,7 @@ HDR: .space 32
 PATH: .space 260
 PSRC: .space 260
 IOB: .space IOB_LEN
-PAYLOAD: .space 8192
+PAYLOAD: .space FILE_B
 EXTRA: .space 4
 
 /* Native project SAVE can continue to its store-copy phase after a failed

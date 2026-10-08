@@ -17,16 +17,21 @@ from midi_machine import MODES, raw_scale, Machine as LinkedMidiMachine
 
 def symbols():
     raw = subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')], text=True)
-    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [TtBb] ((?:ch|mh|bf|ms)_\w+)$',raw,re.M)}
+    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [TtBb] ((?:hd|ch|mh|bf|ms)_\w+)$',raw,re.M)}
 
 class Machine(LinkedMidiMachine):
     def __init__(self):
         super().__init__(symbols)
     def instruction_limit(self, name):
+        if 'hd_set' in self.sym:
+            return 10000000
         return 250000 if (name == 'mh_boot' or name.startswith('ch_')) else 20000
     def setting(self,t,kind=0,key=0,scale=0):
         # Historical test cases 2/3 denote TRI/7TH; both now use HARM CHORD.
-        self.call('mh_set',t,min(kind,2))
+        # These exhaustive pitch/voicing fixtures configure the generator,
+        # not project-bank transitions. The degree integration gate exercises
+        # the interactive setter with real banks and retention separately.
+        self.call('mh_set_native' if 'hd_set' in self.sym else 'mh_set',t,min(kind,2))
         for name in ('ch_current','ch_live','ch_sequence_quality'):
             self.uc.mem_write(self.sym[name]+t, bytes((1 if kind==3 else 0,)))
         self.uc.mem_write(0x46c76df1+68*t,bytes((raw_scale(key,scale),)))
@@ -34,6 +39,16 @@ class Machine(LinkedMidiMachine):
         self.uc.mem_write(self.scratch,bytes((n,11,12,13)))
         self.call('mh_direct' if direct else 'mh_generate',t,offset & 0xffffffff,a0=self.scratch)
         return list(self.uc.mem_read(self.scratch,4))
+    def sequence_root(self,pitch):
+        """Give the degree candidate an explicit C-major default root.
+
+        Its sequence hook reads degree state; the existing generator API
+        still accepts real pitches and retains its exhaustive checks.
+        """
+        if 'hd_encode' not in self.sym:return
+        code=self.call('hd_encode',pitch,0)
+        self.uc.mem_write(self.stack+4,b''.join(n.to_bytes(4,'big') for n in (0,0,0,code)))
+        self.call('hd_edit_base_c')
 
 def machine_gate():
     m=Machine();u=m.uc
@@ -121,7 +136,8 @@ def final_note_gate():
                 valid=[n for n in range(128) if (n-tonic)%12 in degrees]
                 for pitch in range(128):
                     want=min(valid,key=lambda n:(abs(n-pitch),n))
-                    assert m.call('mh_prepare',pitch,0)==pitch
+                    # No degree bank is loaded in this arithmetic fixture.
+                    assert m.call('mh_prepare',pitch,0)==(0xffffffff if 'hd_prepare' in m.sym else pitch)
                     assert m.call('mh_final',pitch,0)==want
     for kind in (1,2,3):
         m.setting(0,kind)
@@ -143,12 +159,14 @@ def final_note_gate():
                 assert actual==want,(kind,note,offset,actual,want)
         # Actual sequence hook receives current TRAN/P-lock and arranger offset.
         lane=m.scratch+0x1000
+        m.sequence_root(62) # degree 2:4; +1 snaps back to D in C major
         u.mem_write(m.scratch,bytes((61,0,0,0)))
         u.mem_write(lane+0x22c,bytes((65,)))
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert list(u.mem_read(m.scratch,4))==([62]*4 if kind==1 else [62,65,69,62 if kind==2 else 72])
         # The native output must not add either offset twice.
         u.mem_write(0x46c7a124,bytes((2,)))
+        m.sequence_root(60)
         u.mem_write(m.scratch,bytes((60,0,0,0)))
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert list(u.mem_read(m.scratch,4))==([62]*4 if kind==1 else [62,65,69,62 if kind==2 else 72])
@@ -159,6 +177,7 @@ def final_note_gate():
         # Out-of-range sequenced root is muted, then a valid trig recovers.
         u.mem_write(0x46c77b1e,b'\0')
         u.mem_write(lane+0x22c,b'\0')
+        m.sequence_root(0)
         u.mem_write(m.scratch,bytes((0,0,0,0)))
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert u.mem_read(m.sym['mh_muted'],1)==b'\x01'
@@ -166,6 +185,7 @@ def final_note_gate():
         u.mem_write(0x46c77b1e,b'\x01')
         m.call('mh_transpose',stop=0x4009fb40,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
         u.mem_write(lane+0x22c,b'\x40');u.mem_write(m.scratch,bytes((60,0,0,0)))
+        m.sequence_root(60)
         m.call('mh_sequence',stop=0x4009fa30,regs={UC_M68K_REG_A5:lane,UC_M68K_REG_A6:m.scratch+4,UC_M68K_REG_D7:0})
         assert u.mem_read(m.sym['mh_muted'],1)==b'\0'
         # Final arp F# becomes F in all modes, before note ownership.
@@ -179,6 +199,7 @@ def final_note_gate():
             m.setting(1,kind,1,5)
             assert m.call('mh_final',42,1)==41
             u.mem_write(lane+0x220,bytes((71,)))
+            m.sequence_root(71)
             u.mem_write(lane+0x22c,bytes((71,)))
             m.call('bf_latch',regs={UC_M68K_REG_A5:lane,UC_M68K_REG_D7:0})
             assert u.mem_read(m.sym['bf_roots'],1)==bytes((41,))

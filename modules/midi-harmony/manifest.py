@@ -3,7 +3,7 @@ from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, P
 
 
 def follow_inc(modules):
-    return ('.set HAVE_FOLLOW,1\n' if 'MIDI FOLLOW' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '')
+    return ('.set HAVE_FOLLOW,1\n' if 'MIDI FOLLOW' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '') + ('.set HAVE_DEGREES,1\n' if 'HARMONY DEGREES' in modules else '')
 
 
 MODULE = Module(
@@ -20,13 +20,13 @@ MODULE = Module(
             Linked('chorddisplay', 'modules/midi-harmony/chord-display.s', dram=True),
             Linked('chordname', 'modules/midi-harmony/chord-name.s', dram=True),
             Linked('chordmigration', 'modules/midi-harmony/chord-migration.s', dram=True),
-            Linked('chordoperations', 'modules/midi-harmony/chord-operations.s', dram=True),
-            Linked('chordfiles', 'modules/midi-harmony/chord-files.s', dram=True),
-            Linked('chordrecord', 'modules/midi-harmony/chord-record.s', dram=True),
-            Linked('chordsequence', 'modules/midi-harmony/chord-sequence.s', dram=True),
-            Linked('chordui', 'modules/midi-harmony/chord-ui.s', dram=True),
-            Linked('chordlocks', 'modules/midi-harmony/locks.s', dram=True),
-            Linked('harmonyplay', 'modules/midi-harmony/play.s', dram=True)),
+            Linked('chordoperations', 'modules/midi-harmony/chord-operations.s', dram=True, include=follow_inc),
+            Linked('chordfiles', 'modules/midi-harmony/chord-files.s', dram=True, include=follow_inc),
+            Linked('chordrecord', 'modules/midi-harmony/chord-record.s', dram=True, include=follow_inc),
+            Linked('chordsequence', 'modules/midi-harmony/chord-sequence.s', dram=True, include=follow_inc),
+            Linked('chordui', 'modules/midi-harmony/chord-ui.s', dram=True, include=follow_inc),
+            Linked('chordlocks', 'modules/midi-harmony/locks.s', dram=True, include=follow_inc),
+            Linked('harmonyplay', 'modules/midi-harmony/play.s', dram=True, include=follow_inc)),
     symbol_refs=(
         *(SymbolRef(addr, 0x400a74c0, 'harmonyplay', 'ch_play_modes', 'MIDI trig modes include CHORD PLAY') for addr in (0x40035a24,0x40051efc,0x40051f6c)),
         *(SymbolRef(addr, 0x400beb72, 'harmonyplay', 'ch_mode_names', 'mode names with CHORD PLAY') for addr in (0x400359fc,0x40036048)),

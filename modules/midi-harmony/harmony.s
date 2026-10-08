@@ -28,6 +28,11 @@ mh_get:
     moveq #0,%d0
     rts
 mh_set:
+.ifdef HAVE_DEGREES
+    jmp hd_set
+    .global mh_set_native
+mh_set_native:
+.endif
     cmpi.l #7,%d0
     bhi.s .set_done
     cmpi.l #2,%d1
@@ -380,8 +385,10 @@ mh_direct:
     beq.w .gen_return
     moveq #0,%d2
     move.b (%a1),%d2
+.ifndef HAVE_DEGREES
     cmpi.l #127,%d2
     bhi.w .gen_invalid
+.endif
 .ifdef HAVE_FOLLOW
     tst.l %d5
     beq.s .gen_own
@@ -397,6 +404,12 @@ mh_direct:
     add.l (%sp),%d2
     bra.s .gen_bounds /* Follow's signed octave must not wrap as a byte. */
 .gen_own:
+.endif
+.ifdef HAVE_DEGREES
+    /* A follower ignores its own degree, but an invalid own root must not
+     * wrap into range when native TRAN arithmetic is applied. */
+    cmpi.l #127,%d2
+    bhi.w .gen_invalid
 .endif
     add.l (%sp),%d2
     andi.l #255,%d2 /* Same byte arithmetic as stock TRAN/arranger. */
@@ -461,6 +474,9 @@ mh_sequence:
     add.l %d0,%d1
     move.l %d7,%d0
     lea -4(%fp),%a0
+.ifdef HAVE_DEGREES
+    jsr hd_sequence_prepare
+.endif
     bsr.w mh_generate
     lea ch_sequence_root,%a0
     move.b -4(%fp),%d1
@@ -520,6 +536,9 @@ mh_scale:
 /* Follow captures raw NOTE + TRAN before snapping, in every HARM mode. */
     .global mh_prepare
 mh_prepare:
+.ifdef HAVE_DEGREES
+    jmp hd_prepare
+.endif
     rts
 
 /* Final correction also keeps stock arp step offsets inside the scale. */
@@ -781,7 +800,11 @@ mh_load:
     jsr ch_legacy_set
     moveq #2,%d1
 .load_type_new:
+.ifdef HAVE_DEGREES
+    bsr.w mh_set_native
+.else
     bsr.w mh_set
+.endif
 .load_done:
     movem.l (%sp),%d0-%d3/%d5/%a0-%a1
     lea 32(%sp),%sp
@@ -1323,6 +1346,7 @@ mh_release:
     move.l %d0,(%a3)
     rts
     .balign 4
+    .global mh_muted
 mh_muted: .space 8,0
     .global mh_held
 mh_held: .space 4096,255

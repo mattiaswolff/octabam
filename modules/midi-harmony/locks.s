@@ -1,3 +1,4 @@
+    .include "remix.inc"
 /* Dedicated CHRD locks: bank x pattern x MIDI track x step.
  * Native NOTE / NOT2-4 / CC bytes are never storage for this module.
  * 0xff is unlocked; only the reader resolves it to TRI (0).
@@ -27,6 +28,9 @@ ch_lock_init:
     bne.s .init_fill
     move.l #0x43485244,%d0
     move.l %d0,ch_initialized
+.ifdef HAVE_DEGREES
+    jsr hd_reset
+.endif
 .init_done:
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
@@ -101,6 +105,9 @@ ch_lock_set:
  * are protected. Generation mismatch restarts using the newest bank.
  */
 ch_nv_save:
+.ifdef HAVE_DEGREES
+    jmp hd_nv_save
+.endif
     cmpi.l #15,%d0
     bhi.w .nv_return
     lea -36(%sp),%sp
@@ -166,6 +173,9 @@ ch_nv_save:
  * Validate the whole payload before changing any live table byte.
  */
 ch_nv_restore:
+.ifdef HAVE_DEGREES
+    jmp hd_nv_restore
+.endif
     lea -28(%sp),%sp
     movem.l %d1-%d5/%a0-%a1,(%sp)
     move.l %d0,%d4

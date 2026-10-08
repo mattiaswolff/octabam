@@ -19,7 +19,7 @@ MODES = [(0,2,4,5,7,9,11),(0,2,3,5,7,9,10),(0,1,3,5,7,8,10),
 
 def symbols():
     raw = subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')], text=True)
-    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [Tt] ((?:mh|bf|ms)_\w+)$',raw,re.M)}
+    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [Tt] ((?:hd|mh|bf|ms)_\w+)$',raw,re.M)}
 
 class Machine:
     def __init__(self, symbol_loader=symbols):
@@ -47,4 +47,6 @@ class Machine:
         assert self.arrival in self.stops,(name,hex(u.reg_read(UC_M68K_REG_PC)))
         return u.reg_read(UC_M68K_REG_D0)
     def instruction_limit(self, name):
-        return 20000
+        # Degree mode boundaries include bank conversion and a retained
+        # snapshot; their correctness gate exercises those complete paths.
+        return 10000000 if "hd_set" in self.sym else 20000
