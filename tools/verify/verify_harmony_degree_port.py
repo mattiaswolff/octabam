@@ -231,8 +231,20 @@ def projects(work):
     data=(work/'project-new-degrees.bin').read_bytes()
     for bank in range(16):
         block=data[bank*SIZE:(bank+1)*SIZE]
-        assert block==(b'\xff'*128+b'\0\0\xff')*128
+        # The UI may observe the fresh current lane during native project
+        # initialization. UNKNOWN and observed STOCK are both empty; neither
+        # may retain a degree, note snapshot, scale or old Part association.
+        for offset in range(0,SIZE,LANE):
+            record=block[offset:offset+LANE]
+            assert record[:128]==b'\xff'*128
+            assert record[128] in (0,1) and record[129:]==b'\0\xff'
         assert degree_positions(block)==b'\xff'*8192
+    native=(work/'project-new-bank.bin').read_bytes()
+    for part in range(8):
+        base=0x8ed80+part*0x18b2 if part<4 else 0x9504a+(part-4)*0x18b2
+        for track in range(8):
+            setup=base+0x4e2+track*36
+            assert (native[setup+5],native[setup+18],native[setup+19])==(0,0,35)
     print('[ok] project/bank Reload, Save To New, fresh load and New Project degree lifecycle',flush=True)
     return {'project_reload':True,'bank_reload':True,'save_as':True,'new_project':True}
 
