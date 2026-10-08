@@ -178,6 +178,25 @@ def main():
                 assert result == expected, (mode, tonic, result, expected)
                 assert changed == sum(a != b for a, b in zip(scale_notes, expected))
                 scale_cases += 1
+        # Explicit degrees can lie outside MIDI even when their native edit
+        # snapshot is a valid pitch. Every degree must clamp only at OFF;
+        # HARM->HARM must preserve even currently silent out-of-range roots.
+        explicit_cases = 0
+        for mode in range(7):
+            for tonic in range(12):
+                scale = mode*64+tonic*4
+                for first in (0, 64):
+                    codes = list(range(first, min(first+64, 84)))
+                    count = len(codes)
+                    encoded = bytes(codes+[NONE]*(64-count))
+                    snapshots = bytes([48]*count+[NONE]*(64-count))
+                    state = encoded+snapshots+bytes([2, mode*12+tonic, 0])
+                    u.mem_write(root, state)
+                    sync(snapshots, 1, scale, 0)
+                    assert read(root, 64) == encoded
+                    result, _ = sync(snapshots, 0, 0, 1)
+                    assert result == bytes([decode(code, scale) for code in codes]+[NONE]*(64-count))
+                    explicit_cases += count
         # Corrupt companions and invalid inputs fail before any publication.
         reset()
         sync(notes, 2, cmin)
@@ -203,7 +222,8 @@ def main():
             assert call('hd_roots_sync_c', root, native, output, 2, cmin, 0) == -1
             assert read(root) == valid and read(output, 64) == b'\xa5'*64
             invalid_cases += 1
-        print(json.dumps({'scale_cases': scale_cases, 'independent_pattern_tracks': lanes,
+        print(json.dumps({'scale_cases': scale_cases, 'explicit_degree_boundaries': explicit_cases,
+                          'independent_pattern_tracks': lanes,
                           'roots_per_case': 64, 'invalid_publications_rejected': invalid_cases,
                           'same_slot_c3_boundary': 'passed', 'abi_registers_and_stack': 'passed',
                           'evidence': 'ColdFire component', 'hardware_tested': False}))

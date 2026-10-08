@@ -7,6 +7,11 @@ the storage and lifecycle contract below has passing evidence.
 
 ## Player contract
 
+**Reconfirmed by the user on 9 October: greenfield, no backward compatibility.**
+Remove legacy settings/companion migration paths; do not add compatibility
+decoders or dual stores. Ordinary OFF/HARM musical conversion is current
+behavior, not a migration. Invalid/corrupt new-format input still fails safely.
+
 Each Kit carries **both DEG and base CHRD**, per MIDI track. These are Part
 defaults: a pattern step with no corresponding lock inherits its current
 Part/Kit's value. Explicit DEG and CHRD locks stay with the pattern. DEG keeps
