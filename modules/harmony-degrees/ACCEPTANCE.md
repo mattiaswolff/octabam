@@ -1,7 +1,7 @@
 # Harmony degree hardware acceptance
 
-Use the separately packaged `mattias-bus-degrees` image and a complete copy of
-a project. Keep the current firmware and original project as the comparison.
+Use the packaged `mattias-bus-degrees-kits` image and a complete copy of a
+project. Keep the current firmware and original project as the comparison.
 The package's source reference and hashes identify the image under test.
 Automated checks do not establish hardware timing or hardware acceptance.
 
@@ -46,6 +46,13 @@ the music already in a Part or sequence.
 6. Use different Part KEYs. Save a Part, change its DEG default, reload it,
    copy it and clear it. Switch banks. Confirm the intended degree defaults
    and explicit root locks stay attached to the correct data.
+   With KITS, save two Kits with different DEG/CHRD defaults, HARM, KEY,
+   voicing and Follow settings. Unlocked trigs must inherit the incoming Kit;
+   explicit DEG and CHRD locks remain pattern data. Load, undo, copy, clear,
+   quick-save and reload the Kits, including one from another bank.
+   Specifically, load D-minor OFF over C-minor CHORD with an explicit `1:3`:
+   the locked native NOTE must become C3, while unlocked trigs use the incoming
+   Kit's NOTE. Repeat while playing, with held keys and an arp, then STOP.
 7. Record roots and chord-quality changes live, including two changes on one
    step. Change KEY before replay: the recorded degrees should transpose,
    and the final recorded change should win. Check releases with overlapping
@@ -78,5 +85,5 @@ the complete stored pair, not one file from each save.
 
 Degrees resolving beyond MIDI 0–127 are silent in HARM. Turning HARM OFF
 commits the closest MIDI boundary because native NOTE has no separate silent
-root value. KITS and MIDI SCENES are rejected by the composition ledger until
-they have degree-aware storage and interpolation contracts.
+root value. KITS carries native Part defaults; it adds no degree storage or
+conversion adapter. MIDI SCENES remains incompatible with the degree model.

@@ -128,8 +128,11 @@ retained identities. No default is restored from a companion.
 
 Codec/root checks cover all 84 scales and 7,056 scale/degree combinations.
 CHRD native defaults and pending inheritance have linked-code checks. Full
-composed hooks, files, publication and firmware lifecycle acceptance are in
-progress. Earlier D0 receipts belong to the preserved D0 image and do not
+firmware checks pass native Part transitions across all nine mode pairs,
+independent incoming defaults, degree/CHRD recording, save, cold reload and
+retained resume. The composed hooks, interrupted native copy/clear, file
+failure paths and bounded publication checks pass. KITS library and musical
+recall checks are in progress. Earlier D0 receipts belong to the preserved D0 image and do not
 validate these new Part-owned changes. Hardware acceptance remains separate.
 
 ## Reproduce and accept
