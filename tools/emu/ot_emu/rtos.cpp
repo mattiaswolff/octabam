@@ -1412,6 +1412,14 @@ namespace ot
 		const auto st = runLoop(s);
 		if(st == Stop::Gate)
 		{
+			if(m_machine.getA7() != sp + 4)
+			{
+				char msg[160];
+				std::snprintf(msg, sizeof msg, "callAsMain(%#x): C ABI stack mismatch: %#x, expected %#x",
+					_addr, m_machine.getA7(), sp + 4);
+				m_why = msg;
+				return false; // Preserve the failure; do not hide a callee leak.
+			}
 			_d0 = m_machine.getD0();
 			// RTS consumes the return address, not the C ABI arguments. We
 			// are the caller: reclaim them before borrowing main again.

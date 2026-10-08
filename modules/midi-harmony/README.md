@@ -567,3 +567,49 @@ boot. Hardware playing feel remains to be evaluated.
 repeated scale/fifths progressions, octave changes, all available keys/scales,
 all spreads, both WIDTH choices and MIDI boundaries. This is machine-code
 emulation, not electrical MIDI or hardware acceptance.
+
+
+## Concert stress findings (8 October 2026)
+
+The eight-track full-firmware reproduction in `out/concert-port` exposed
+an ownership defect: sounding C/E/G on channels 1 through 8 produced 24
+note-ons, but only three releases, all on channel 8. Stock keyboard release
+tokens at `0x46c79d70` are indexed only by pitch. Harmony's per-track reference
+counts did not protect the stock layer from overwriting those tokens.
+
+A second reproduction switches HARM OFF while C/E/G remains held, then
+presses/releases E. The bypass call releases the held chord's E prematurely.
+The dense active-Harmony model alone did not catch either problem: 1,024
+simultaneous physical keys and 14,742 edges passed at the intercepted stock
+keyboard boundary. This is why both boundary checks and real UART captures
+are required. The fix gives generated notes private per-track stock release tokens and
+coalesces shared direct channel/pitch owners. Captured tokens release the
+original destination after channel edits and CHAN OFF. Bypass notes that
+intersect held Harmony tones join its reference counts; an earlier bypass
+note is adopted when a new chord shares it. Unrelated bypass stays native.
+Four pinned slot detours recognize only the owned-call return PC; there is
+no shared temporary pointer or new interrupt mask.
+
+The stateful linked gate runs three reproducible seeds, over 44,000 key
+edges, 1,024 simultaneous keys, NOTE/triad/seventh changes, all track/scale
+contexts available in the selected image, and randomized release order.
+With `OT_PROJECT` set, the image gate also invokes the full port suite.
+The standalone full port suite passes 12 scenarios and 5,998 UART note events:
+1,024 simultaneous pitches, separate/shared/paired channels, both bypass
+transition orders, stock bypass parity, channel changes/OFF while held,
+eight arps, 80 shared-channel churn cycles, and an eight-track sequence.
+Every scenario checks balanced notes, empty ownership and unchanged banks.
+In a combined build, the sequence additionally runs an eight-track Follow
+chain. Fixtures and receipts are under `out/midi-concert-port/`.
+
+```
+.venv/bin/python tools/verify/verify_midi_harmony_stress.py
+.venv/bin/python tools/verify/verify_midi_concert_port.py --project /path/to/template
+```
+
+Live port events enter the real keyboard C ABI; sequence events run through
+native transport. They do not prove external-input parser throughput,
+physical DIN/USB jitter, hardware CPU headroom, or hours of continuous performance.
+The port itself needed a caller-stack cleanup fix before the longest floods
+were meaningful; `tools/emu/README.md` records that separate finding.
+No physical firmware was flashed or tested.
