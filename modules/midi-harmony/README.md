@@ -534,3 +534,34 @@ uses the same four-count stock accumulator as Harmony's other new controls.
 `tools/verify/verify_chord_display.py --project DIR` checks captured pitches,
 release/STOP clearing, native octave changes and sequencer UART agreement on a
 copied virtual card. These remain emulator checks, not hardware acceptance.
+
+### Playability candidate: root anchoring and WIDTH
+
+AUTO now admits only candidates containing the exact generated root pitch.
+Playing C4 keeps C4 in the chord, regardless of earlier progressions; other
+voices can still invert around it. KEY snapping and TRAN happen before this
+anchor, and ROOT OMIT/-1 OCT/-2 OCT still apply afterward. A root need not be
+the lowest voice. The bounded search and MIDI limits remain unchanged.
+
+Harmony window **F: WIDTH** is a temporary per-track audition control:
+**FULL** (default) retains existing OPEN/WIDE. **SOFT** makes OPEN lower the
+third sorted voice by one octave, and makes WIDE use the former OPEN shape.
+For a C4 major triad with VOIC ROOT and ROOT KEEP:
+
+| WIDTH | OPEN | WIDE |
+| --- | --- | --- |
+| FULL | C4–G4–E5 | C4–E5–G5 |
+| SOFT | G3–C4–E4 | C4–G4–E5 |
+
+SOFT OPEN on a seventh is a drop-2 voicing; on a triad it lowers the fifth.
+This keeps the root's register while reducing the upper register's weight;
+it can put another chord tone below the root. CLOSE is identical in both.
+At MIDI boundaries a spread that cannot fit falls back to the unspread chord.
+WIDTH clears AUTO history when edited. It is intentionally volatile: it is
+not saved into project comments or battery RAM and starts FULL at firmware
+boot. Hardware playing feel remains to be evaluated.
+
+`tools/verify/verify_harmony_playability.py` exercises anchored AUTO through
+repeated scale/fifths progressions, octave changes, all available keys/scales,
+all spreads, both WIDTH choices and MIDI boundaries. This is machine-code
+emulation, not electrical MIDI or hardware acceptance.

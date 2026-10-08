@@ -124,6 +124,7 @@ MODULE = Module(
         Detour(0x40010224, bytes.fromhex('7139100b14ae'), 'midiharmony', 'mh_boot', 'validate battery-backed settings'),
     ),
     gates=(Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_playability.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_play.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_display.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_storage.py', stage='image', venv=True)),
