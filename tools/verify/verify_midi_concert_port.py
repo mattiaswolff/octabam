@@ -134,9 +134,11 @@ def run(source,name,sym,image,channels,mode):
         assert {e[1] for e in events if e[0]=='on'}==set(channels),(name,events)
         assert len(events)>=(400 if sequenced else 24),(name,len(events))
     if mode=='change':
+        source_count=sum(e[:2]==('on',channels[7]) for e in events)
+        assert source_count>=48,(name,'source did not run enough changes',source_count)
         for ch in channels[:7]:
             pitches=[e[2] for e in events if e[:2]==('on',ch)]
-            assert len(pitches)>100 and len(set(pitches))>=6,(name,ch,pitches)
+            assert len(pitches)==source_count and len(set(pitches))>=6,(name,ch,source_count,pitches)
     assert (w/'mh_held.bin').read_bytes()==b'\xff'*4096,name
     assert (w/'mh_refs.bin').read_bytes()==bytes(1024),name
     assert (w/'mh_key_tokens.bin').read_bytes()==b'\xff'*2048,name
