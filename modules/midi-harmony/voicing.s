@@ -40,6 +40,22 @@ mh_voice:
     move.l %d0,80(%sp)
     move.l %d7,%d0
     jsr mh_sprd_get
+    /* SOFT OPEN drops the third sorted voice; SOFT WIDE uses the
+     * former OPEN shape. FULL retains the original spacing exactly. */
+    move.l %d0,%d1
+    lea mh_width,%a0
+    move.l %d1,%d0
+    tst.b (%a0,%d7.l)
+    beq.s .voice_width_ready
+    tst.l %d0
+    beq.s .voice_width_ready
+    cmpi.l #2,%d0
+    beq.s .voice_width_open
+    moveq #3,%d0
+    bra.s .voice_width_ready
+.voice_width_open:
+    moveq #1,%d0
+.voice_width_ready:
     move.l %d0,76(%sp)
     move.l %d7,%d0
     jsr mh_active
@@ -105,6 +121,11 @@ mh_voice:
     move.l %d0,68(%sp) /* anchor root */
     moveq #0,%d1
     move.b 4(%a2),%d1 /* previous logical root in token's high byte */
+    cmp.l %d1,%d0
+    bne.s .voice_new_root
+    move.l (%a2),56(%sp) /* Repeated root/quality keeps the sounded voicing. */
+    bra.w .voice_remember
+.voice_new_root:
     sub.l %d1,%d0
     moveq #0,%d1
 .voice_register_up:
@@ -162,7 +183,21 @@ mh_voice:
     move.l 76(%sp),%d0
     bsr.w mh_spread
     tst.l %d0
-    beq.s .voice_next_octave
+    beq.w .voice_next_octave
+    /* Only score candidates containing the exact requested root register.
+     * ROOT placement still runs afterward; Follow and recording use the
+     * untouched logical root. This prevents gradual octave walking. */
+    moveq #0,%d3
+.voice_root_find:
+    moveq #0,%d0
+    move.b (%a0,%d3.l),%d0
+    cmp.l 68(%sp),%d0
+    beq.s .voice_root_found
+    addq.l #1,%d3
+    cmp.l %d6,%d3
+    blt.s .voice_root_find
+    bra.w .voice_next_octave
+.voice_root_found:
     moveq #0,%d3
 .voice_score:
     moveq #0,%d0
@@ -401,6 +436,8 @@ mh_spread:
     lea 16(%sp),%a1
     tst.l %d0
     beq.s .spread_ok
+    cmpi.l #3,%d0
+    beq.s .spread_soft
     cmpi.l #1,%d0
     bne.s .spread_wide
     moveq #0,%d2
@@ -417,6 +454,13 @@ mh_spread:
     blt.s .spread_rotate
     move.b %d2,-1(%a1,%d6.l)
     bra.s .spread_ok
+.spread_soft:
+    moveq #0,%d2
+    move.b 2(%a1),%d2
+    subi.l #12,%d2
+    bmi.s .spread_fail
+    move.b %d2,2(%a1)
+    bra.s .spread_ok
 .spread_wide:
     moveq #1,%d1
 .spread_upper:
@@ -430,6 +474,11 @@ mh_spread:
     cmp.l %d6,%d1
     blt.s .spread_upper
 .spread_ok:
+    /* SOFT can interleave lifted and unlifted voices; sort atomically. */
+    move.l %a0,-(%sp)
+    move.l %a1,%a0
+    bsr.w mh_sort_chord
+    move.l (%sp)+,%a0
     move.l (%a1),(%a0)
     moveq #1,%d0
     bra.s .spread_return
@@ -441,3 +490,59 @@ mh_spread:
     rts
     .balign 4
 mh_voice_history: .space 64,0
+
+/* Sort only the sounding voices; triad padding is handled by the caller.
+ * d6 count, a0 four pitches. Preserve all registers. */
+    .text
+mh_sort_chord:
+    lea -20(%sp),%sp
+    movem.l %d0-%d4,(%sp)
+    move.l %d6,%d4
+.sort_pass:
+    moveq #1,%d2
+.sort_pair:
+    moveq #0,%d0
+    moveq #0,%d1
+    move.b -1(%a0,%d2.l),%d0
+    move.b (%a0,%d2.l),%d1
+    cmp.l %d1,%d0
+    bls.s .sort_next
+    move.b %d1,-1(%a0,%d2.l)
+    move.b %d0,(%a0,%d2.l)
+.sort_next:
+    addq.l #1,%d2
+    cmp.l %d6,%d2
+    blt.s .sort_pair
+    subq.l #1,%d4
+    bne.s .sort_pass
+    movem.l (%sp),%d0-%d4
+    lea 20(%sp),%sp
+    rts
+
+/* Volatile per-track audition setting: 0 FULL (existing), 1 SOFT.
+ * Deliberately absent from project/battery formats. */
+    .balign 4
+    .global mh_width,mh_width_get,mh_width_set
+mh_width: .space 8,0
+mh_width_get:
+    cmpi.l #7,%d0
+    bhi.s .width_invalid
+    lea mh_width,%a0
+    move.b (%a0,%d0.l),%d0
+    andi.l #1,%d0
+    rts
+.width_invalid:
+    moveq #0,%d0
+    rts
+mh_width_set:
+    cmpi.l #7,%d0
+    bhi.s .width_done
+    cmpi.l #1,%d1
+    bhi.s .width_done
+    lea mh_width,%a0
+    move.b %d1,(%a0,%d0.l)
+    lea mh_voice_history,%a0
+    lsl.l #3,%d0
+    clr.l 4(%a0,%d0.l)
+.width_done:
+    rts

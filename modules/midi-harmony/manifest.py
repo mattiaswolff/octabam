@@ -39,5 +39,6 @@ MODULE = Module(
         Detour(0x40025ac8, bytes.fromhex('42b9100b14d8'), 'midiharmony', 'mh_defaults', 'new project settings defaults'),
         Detour(0x40010224, bytes.fromhex('7139100b14ae'), 'midiharmony', 'mh_boot', 'validate battery-backed settings'),
     ),
-    gates=(Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),),
+    gates=(Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_playability.py', stage='image', venv=True),),
 )
