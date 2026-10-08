@@ -283,7 +283,7 @@ Press D on MIDI NOTE SETUP to open RFOL, then turn D inside the window
   the new one, restarting the synth envelope. Rests stay silent. The original
   release deadline and the next programmed trig stay in place.
 
-The setting is per receiver, volatile, and takes effect from its next note.
+The setting is per receiver, volatile, and takes effect from its next ordinary trig (not an arp-only tick).
 Live source-key changes are handled on the next sequencer service pass, not
 held until the next receiver trig. This is not a measured zero-latency claim.
 A source change coinciding with a scheduled receiver event does not add an

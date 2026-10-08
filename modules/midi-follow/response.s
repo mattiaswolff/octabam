@@ -20,7 +20,7 @@ bf_response_get:
 .get_zero:
     moveq #0,%d0
     rts
-/* d0 track,d1 value; all registers preserved. Changes arm at the next note. */
+/* d0 track,d1 value; all registers preserved. Changes arm at the next ordinary trig. */
 bf_response_set:
     lea -8(%sp),%sp
     movem.l %d2/%a0,(%sp)
@@ -164,6 +164,9 @@ bf_response_observe:
     lea bf_response_modes,%a0
     tst.b (%a0,%d7.l)
     beq.s .observe_done
+    lea bf_response_pool,%a0
+    tst.l (%a0,%d7.l*4)
+    bmi.s .observe_done /* Enabling mid-arp waits for a known pool anchor. */
     move.l %d7,%d0
     bsr.w bf_response_target
     lea bf_response_anchor,%a0
@@ -219,7 +222,7 @@ bf_response_tick:
     sub.l %d0,%d6
     neg.l %d6 /* delta from the sounding logical root */
     beq.w .tick_next
-    move.l %d0,(%a0,%d7.l*4)
+    move.l %d0,64(%sp) /* Commit only if the held voices actually move. */
     move.l #0x10101,%d0
     lsl.l %d7,%d0
     and.l 56(%sp),%d0
@@ -241,6 +244,9 @@ bf_response_tick:
     lea 0x46c76de0,%a0
     tst.b (%a0,%d0.l)
     beq.w .tick_next
+    lea bf_response_anchor,%a0
+    move.l 64(%sp),%d0
+    move.l %d0,(%a0,%d7.l*4)
     move.l %d7,%d0
     lsl.l #5,%d0
     lea 0x46c77a16,%a3
@@ -311,6 +317,8 @@ bf_response_tick:
 .tick_forget:
     lea bf_response_anchor,%a0
     moveq #-1,%d0
+    move.l %d0,(%a0,%d7.l*4)
+    lea bf_response_pool,%a0
     move.l %d0,(%a0,%d7.l*4)
 .tick_next:
     addq.l #1,%d7
