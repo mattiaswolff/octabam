@@ -15,7 +15,7 @@ import subprocess
 import verify_midi_harmony_port as p
 
 
-def fixture(source,name,channels,arp=False,sequenced=False):
+def fixture(source,name,channels,arp=False,sequenced=False,change=False):
     w=p.fixture(source,name,{t:2 for t in range(8)},key_raw=0)
     for path in (w/'project').glob('bank*.work'):
         def edit(d):
@@ -35,10 +35,10 @@ def fixture(source,name,channels,arp=False,sequenced=False):
                     d[at+9:at+33]=bytes(24)
                     d[at+0x39:at+0x839]=b'\xff'*2048
                     if sequenced:
-                        d[at+9:at+17]=((1<<16)-1).to_bytes(8,'big')
+                        d[at+9:at+17]=(1 if change and t<7 else (1<<16)-1).to_bytes(8,'big')
                         for step in range(16):
                             lock=at+0x39+step*32
-                            d[lock:lock+3]=bytes((48+(step%4)*5,90+t,3))
+                            d[lock:lock+3]=bytes((48+(step%4)*5,90+t,127 if change and t<7 else 3))
         p.otp._bank_write(w/'project',int(path.stem[4:]),edit,guard=False)
     card,_=p.emu_card.stage_project(w/'project','OCTABAM','BASS',tree=w/'tree')
     (w/'card.img').write_bytes(card)
@@ -47,8 +47,8 @@ def fixture(source,name,channels,arp=False,sequenced=False):
 
 def run(source,name,sym,image,channels,mode):
     arp=mode=='arp'
-    sequenced=mode=='sequence'
-    w=fixture(source,name,channels,arp,sequenced)
+    sequenced=mode in ('sequence','change')
+    w=fixture(source,name,channels,arp,sequenced,mode=='change')
     commands=[]
     def key(frame,t,n,v):commands.append((frame,f'call:{sym["mh_keyboard"]:#x},{t},{n},{v},0'))
     def poke(frame,at,value):commands.append((frame,f'poke:{at:#x}={value}'))
@@ -59,7 +59,9 @@ def run(source,name,sym,image,channels,mode):
         commands.append((28000,'call:0x4009f5bc'))
         if 'bf_sources' in sym:
             # Longest reverse chain: T1 -> T2 -> ... -> T8, shared scale/root.
-            for t in range(7):poke('-',sym['bf_sources']+t,t+2)
+            for t in range(7):
+                poke('-',sym['bf_sources']+t,t+2)
+                if mode=='change':poke('-',sym['bf_response_modes']+t,1)
     elif mode=='bypass-first':
         for t in range(8):
             poke('-',p.harmony.NV+t,0)
@@ -131,6 +133,10 @@ def run(source,name,sym,image,channels,mode):
     else:
         assert {e[1] for e in events if e[0]=='on'}==set(channels),(name,events)
         assert len(events)>=(400 if sequenced else 24),(name,len(events))
+    if mode=='change':
+        for ch in channels[:7]:
+            pitches=[e[2] for e in events if e[:2]==('on',ch)]
+            assert len(pitches)>100 and len(set(pitches))>=6,(name,ch,pitches)
     assert (w/'mh_held.bin').read_bytes()==b'\xff'*4096,name
     assert (w/'mh_refs.bin').read_bytes()==bytes(1024),name
     assert (w/'mh_key_tokens.bin').read_bytes()==b'\xff'*2048,name
@@ -168,6 +174,8 @@ def main():
            'eight-arps':(list(range(1,9)),'arp'),
            'shared-channel-churn':([1,2,3,4]*2,'churn'),
            'eight-track-sequence':(list(range(1,9)),'sequence')}
+    if 'bf_response_modes' in sym:
+        cases['seven-held-change-followers']=(list(range(1,9)),'change')
     selected=args.case or list(cases)
     assert all(n in cases for n in selected),selected
     receipt=p.OUT/('result-'+('-'.join(selected) if args.case else 'all')+'.json')
