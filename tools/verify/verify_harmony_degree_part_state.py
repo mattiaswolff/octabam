@@ -9,6 +9,7 @@ import json
 from unicorn import UC_HOOK_CODE
 from unicorn.m68k_const import *
 from verify_harmony_degree_integration import DegreeMachine, ROOT
+from midi_machine import InterruptMaskTrace
 
 B, BS, PS, LANE = 0x400e21e0, 0x9b340, 0x18b2, 131
 COPY, INIT = 0x40020898, 0x40005638
@@ -34,11 +35,12 @@ def main():
     put(0x46c82456,B,4);put(0x100b14cf,0);put(0x100b14d0,0)
     source=m.scratch+0x2000
     paused=False;observing=False;instructions=0;masked=0;max_masked=0
+    mask_trace=InterruptMaskTrace(u)
     def observe(u,pc,size,data):
         nonlocal paused,instructions,masked,max_masked
         if not observing:return
         instructions+=1
-        if u.reg_read(UC_M68K_REG_SR)&0x700==0x700:masked+=1
+        if mask_trace.before(pc)==7:masked+=1
         else:max_masked=max(max_masked,masked);masked=0
         if not paused and pc==0x400208ae and u.reg_read(UC_M68K_REG_A1)>=B+0x8ed80+0x4e2+144:
             paused=True;u.emu_stop()
@@ -61,6 +63,7 @@ def main():
         u.reg_write(UC_M68K_REG_SR,0x2000);u.reg_write(UC_M68K_REG_A7,m.stack)
         u.mem_write(m.stack,b''.join(v.to_bytes(4,'big') for v in (m.done,*args)))
         m.arrival=None;m.stops={m.done};paused=False;observing=True;instructions=0
+        mask_trace.ipl=0
         u.emu_start(COPY,0,count=2000000)
         assert paused and m.arrival is None
         assert get(s['mp_snapshot_bank'],4)==B and get(s['mp_snapshot_parts'],4)==1

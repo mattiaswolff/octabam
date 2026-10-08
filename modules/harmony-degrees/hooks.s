@@ -274,6 +274,19 @@ hd_record_modes:
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
     rts
+    .global hd_record_sync
+/* Reconcile the native recorder's destination before atomic publication. */
+hd_record_sync:
+    lea -16(%sp),%sp
+    movem.l %d0-%d1/%a0-%a1,(%sp)
+    move.l %d2,-(%sp)
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr hd_sync_c
+    lea 12(%sp),%sp
+    movem.l (%sp),%d0-%d1/%a0-%a1
+    lea 16(%sp),%sp
+    rts
 /* d0 bank, d1 pattern, d2 track, d3 step, d4 captured degree.
  * The recorder holds its short root-publication mask; it saves NV afterward. */
 hd_record:
@@ -284,7 +297,7 @@ hd_record:
     move.l %d2,-(%sp)
     move.l %d1,-(%sp)
     move.l %d0,-(%sp)
-    jsr hd_record_c
+    jsr hd_record_publish_c
     lea 20(%sp),%sp
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp

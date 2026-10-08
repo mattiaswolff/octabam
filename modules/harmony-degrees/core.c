@@ -347,13 +347,37 @@ void hd_record_c(unsigned bank, unsigned pattern, unsigned track, unsigned step,
     if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return;
     if (degree >= 128 && degree <= 255) { hd_copy_note_c(bank,pattern,track,step,-1,degree&127); return; }
     if ((unsigned)degree >= HD_CODES || hd_sync_c(bank,pattern,track) != 1) return;
-    HdRoots *r = roots(bank,pattern,track);
     uint16_t sr = mask();
+    hd_record_publish_c(bank,pattern,track,step,degree);
+    unmask(sr);
+}
+/* Native recorder has reconciled the lane before its short publication mask.
+ * Never convert a whole lane here: NOTE and its captured degree must publish
+ * together, but first-use conversion belongs to the interruptible prepare.
+ * Part mode edits/copies and recording run in the UI task; an engine
+ * interrupt may change a Follow source's KEY, not this lane's representation. */
+void hd_record_publish_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree) {
+    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return;
+    HdRoots *r = roots(bank,pattern,track);
+    if (degree >= 128 && degree <= 255) {
+        unsigned note = (unsigned)degree&127;
+        write_native(bank,step_note(bank,pattern,track,step),note);
+        if (r->state == HD_ROOT_HARM) {
+            int context = hd_pattern_context_c(bank,pattern);
+            if (context < 0) return;
+            degree = hd_encode_c((int)note,hd_scale_c(bank,(unsigned)context%4,track));
+        } else {
+            if (r->state != HD_ROOT_UNKNOWN) { r->degree[step] = HD_NONE; r->note[step] = (uint8_t)note; }
+            changed(bank,pattern,track);
+            dirty(bank);
+            return;
+        }
+    }
+    if ((unsigned)degree >= HD_CODES || r->state != HD_ROOT_HARM) return;
     r->degree[step] = (uint8_t)degree;
     r->note[step] = *step_note(bank,pattern,track,step);
     changed(bank,pattern,track);
     dirty(bank);
-    unmask(sr);
 }
 void hd_copy_note_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree, int note) {
     if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64 || (note != HD_NONE && (unsigned)note > 127)) return;

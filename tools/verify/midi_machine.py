@@ -17,6 +17,27 @@ def raw_scale(key,mode):
 MODES = [(0,2,4,5,7,9,11),(0,2,3,5,7,9,10),(0,1,3,5,7,8,10),
          (0,2,4,6,7,9,11),(0,2,4,5,7,9,10),(0,2,3,5,7,8,10),(0,1,3,5,6,8,10)]
 
+
+class InterruptMaskTrace:
+    """Observe IPL without materializing Unicorn's lazy comparison flags.
+
+    Reading SR on every instruction can change a ColdFire CMP/BNE result in
+    Unicorn. Decode the actual SR writers instead; refuse an unknown writer
+    so a new instruction cannot silently invalidate the measurement.
+    """
+    def __init__(self, uc, ipl=0):
+        self.uc=uc;self.ipl=ipl
+    def before(self, pc):
+        u=self.uc;old=self.ipl
+        op=int.from_bytes(u.mem_read(pc,2),'big')
+        if op==0x46fc:
+            self.ipl=(int.from_bytes(u.mem_read(pc+2,2),'big')>>8)&7
+        elif op&0xfff8==0x46c0:
+            self.ipl=(u.reg_read(UC_M68K_REG_D0+(op&7))>>8)&7
+        elif op&0xffc0==0x46c0 or op in (0x007c,0x027c,0x0a7c,0x4e73):
+            raise AssertionError(('unhandled SR writer',hex(pc),hex(op)))
+        return old
+
 def symbols():
     raw = subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')], text=True)
     return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [Tt] ((?:hd|mh|bf|ms)_\w+)$',raw,re.M)}

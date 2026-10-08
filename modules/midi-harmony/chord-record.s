@@ -130,6 +130,9 @@ ch_record_commit:
     move.l %d5,%d1
     move.l 8(%fp),%d2
     move.l %a3,%d3
+    .ifdef HAVE_DEGREES
+    jsr hd_record_sync
+    .endif
     jsr ch_lock_set
     .ifdef HAVE_DEGREES
     move.w %sr,%d0

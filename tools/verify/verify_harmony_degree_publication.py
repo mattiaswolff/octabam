@@ -4,6 +4,7 @@ import json
 from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_WRITE
 from unicorn.m68k_const import *
 from verify_harmony_degree_integration import DegreeMachine, ROOT
+from midi_machine import InterruptMaskTrace
 
 
 def main():
@@ -11,6 +12,7 @@ def main():
     note=bank+0x4900;degree=h;snapshot=h+64
     expected=set();watch=False;pending=False;max_masked=masked=0
     check_duration=False;check_nv=False;observations=0
+    mask_trace=InterruptMaskTrace(u)
     def put(a,v,n=1):u.mem_write(a,v.to_bytes(n,'big'))
     def get(a):return u.mem_read(a,1)[0]
     # Independent C-major pitch oracle, including nearest/lower tie policy.
@@ -25,16 +27,17 @@ def main():
         if not watch:return
         if any(address<=a<address+size for a in (note,degree,snapshot)):pending=True
         if check_nv and address<0x100f8620+24960 and address+size>0x100f8620:
-            assert u.reg_read(UC_M68K_REG_SR)&0x700==0,'bulk retention ran with interrupts masked'
+            assert mask_trace.ipl==0,'bulk retention ran with interrupts masked'
     def inspect(u,pc,size,data):
         nonlocal pending,max_masked,masked,observations
         if not watch:return
+        ipl=mask_trace.before(pc)
         if check_duration:
-            if u.reg_read(UC_M68K_REG_SR)&0x700==0x700:masked+=1
+            if ipl==7:masked+=1
             else:max_masked=max(max_masked,masked);masked=0
         if not pending:return
         # Observe immediately AFTER each writer, before the next instruction.
-        if u.reg_read(UC_M68K_REG_SR)&0x700==0x700:return
+        if ipl==7:return
         pending=False
         n=get(note);d=get(degree);s=get(snapshot)
         visible=d if n==s else encode(n)
@@ -52,6 +55,7 @@ def main():
             put(note,48);put(degree,35);put(snapshot,48)
             put(h+128,2);put(h+129,0);put(h+130,0)
             expected={35,new_degree};watch=True;pending=False
+            mask_trace.ipl=initial_ipl>>8
             check_duration=initial_ipl!=0x700;masked=0
             u.mem_write(m.stack+4,b''.join(v.to_bytes(4,'big') for v in (0,0,0,0,new_degree)))
             m.call('hd_edit_step_c',regs={UC_M68K_REG_SR:0x2000|initial_ipl})
@@ -72,6 +76,7 @@ def main():
     put(m.sym['ch_record_active'],0,4);put(m.sym['hd_record_active'],35,4)
     put(m.scratch+8,0,4);put(m.scratch+16,100,4)
     expected={35};watch=True;pending=False;check_duration=False;check_nv=True
+    mask_trace.ipl=0
     m.call('ch_record_commit',stop=0x400420fa,regs={UC_M68K_REG_SR:0x2000,
         UC_M68K_REG_D6:0,UC_M68K_REG_D5:0,UC_M68K_REG_A3:0,
         UC_M68K_REG_A4:50,UC_M68K_REG_A6:m.scratch})
@@ -80,10 +85,24 @@ def main():
     assert u.reg_read(UC_M68K_REG_SR)&0x700==0
     assert observations>=9,'the observer never reached an interruptible publication'
     assert max_masked<300,('root update masked too much work',max_masked)
+    max_edit=max_masked
+    # A first recording must initialize a dense native lane before entering
+    # the atomic single-root publication, not inside one long outer mask.
+    for step in range(64):put(note+step*32,48+step%64)
+    u.mem_write(h,b'\xff'*128+b'\0\0\xff')
+    expected={35};pending=False;watch=True;check_duration=True
+    mask_trace.ipl=0;max_masked=masked=0
+    m.call('ch_record_commit',stop=0x400420fa,regs={UC_M68K_REG_SR:0x2000,
+        UC_M68K_REG_D6:0,UC_M68K_REG_D5:0,UC_M68K_REG_A3:0,
+        UC_M68K_REG_A4:50,UC_M68K_REG_A6:m.scratch})
+    watch=False
+    assert get(note)==get(snapshot)==50 and get(degree)==35
+    assert max_masked<3000,('first recording masked whole-lane conversion',max_masked)
     result={'interrupt_visible_roots':'old_or_new_only','edit_cases':12,
             'clear_cannot_resurrect':True,'off_clear_native_unchanged':True,
             'record_captured_key_publication':True,'retention_unmasked':True,
-            'max_edit_masked_instructions':max_masked,'observations':observations,
+            'max_edit_masked_instructions':max_edit,'max_cold_record_masked_instructions':max_masked,
+            'observations':observations,
             'hardware_timing_measured':False}
     print(json.dumps(result))
     (ROOT/'out/harmony-degrees/publication.json').write_text(json.dumps(result,indent=2)+'\n')

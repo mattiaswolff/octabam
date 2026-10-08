@@ -53,6 +53,7 @@ int hd_base_c(unsigned bank, unsigned part, unsigned track);
 int hd_resolve_c(unsigned bank, unsigned pattern, unsigned track, unsigned step);
 int hd_scale_c(unsigned bank, unsigned part, unsigned track);
 void hd_record_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree);
+void hd_record_publish_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree);
 void hd_edit_base_c(unsigned bank, unsigned part, unsigned track, int degree);
 void hd_edit_step_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree);
 int hd_lock_c(unsigned bank, unsigned pattern, unsigned track, unsigned step);
