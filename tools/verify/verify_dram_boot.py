@@ -73,12 +73,28 @@ fatal_hits = sum(1 for l in hits if f"at 0x{fatal:x}" in l)
 ok = handoff and entry_hits == 1 and fatal_hits == 0
 print(f"  [{'PASS' if ok else 'FAIL'}] verify_dram_boot: {remix.name} boots to the handoff; "
       f"loader ran {entry_hits}x, its fatal hang {fatal_hits}x")
+# Native Part initialization can run after the loader and before handoff.
+# Only these named transient data arrays may differ because of that work;
+# never bless a containing function/section or widen the code-drift budget.
+part_state_ranges = []
+if any(m.key == 'MIDI PART STATE' for m in mods):
+    runtime_nm = subprocess.check_output([
+        'm68k-elf-nm', str(ROOT / 'out/platform/runtime/runtime.elf')], text=True)
+    runtime_symbols = {f[2]: int(f[0], 16) for f in
+                       (line.split() for line in runtime_nm.splitlines()) if len(f) == 3}
+    part_state_ranges = [(runtime_symbols[name], size) for name, size in
+                         (('mp_snapshot', 4*8*36), ('mp_part_epochs', 64*4))]
+
 for (a, n, p), (label, raw) in zip(dumps, expects):
     got = p.read_bytes() if p.exists() else b""
     diff = [i for i in range(min(len(got), len(raw))) if got[i] != raw[i]]
-    fine = len(got) == len(raw) and len(diff) <= 16
+    transient = [i for i in diff if any(start <= a+i < start+size
+                                       for start, size in part_state_ranges)]
+    remaining = len(diff)-len(transient)
+    fine = len(got) == len(raw) and remaining <= 16
     ok &= fine
     print(f"  [{'PASS' if fine else 'FAIL'}] verify_dram_boot: {label} at 0x{a:08x} == linked "
-          f"runtime ({n:,} B) except {len(diff)} byte(s) the runtime wrote itself"
+          f"runtime ({n:,} B) except {len(transient)} named Part-state byte(s) and "
+          f"{remaining} other byte(s) the runtime wrote itself"
           + (f" at +{diff[0]:#x}.." if diff else ""))
 sys.exit(0 if ok else 1)
