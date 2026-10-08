@@ -103,10 +103,10 @@ def record_save(source,root_mode=0):
     files=p.emu_card.extract_image((work/'save-card.img').read_bytes())
     for suffix in ('work','strd'):
         data=files[f'OCTABAM/BASS/chrd01.{suffix}']
-        assert len(data)==8224 and data[:4]==b'CHRD'
+        assert len(data)==8224 and data[:8]==b'CHD2'+(2).to_bytes(4,'big')
         assert data[32:]==locks[:8192]
     for bank in range(2,17):
-        assert files[f'OCTABAM/BASS/chrd{bank:02d}.strd']==b'CHNO'+bytes(28)
+        assert files[f'OCTABAM/BASS/chrd{bank:02d}.strd']==b'CHD0'+bytes(28)
     print('[ok] actual mode selector, REC+PLAY, recorded physical NOTE+CHRD, replay and complete SAVE/store',flush=True)
     # Fresh disk load and the firmware's own current-bank resume.
     script='100 key 0x31 down\n200 key 0x31 up\n500 key 0x28 down\n600 key 0x28 up\n9000 key 0x27 down\n9100 key 0x27 up\n10000 quit\n'
