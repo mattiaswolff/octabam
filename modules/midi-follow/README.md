@@ -1,5 +1,7 @@
 # MIDI Follow (experimental)
 
+For the shared workflow, see [MIDI roots, scales and chords](../../docs/guide/MIDI_ROOTS_AND_CHORDS.md).
+
 Each MIDI track can follow another MIDI track's chord root while keeping its
 own rhythm, velocity and note length. By default, FIXED octave 3 with TRAN=0 uses MIDI notes 36–47:
 C → F → G gives 36 → 41 → 43. The follower's TRAN adds a signed semitone

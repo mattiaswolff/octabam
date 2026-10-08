@@ -1,5 +1,7 @@
 # MIDI Harmony
 
+For the shared workflow, see [MIDI roots, scales and chords](../../docs/guide/MIDI_ROOTS_AND_CHORDS.md).
+
 On a MIDI track, open **NOTE SETUP** (FUNC + SRC). Knob **F: HARM** selects:
 
 | HARM | Output |
