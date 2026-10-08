@@ -839,6 +839,7 @@ def main():
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
     _want = {"harmony-degrees": (), "mattias-bus-degrees": _rig,
+             "mattias-bus-degrees-kits": _rig,
              "midi-part-state": (), "mattias-bus-part-kits": _rig,
              "midi-harmony-follow": (), "mattias-bus": _rig,
              "mattias-midi-follow": _rig, "mattias-midi-harmony": _rig, "midi-scales": (), "midi-follow": (), "midi-harmony": (), "mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
