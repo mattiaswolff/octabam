@@ -382,7 +382,7 @@ def persistence(source,voic=1,omit=0):
     lines.extend([f'2500 enc 1 {4 if voic==1 else voic-1}','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1',f'2640 enc 3 {omit}','2650 enc 4 5','2660 enc 5 4'])
     key(2700,0x32,50)
     key(2800,0x32)
-    lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up','4000 enc 5 4'])
+    lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up',f'4000 enc 5 {4 if expected_key==25 else 1}'])
     key(4500,0x32)
     for at,k in zip(range(5000,9200,700),[0x1c,0x21,0x20,0x31,0x31]):key(at,k)
     lines.append('40000 quit')
