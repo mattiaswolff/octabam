@@ -208,15 +208,16 @@ def keyboard_gate():
         args=[0,note,velocity,1]
         u.mem_write(m.stack,m.done.to_bytes(4,'big')+b''.join(v.to_bytes(4,'big') for v in args))
         u.reg_write(UC_M68K_REG_A7,m.stack);u.reg_write(UC_M68K_REG_SR,0x2700)
-        m.stops={m.done,0x4009e9b0,m.sym['mh_record_key']};pc=m.sym['mh_keyboard'];events=[]
+        m.stops={m.done,0x4009e9b0,m.sym['mh_record_key'],m.sym['mh_owned_key']};pc=m.sym['mh_keyboard'];events=[]
         for _ in range(20):
             m.arrival=None;u.emu_start(pc,0,count=50000)
             assert m.arrival in m.stops
             if m.arrival==m.done:return events
             sp=u.reg_read(UC_M68K_REG_A7)
-            if m.arrival==m.sym['mh_record_key']:
+            if m.arrival in (m.sym['mh_record_key'],m.sym['mh_owned_key']):
                 args=[int.from_bytes(u.mem_read(sp+4+4*i,4),'big') for i in range(4)]
-                recorded.append(tuple(args))
+                if m.arrival==m.sym['mh_record_key']:recorded.append(tuple(args))
+                else:events.append((args[1],args[2]));forwarded.append(tuple(args))
                 pc=int.from_bytes(u.mem_read(sp,4),'big');u.reg_write(UC_M68K_REG_A7,sp+4)
                 continue
             args=[int.from_bytes(u.mem_read(sp+32+4*i,4),'big') for i in range(4)]
