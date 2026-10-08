@@ -68,6 +68,18 @@ def machine():
         source=(receiver+1)%8;m=fixture(receiver=receiver,source=source)
         assert m.change()==[(0x90+receiver,36,0),(0x90+receiver,41,91)]
     m=fixture();s=m.sym
+    m.uc.mem_write(s['bf_sources']+1,b'\x03')
+    m.uc.mem_write(s['bf_sources']+2,b'\x01')
+    assert m.change()==[(0x91,36,0),(0x91,41,91)],'ultimate source chain'
+    m=fixture();assert m.change(72)==[],'FIXED ignores source octaves'
+    m=fixture(pitches=(60,));s=m.sym
+    m.uc.mem_write(s['bf_reg_modes']+1,b'\x01')
+    m.call('bf_response_observe',regs={UC_M68K_REG_D7:1,UC_M68K_REG_D4:0,UC_M68K_REG_A2:m.scratch})
+    assert m.change(72)==[(0x91,60,0),(0x91,72,91)]
+    m=fixture();m.uc.mem_write(0x46c76fe0+32+12,b'\x47')
+    assert m.change(60)==[],'TRAN edit alone is not a root change'
+    assert m.change(65)==[(0x91,36,0),(0x91,48,91)]
+    m=fixture();s=m.sym
     m.call('bf_response_set',1,0);m.call('bf_response_set',1,1)
     assert m.change()==[],'setting switch must arm at next receiver note'
     print('[ok] NEXT identity; CHANGE held root/voices, repeated roots, rests, scheduled edges, mute/enable/channel gates, ownership collisions, MIDI bounds, all receivers and unchanged release deadlines')
