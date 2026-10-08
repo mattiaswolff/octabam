@@ -1,5 +1,7 @@
 # MIDI Scales
 
+For the shared workflow, see [MIDI roots, scales and chords](../../docs/guide/MIDI_ROOTS_AND_CHORDS.md).
+
 Extends the existing **KEY** control at the bottom right of MIDI ARP SETUP
 (FUNC + AMP), without moving controls or replacing the graph.
 
