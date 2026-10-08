@@ -7,7 +7,7 @@
     .include "remix.inc"
     .if MP_DEFINE
     .text
-    .global mp_ui_context,mp_play_context,mp_read,mp_write
+    .global mp_ui_context,mp_play_context,mp_read,mp_write,mp_read_key
 mp_ui_context:
     lea -12(%sp),%sp
     movem.l %d1-%d2/%a0,(%sp)
@@ -116,11 +116,45 @@ mp_read:
     bsr.w .address
     tst.l %d0
     bmi.s .read_done
+    bsr.w .snapshot_address
     moveq #0,%d0
     move.b (%a0),%d0
 .read_done:
     movem.l (%sp),%d4-%d6/%a0-%a1
     lea 20(%sp),%sp
+    rts
+
+/* Read native KEY (offset 17) without making it a writable custom field. */
+mp_read_key:
+    lea -24(%sp),%sp
+    movem.l %d2/%d4-%d6/%a0-%a1,(%sp)
+    moveq #16,%d2
+    bsr.w .address
+    tst.l %d0
+    bmi.s .key_done
+    bsr.w .snapshot_address
+    moveq #0,%d0
+    move.b 1(%a0),%d0
+.key_done:
+    movem.l (%sp),%d2/%d4-%d6/%a0-%a1
+    lea 24(%sp),%sp
+    rts
+
+/* Internal address remap for an in-progress native bank/Part replacement.
+ * .address supplied a1 bank,d4 Part,d0 byte offset in the working array.
+ * Only readers use the snapshot; native/UI writes retain native authority.
+ */
+.snapshot_address:
+    cmpa.l mp_snapshot_bank,%a1
+    bne.s .snapshot_done
+    move.l #0x18b2-288,%d5
+    mulu.l %d4,%d5
+    neg.l %d5
+    add.l %d0,%d5
+    subi.l #0x4e2,%d5
+    lea mp_snapshot,%a0
+    adda.l %d5,%a0
+.snapshot_done:
     rts
 
 /* d0 track,d1 context,d2 field,d3 byte -> 1 accepted, 0 invalid.
