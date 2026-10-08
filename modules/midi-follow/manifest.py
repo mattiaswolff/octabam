@@ -11,6 +11,7 @@ MODULE = Module(
     proof=Proof.PORT, proof_note="verify_midi_follow: stock/patched MIDI capture; not flashed",
     doc="RFOL selects a source; press D for fixed or source-relative octave, then follower TRAN/P-locks.",
     linked=(Linked("bassfollow", "modules/midi-follow/midi_follow.s", dram=True, include=harmony_inc),
+            Linked("followresponse", "modules/midi-follow/response.s", dram=True, include=harmony_inc),
             Linked("followregister", "modules/midi-follow/register.s", dram=True),
             Linked("followpage", "modules/midi-follow/page.s", dram=True)),
     symbol_refs=(
@@ -35,6 +36,7 @@ MODULE = Module(
              Detour(0x4009FB80, bytes.fromhex("12126d0001a6"),
                    "bassfollow", "bf_note",
                    "resolve root before the sequencer records the emitted note"),),
-    gates=(Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),
+    gates=(Gate("tools/verify/verify_midi_follow_response.py", stage="image", venv=True),
+           Gate("tools/verify/verify_midi_follow.py", stage="image", venv=True),
            Gate("tools/verify/verify_midi_follow_register.py", stage="image", venv=True)),
 )
