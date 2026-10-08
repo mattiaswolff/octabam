@@ -2,14 +2,6 @@
  * C retains d2-d7/a2-a6; the called helpers preserve that set.
  */
     .text
-    .global hd_type_c,hd_source_c
-hd_type_c:
-    move.l 4(%sp),%d0
-    jmp mh_get
-hd_source_c:
-    move.l 4(%sp),%d0
-    jmp mh_source
-
 /* Register ABI wrappers for the existing lifecycle hooks. Preserve all
  * registers except a documented result, including C's volatile a1. */
     .global hd_reset,hd_ready_all,hd_bank_reset,hd_bank_loaded,hd_nv_save,hd_nv_restore

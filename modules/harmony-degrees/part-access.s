@@ -1,9 +1,12 @@
 /* C ABI adapters to the shared explicit-context native Part interface. */
     .include "remix.inc"
     .text
-    .global hd_follow_c
+    .global hd_follow_c,hd_scales_c
 hd_follow_c:
     moveq #HD_FOLLOW,%d0
+    rts
+hd_scales_c:
+    moveq #HD_SCALES,%d0
     rts
     .global hd_ui_context_c,hd_play_context_c,hd_part_read_c,hd_part_write_c,hd_part_key_c
 hd_ui_context_c:

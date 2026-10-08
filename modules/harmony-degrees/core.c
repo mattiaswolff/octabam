@@ -82,6 +82,7 @@ int hd_scale_c(unsigned bank, unsigned part, unsigned track) {
                    native(bank)[part_offset(part)+0x4e2 + track*36+17];
     if (!raw || raw > 84) return 0;
     if (raw <= 24) return (int)(((raw-1)/2)*4+((raw-1)&1)*320);
+    if (!hd_scales_c()) return 0;
     static const unsigned modes[5] = {1,2,3,4,6};
     return (int)(((raw-25)/5)*4+modes[(raw-25)%5]*64);
 }

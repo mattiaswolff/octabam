@@ -15,7 +15,8 @@ MODULE = Module(
     linked=(Linked('degreecodec', 'modules/harmony-degrees/codec.s', dram=True),
             Linked('degreeroots', 'modules/harmony-degrees/roots.s', dram=True),
             Linked('degreeaccess', 'modules/harmony-degrees/part-access.s', dram=True,
-                   include=lambda modules: '.set HD_FOLLOW,' + str(int('MIDI FOLLOW' in modules)) + '\n'),
+                   include=lambda modules: '.set HD_FOLLOW,' + str(int('MIDI FOLLOW' in modules)) +
+                   '\n.set HD_SCALES,' + str(int('MIDI SCALES' in modules)) + '\n'),
             Linked('degreecore', 'modules/harmony-degrees/core.s', dram=True),
             Linked('degreestorage', 'modules/harmony-degrees/storage.s', dram=True),
             Linked('degreeevents', 'modules/harmony-degrees/events.s', dram=True),

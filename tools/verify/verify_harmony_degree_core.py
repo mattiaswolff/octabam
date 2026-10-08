@@ -9,6 +9,7 @@ import json
 import pathlib
 import re
 import subprocess
+import sys
 import tempfile
 from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
 from unicorn.m68k_const import *
@@ -27,7 +28,8 @@ def main():
     subprocess.run(['python3', str(ROOT/'modules/harmony-degrees/generate.py'), '--check'], check=True)
     with tempfile.TemporaryDirectory(prefix='harmony-degree-core-') as tmp:
         out = pathlib.Path(tmp)
-        (out/'remix.inc').write_text('.set MP_DEFINE,1\n.set HD_FOLLOW,1\n')
+        scales = '--without-scales' not in sys.argv
+        (out/'remix.inc').write_text(f'.set MP_DEFINE,1\n.set HD_FOLLOW,1\n.set HD_SCALES,{int(scales)}\n')
         (out/'stub.s').write_text("""
 .data
 .global ch_lock_table,ch_nv_bank,ch_lock_status
@@ -117,6 +119,17 @@ mp_part_epochs: .space 256
             before.append(bytes(data))
             call('hd_bank_loaded_c',b)
         ui(0,0)
+        # Native KEY decoding agrees with the selected module vocabulary;
+        # undefined extended IDs cannot activate unavailable scale modes.
+        for raw in range(256):
+            put(key(0,0,0),raw)
+            expected = 0
+            if 1 <= raw <= 24:
+                expected = ((raw-1)//2)*4+((raw-1)%2)*320
+            elif scales and 25 <= raw <= 84:
+                expected = ((raw-25)//5)*4+(1,2,3,4,6)[(raw-25)%5]*64
+            assert call('hd_scale_c',0,0,0)==expected, (raw,scales)
+        put(key(0,0,0),2)
         # OFF access never converts pitches, creates degrees or dirties banks.
         for b in range(16):
             for p in range(16): assert call('hd_sync_c',b,p,0)==0
@@ -301,7 +314,7 @@ mp_part_epochs: .space 256
         u.mem_write(nv,saved)
         assert call('hd_nv_restore_c',1)==0
         assert call('hd_validate_c',sym['hd_banks'])==1
-        print(json.dumps({'banks':16,'patterns':256,'part_default_authority':'passed',
+        print(json.dumps({'banks':16,'patterns':256,'scales_module':scales,'native_key_values':256,'part_default_authority':'passed',
                           'off_stock_and_unrelated_banks':'byte comparisons passed',
                           'same_slot_outgoing_c3_follow_and_new_entry':'passed',
                 'snapshot_no_reattachment_and_unaffected_part':'passed',
