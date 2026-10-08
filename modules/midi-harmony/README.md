@@ -412,7 +412,8 @@ no shared temporary pointer or new interrupt mask.
 The stateful linked gate runs three reproducible seeds, over 44,000 key
 edges, 1,024 simultaneous keys, NOTE/triad/seventh changes, all track/scale
 contexts available in the selected image, and randomized release order.
-The full port suite passes 12 scenarios and 5,998 UART note events:
+With `OT_PROJECT` set, the image gate also invokes the full port suite.
+The standalone full port suite passes 12 scenarios and 5,998 UART note events:
 1,024 simultaneous pitches, separate/shared/paired channels, both bypass
 transition orders, stock bypass parity, channel changes/OFF while held,
 eight arps, 80 shared-channel churn cycles, and an eight-track sequence.
@@ -427,7 +428,7 @@ chain. Fixtures and receipts are under `out/midi-concert-port/`.
 
 Live port events enter the real keyboard C ABI; sequence events run through
 native transport. They do not prove external-input parser throughput,
-physical DIN/USB jitter, hardware CPU headroom, or a hours-long concert.
+physical DIN/USB jitter, hardware CPU headroom, or hours of continuous performance.
 The port itself needed a caller-stack cleanup fix before the longest floods
 were meaningful; `tools/emu/README.md` records that separate finding.
 No physical firmware was flashed or tested.
