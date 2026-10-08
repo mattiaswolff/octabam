@@ -44,7 +44,8 @@ its displayed KEY is read-only while following.
 - RFOL selects a **MIDI track**, independently of its output channel.
   The source's arpeggio does not change the followed root.
 - A sequenced follower uses the latest source root on its next note trig.
-  Rests retain that root; held notes are not repitched. Until a source root
+  With RESP NEXT (default), held notes are not repitched. Rests retain the
+  root. Until a source root
   is known, the follower plays its own notes.
 - Muting the source silences its output while its sequenced root progression
   continues to drive followers. Keep its output channel enabled.
@@ -64,7 +65,8 @@ Live playing does not replace a running pattern's root progression.
 **KEY is a Part setting.** HARM, VOIC, SPRD and ROOT are saved per MIDI track
 in the project. CHRD locks belong to sequencer steps and use project companion
 files; keep those files with the project when backing up or copying it.
-**RFOL and its octave settings reset on reboot** and must be selected again.
+**RFOL, MODE and both OCT values are saved per MIDI track in the project**
+and restored on restart. Changing Parts does not change the Follow setup.
 
 See the module READMEs for full controls, storage details and verification
 status. These are development modules; hardware acceptance remains pending.
