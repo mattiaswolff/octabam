@@ -10,6 +10,9 @@ from collections import Counter
 import hashlib
 import json
 import random
+import os
+import subprocess
+import sys
 
 import verify_midi_harmony as h
 from unicorn.m68k_const import *
@@ -137,6 +140,7 @@ def main():
     ap.add_argument('remix', nargs='?')
     ap.add_argument('--steps', type=int, default=12000)
     ap.add_argument('--seed', type=int, action='append')
+    ap.add_argument('--project', default=os.environ.get('OT_PROJECT'))
     ap.add_argument('--bypass-only', action='store_true')
     args = ap.parse_args()
     out = h.ROOT/'out/harmony-stress'
@@ -148,6 +152,12 @@ def main():
     receipt.write_text(json.dumps(dict(status='pass', seeds=results,
         image_sha256=hashlib.sha256((h.ROOT/'out/mainos_bus.bin').read_bytes()).hexdigest(),
         scope='linked keyboard ownership; stock keyboard and recorder intercepted'), indent=2)+'\n')
+
+    if args.project:
+        subprocess.run([sys.executable,str(h.ROOT/'tools/verify/verify_midi_concert_port.py'),
+                        '--project',args.project],check=True,timeout=1800)
+    else:
+        print('[SKIP] concert UART suite: supply --project DIR or OT_PROJECT',flush=True)
 
 
 if __name__ == '__main__':
