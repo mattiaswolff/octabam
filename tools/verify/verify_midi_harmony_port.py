@@ -81,9 +81,9 @@ def choice_panel(text):
     return '\n'.join(sorted(lines,key=lambda l:int(l.split()[0])))+'\n'
 
 
-def run(work, name, extra=(), image=None, card=None):
+def run(work, name, extra=(), image=None, card=None, physical_panel=False):
     extra=list(extra)
-    if '--live-script' in extra:
+    if '--live-script' in extra and not physical_panel:
         index=extra.index('--live-script')+1
         original=pathlib.Path(extra[index])
         physical=work/f'{name}-physical-panel.txt'
@@ -671,7 +671,7 @@ def live_transpose(source):
         if mode=='chord-play':script+=f'6700 key {8+q} up\n'
         script+='7100 quit\n'
         path=work/'keys.txt';path.write_text(script)
-        events=run(work,'keys',extra+['--rtc','1800000000','--internal-clock','--live-script',path,'--lcd',work/'screen.lcd','--mem-dump',f'0x46c76fec,1={work}/tran.bin'])
+        events=run(work,'keys',extra+['--rtc','1800000000','--internal-clock','--live-script',path,'--lcd',work/'screen.lcd','--mem-dump',f'0x46c76fec,1={work}/tran.bin'],physical_panel=True)
         balanced(events)
         assert (work/'tran.bin').read_bytes()==bytes((64+delta,))
         notes=[e[2] for e in events if e[:2]==('on',1)]
@@ -708,7 +708,11 @@ def live_transpose_cleanup(source):
         work=fixture(source,f'transpose-leave-{name}',{0:2},key_raw=2,arp=True)
         script=work/'keys.txt'
         script.write_text(chord.PANEL+'1700 key 9 down\n2000 key 0 down\n'+chord.key(2400,0x23)+'3000 enc 0 7\n'+end+'4500 quit\n')
-        events=run(work,'keys',['--rtc','1800000000','--internal-clock','--live-script',script])
+        # TRAN is a native pitch control. Its raw report must not be expanded
+        # into the four-count choices used by HARM/DEG/CHRD enumerations.
+        events=run(work,'keys',['--rtc','1800000000','--internal-clock','--live-script',script,
+            '--mem-dump',f'0x46c76fec,1={work}/tran.bin'],physical_panel=True)
+        assert (work/'tran.bin').read_bytes()==bytes((71,))
         balanced(events)
         notes=[e[2] for e in events if e[:2]==('on',1)]
         assert {48,51,55,58}<=set(notes) and set(notes)&{62,65},notes

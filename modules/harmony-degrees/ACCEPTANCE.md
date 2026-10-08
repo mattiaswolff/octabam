@@ -22,6 +22,10 @@ Automated checks do not establish hardware timing or hardware acceptance.
 in C minor and C4 in D minor: the octave belongs to the tonic, not each
 resolved note's letter name.
 
+Use `1:3` whenever a fresh or missing degree needs a default. Existing stock
+notes are still converted when entering HARM; the default does not replace
+the music already in a Part or sequence.
+
 ## Acceptance sequence
 
 1. On a MIDI track, choose C minor, HARM CHORD and CHRD TRI. Program three

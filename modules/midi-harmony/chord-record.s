@@ -129,6 +129,11 @@ ch_record_commit:
     move.l 8(%fp),%d2
     move.l %a3,%d3
     jsr ch_lock_set
+    .ifdef HAVE_DEGREES
+    move.w %sr,%d0
+    move.l %d0,-(%sp)
+    move.w #0x2700,%sr
+    .endif
     /* NOTE + velocity in the native bank and its current-bank mirror. */
     move.l %d6,%d0
     move.l #0x9b340,%d1
@@ -165,6 +170,12 @@ ch_record_commit:
     move.l %a3,%d3
     move.l hd_record_active,%d4
     jsr hd_record
+    move.l (%sp)+,%d0
+    move.w %d0,%sr
+    /* Retention is deliberately outside the root-publication mask. */
+    moveq #0,%d0
+    move.b 0x80000002,%d0
+    jsr hd_nv_save
     .endif
     movem.l (%sp),%d0-%d7/%a0
     lea 36(%sp),%sp

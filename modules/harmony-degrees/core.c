@@ -13,6 +13,17 @@
 #define WORD(a) (*(volatile uint32_t *)(uintptr_t)(a))
 #define ORDER() __asm__ volatile("" ::: "memory")
 
+/* Publish a root and its native edit-detection snapshot together. Keep
+ * conversion and retained-bank hashing outside these small critical sections. */
+static uint16_t root_mask(void) {
+    uint16_t sr;
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) :: "cc", "memory");
+    return sr;
+}
+static void root_unmask(uint16_t sr) {
+    __asm__ volatile("move.w %0,%%sr" :: "d"(sr) : "cc", "memory");
+}
+
 HdBank hd_banks[HD_BANKS];
 volatile uint8_t hd_busy[HD_TRACKS];
 volatile uint8_t hd_target[HD_TRACKS];
@@ -204,18 +215,22 @@ void hd_record_c(unsigned bank, unsigned pattern, unsigned track, unsigned step,
     if ((unsigned)degree >= HD_CODES) return;
     HdBank *h = &hd_banks[bank];
     unsigned i = index_of(pattern, track, step);
+    uint16_t sr = root_mask();
     h->degree[i] = (uint8_t)degree;
     h->note[i] = *step_note(bank, pattern, track, step);
     h->active[track] = h->valid[track] = 1;
+    root_unmask(sr);
     dirty(bank);
 }
 void hd_edit_base_c(unsigned bank, unsigned part, unsigned track, int degree) {
     if (bank >= 16 || part >= 8 || track >= 8 || (unsigned)degree >= HD_CODES) return;
     HdBank *h = &hd_banks[bank];
     unsigned i = part*8 + track;
+    uint16_t sr = root_mask();
     h->base[i] = (uint8_t)degree;
     h->base_note[i] = *base_note(bank, part, track);
     h->active[track] = h->valid[track] = 1;
+    root_unmask(sr);
     if (part < 4) {
         unsigned mask = native(bank)[0x95048] | (1u << part);
         native(bank)[0x95048] = (uint8_t)mask;
@@ -236,10 +251,12 @@ void hd_edit_step_c(unsigned bank, unsigned pattern, unsigned track, unsigned st
     unsigned i = index_of(pattern, track, step);
     unsigned note = degree == HD_NONE ? HD_NONE : absolute((unsigned)degree,
                                           hd_scale_c(bank,part_of(bank,pattern),track));
+    uint16_t sr = root_mask();
     write_native(bank,step_note(bank,pattern,track,step),note);
     h->degree[i] = (uint8_t)degree;
     h->note[i] = (uint8_t)note;
     h->active[track] = h->valid[track] = 1;
+    root_unmask(sr);
     dirty(bank);
 }
 /* Native memcpy has already copied all fields. Repair only the root's
@@ -287,5 +304,10 @@ void hd_forget_c(unsigned bank, unsigned pattern, unsigned track, unsigned step)
     if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return;
     HdBank *h = &hd_banks[bank];
     unsigned i = index_of(pattern,track,step);
+    uint16_t sr = root_mask();
+    /* A reader between this hook and native clear must not reconstruct the
+     * deleted degree from the still-present old NOTE. OFF stays native. */
+    if (h->active[track]) write_native(bank,step_note(bank,pattern,track,step),HD_NONE);
     h->degree[i] = h->note[i] = HD_NONE;
+    root_unmask(sr);
 }

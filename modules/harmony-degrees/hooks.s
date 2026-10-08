@@ -245,7 +245,8 @@ hd_capture:
     movem.l (%sp),%d1-%d2/%a0-%a1
     lea 16(%sp),%sp
     rts
-/* d0 bank, d1 pattern, d2 track, d3 step, d4 captured degree. */
+/* d0 bank, d1 pattern, d2 track, d3 step, d4 captured degree.
+ * The recorder holds its short root-publication mask; it saves NV afterward. */
 hd_record:
     lea -16(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
@@ -256,9 +257,6 @@ hd_record:
     move.l %d0,-(%sp)
     jsr hd_record_c
     lea 20(%sp),%sp
-    moveq #0,%d0
-    move.b 0x80000002,%d0
-    jsr hd_nv_save
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
     rts

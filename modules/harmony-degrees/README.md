@@ -40,6 +40,10 @@ Native NOTE always remains a valid pitch or its native unlocked sentinel.
 Harmony degree defaults and locks are separate data. Only the selected
 representation is authoritative; conversion synchronizes at OFF/HARM boundaries.
 Degree locks preserve native lock presence and Part-default inheritance.
+Edits publish each root and its native snapshot together under a short
+interrupt mask. Recording uses the same boundary; bank retention runs after
+interrupts are restored. Clearing a HARM root removes its native mirror with
+the degree so an intervening reader cannot reconstruct the deleted value.
 
 HARM remains project-wide per MIDI track. A transition covers the working
 data for that track across all banks and patterns, resolving each pattern's
@@ -131,6 +135,8 @@ Hardware acceptance remains separate.
 
 Build with `make bus REMIX=mattias-bus-degrees BUILD=D0`. The module's declared
 image gates cover the codec, core, linked hooks and filesystem failure paths.
+An interrupt-publication gate checks old-or-new root visibility, recorded KEY
+identity, clear behavior, mask restoration and unmasked retention copying.
 Run the complete carrier checks with `make check REMIX=mattias-bus-degrees
 BUILD=D0`; use `OT_PROJECT` for the existing full-project/USB/concert gates.
 
