@@ -16,7 +16,7 @@ Knob **D: ROOT** selects **KEEP** (default), **OMIT**, **-1 OCT** or **-2 OCT**.
 The controls use the stock PLAYBACK selector graphics: three positions for
 HARM, five for VOIC, three for SPRD and four for ROOT, with the value printed underneath.
 HARM, VOIC and SPRD occupy the top row of a six-cell grid, matching the
-physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; F selects the WIDTH control; E is inactive;
+physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; E and F are inactive;
 the footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The footer identifies
@@ -81,7 +81,7 @@ NOTE and snaps when Harmony plays it. Shared chord tones do not suppress
 a new key's recording. Playback regenerates the chord from NOTE, including
 when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
 
-HARM, VOIC, SPRD, ROOT and WIDTH are native Part settings for each MIDI track,
+HARM, VOIC, SPRD and ROOT are native Part settings for each MIDI track,
 alongside KEY. UI edits address the selected working Part; playback reads each
 track's playing Part. MIDI Follow stores its source, register choices and
 response in that same native Part. KITS carries these bytes through ordinary
@@ -386,8 +386,8 @@ its old final bass-only
 replacement when Harmony is active. Each module also builds independently.
 
 Native MIDI SETUP stores HARM at offset 5; VOIC/SPRD/ROOT share offset 16
-(bits 0–2 / 3–4 / 5–6). WIDTH uses bit 2 of the shared offset-12 flags byte,
-alongside Follow MODE/response. Base CHRD uses offset 18. These fields have
+(bits 0–2 / 3–4 / 5–6). Follow MODE/response use the shared offset-12
+flags byte. Base CHRD uses offset 18. These fields have
 explicit native ranges and defaults and use the shared Part access helpers.
 No project-comment or private battery settings store is used. The native
 Part lifecycle owns persistence; held-note identity, voice-leading history
@@ -530,7 +530,7 @@ uses the same four-count stock accumulator as Harmony's other new controls.
 release/STOP clearing, native octave changes and sequencer UART agreement on a
 copied virtual card. These remain emulator checks, not hardware acceptance.
 
-### Playability candidate: root anchoring and WIDTH
+### Root anchoring and spacing
 
 AUTO now admits only candidates containing the exact generated root pitch.
 Playing C4 keeps C4 in the chord, regardless of earlier progressions; other
@@ -538,27 +538,16 @@ voices can still invert around it. KEY snapping and TRAN happen before this
 anchor, and ROOT OMIT/-1 OCT/-2 OCT still apply afterward. A root need not be
 the lowest voice. The bounded search and MIDI limits remain unchanged.
 
-Harmony window **F: WIDTH** is a per-track Part setting:
-**FULL** (default) retains existing OPEN/WIDE. **SOFT** makes OPEN lower the
-third sorted voice by one octave, and makes WIDE use the former OPEN shape.
-For a C4 major triad with VOIC ROOT and ROOT KEEP:
-
-| WIDTH | OPEN | WIDE |
-| --- | --- | --- |
-| FULL | C4–G4–E5 | C4–E5–G5 |
-| SOFT | G3–C4–E4 | C4–G4–E5 |
-
-SOFT OPEN on a seventh is a drop-2 voicing; on a triad it lowers the fifth.
-This keeps the root's register while reducing the upper register's weight;
-it can put another chord tone below the root. CLOSE is identical in both.
-At MIDI boundaries a spread that cannot fit falls back to the unspread chord.
-WIDTH clears AUTO history when edited. It follows native Part save, recall,
-copy and retained-memory resume, and is carried by KITS when present. Fresh
-Parts start FULL. Hardware playing feel remains to be evaluated.
+SPRD alone selects chord spacing. For a C4 major triad with VOIC ROOT and
+ROOT KEEP, CLOSE gives C4–E4–G4, OPEN gives C4–G4–E5, and WIDE gives
+C4–E5–G5. At MIDI boundaries a spread that cannot fit falls back to the
+unspread chord. SPRD follows native Part save, recall, copy and retained-memory
+resume, and is carried by KITS when present. Hardware playing feel remains
+to be evaluated.
 
 `tools/verify/verify_harmony_playability.py` exercises anchored AUTO through
 repeated scale/fifths progressions, octave changes, all available keys/scales,
-all spreads, both WIDTH choices and MIDI boundaries. This is machine-code
+all spreads and MIDI boundaries. This is machine-code
 emulation, not electrical MIDI or hardware acceptance.
 
 

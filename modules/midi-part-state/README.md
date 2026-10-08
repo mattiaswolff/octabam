@@ -44,9 +44,8 @@ are partially replaced. They do not establish full project/Kit lifecycle or
 hardware acceptance; those integration checks remain pending.
 
 SETUP offset 12 is a shared flags byte: bit 0 Follow MODE, bit 1 Follow
-TRIG/LIVE response, bit 2 Harmony WIDTH. This module owns its native range
-(0..7) and byte claim so either consumer works alone. Each writer preserves
-the other flags. Fresh Parts initialize all three flags to zero.
+TRIG/LIVE response. This module owns its native range (0..3) and byte claim.
+Each writer preserves the other flag. Fresh Parts initialize both flags to zero.
 
 For full firmware checks on a copied project, run
 `tools/verify/verify_midi_part_port.py --project DIR` for native Part

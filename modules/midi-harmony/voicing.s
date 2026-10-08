@@ -78,27 +78,6 @@ mh_voice_at: /* d0 track,d1 captured context,a0 pool; all regs preserved */
     move.l %d7,%d0
     move.l 88(%sp),%d1
     jsr mh_sprd_get_at
-    /* SOFT OPEN drops the third sorted voice; SOFT WIDE uses the
-     * former OPEN shape. FULL retains the original spacing exactly. */
-    move.l %d0,76(%sp)
-    move.l %d7,%d0
-    move.l 88(%sp),%d1
-    jsr mh_width_get_at
-    tst.l %d0
-    beq.s .voice_full_width
-    move.l 76(%sp),%d0
-    tst.l %d0
-    beq.s .voice_width_ready
-    cmpi.l #2,%d0
-    beq.s .voice_width_open
-    moveq #3,%d0
-    bra.s .voice_width_ready
-.voice_width_open:
-    moveq #1,%d0
-    bra.s .voice_width_ready
-.voice_full_width:
-    move.l 76(%sp),%d0
-.voice_width_ready:
     move.l %d0,76(%sp)
     move.l %d7,%d0
     move.l 88(%sp),%d1
@@ -535,8 +514,6 @@ mh_spread:
     lea 16(%sp),%a1
     tst.l %d0
     beq.s .spread_ok
-    cmpi.l #3,%d0
-    beq.s .spread_soft
     cmpi.l #1,%d0
     bne.s .spread_wide
     moveq #0,%d2
@@ -553,13 +530,6 @@ mh_spread:
     blt.s .spread_rotate
     move.b %d2,-1(%a1,%d6.l)
     bra.s .spread_ok
-.spread_soft:
-    moveq #0,%d2
-    move.b 2(%a1),%d2
-    subi.l #12,%d2
-    bmi.s .spread_fail
-    move.b %d2,2(%a1)
-    bra.s .spread_ok
 .spread_wide:
     moveq #1,%d1
 .spread_upper:
@@ -573,7 +543,7 @@ mh_spread:
     cmp.l %d6,%d1
     blt.s .spread_upper
 .spread_ok:
-    /* SOFT can interleave lifted and unlifted voices; sort atomically. */
+    /* Sort the completed spacing before publishing it atomically. */
     move.l %a0,-(%sp)
     move.l %a1,%a0
     bsr.w mh_sort_chord

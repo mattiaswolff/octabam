@@ -16,7 +16,7 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None, widths=None):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
     follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
@@ -35,7 +35,6 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
                     voic=(voicings or {}).get(t,int(t in auto))
                     root=(roots or {}).get(t,(omits or {}).get(t,0))
                     data[setup+16]=voic | ((spreads or {}).get(t,0)<<3) | (root<<5)
-                    data[setup+12]=((widths or {}).get(t,0)<<2)
                     data[setup+17]=key_raw if t!=1 else 4
                 for t,offset in (tran or {}).items():
                     data[base+0x3e2+32*t+12]=64+offset
@@ -151,8 +150,9 @@ def sequence(source):
     a=run(work,'stock',extra,image=ROOT/'out/raw/section_3_MAIN_OS.bin')
     b=run(work,'patched',extra)
     assert a==b
+    assert (work/'stock.midi').read_bytes()==(work/'patched.midi').read_bytes(), 'HARM OFF changed bypass UART'
     balanced(b)
-    print('  [ok] full firmware TYPE OFF matches stock MIDI',flush=True)
+    print('  [ok] full firmware HARM OFF matches complete stock UART',flush=True)
     return cases
 
 
@@ -393,10 +393,10 @@ def persistence(source,voic=1,omit=0):
     expected=(work/'saved-state.bin').read_bytes()
     assert expected[0x4e2+5]==2
     assert expected[0x4e2+16]==voic+8+32*omit
-    assert expected[0x4e2+12]==4, 'WIDTH not stored in native Part'
+    assert expected[0x4e2+12]==0, 'Unused E/F encoders changed Part flags'
     for t,fields in follow_settings.items():
         for field,value in fields.items():
-            assert expected[0x4e2+36*t+field]==value+(4 if t==0 and field==12 else 0)
+            assert expected[0x4e2+36*t+field]==value
     files=emu_card.extract_image((work/'save-card.img').read_bytes())
     for name in ('bank01.work','bank01.strd'):
         data=files['OCTABAM/BASS/'+name]
@@ -419,7 +419,7 @@ def persistence(source,voic=1,omit=0):
         assert state[at+5]==state[at+16]==state[at+12]==0
         if follow_settings:
             assert (state[at+3],state[at+13],state[at+15])==(0,3,2)
-    print('  [ok] UART Harmony controls including WIDTH, native bank SAVE, disk reload, CS1 warm boot and fresh-project defaults',flush=True)
+    print('  [ok] UART Harmony controls and inactive E/F encoders, native bank SAVE, disk reload, CS1 warm boot and fresh-project defaults',flush=True)
     return {work.name:'pass'}
 
 

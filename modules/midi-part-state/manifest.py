@@ -19,7 +19,7 @@ MODULE = Module(
                     'midipartentry', 'mp_copy_entry', 'coherent native MIDI Part copies'),
              Detour(0x40005638, bytes.fromhex('4fefffa848d77cfc'),
                     'midipartentry', 'mp_init_entry', 'coherent native MIDI Part initialization', pad_to=8)),
-    pokes=(Poke(0x400d4082, bytes.fromhex('00000001'), bytes.fromhex('00000008'), 'MODE/response/WIDTH Part flags range'),),
+    pokes=(Poke(0x400d4082, bytes.fromhex('00000001'), bytes.fromhex('00000004'), 'MODE/response Part flags range'),),
     claims=Claims(part_window=tuple((0x4e2+36*t+12, 1, 'shared MIDI Part flags') for t in range(8))),
     gates=(Gate('tools/verify/verify_midi_part.py', stage='image', venv=True),
            Gate('tools/verify/verify_midi_part_copy.py', stage='image', venv=True),

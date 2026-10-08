@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual-panel/UART acceptance for silent releases and the Part-owned WIDTH control."""
+"""Actual-panel/UART acceptance for silent releases and the Part-owned spacing controls."""
 import argparse
 import json
 import subprocess
@@ -60,44 +60,42 @@ def main():
     subprocess.run([p.sys.executable,str(p.ROOT/'tools/emu/lcd_view.py'),str(work/'overlap.lcd'),'--png',str(work/'overlap.png')],check=True,stdout=subprocess.DEVNULL)
     results['overlap-guide']={'root':55,'quality':4,'intentionally_held_at_capture':True}
     print('[ok] overlapping roots: G SUS4 guide retains its captured quality after F TRI releases',flush=True)
-    # Open the real Harmony window and turn physical F, then play while AUTO
-    # remembers earlier roots. Width is never injected directly into memory.
-    for width in (0,1):
-        for spread in range(3):
-            name=f'auto-width-{width}-spread-{spread}'
-            work=p.fixture(args.project,name,{0:2},auto=(0,),spreads={0:spread})
-            setup=c.PANEL+'''1500 key 0x2d down
+    for spread in range(3):
+        name=f'auto-spread-{spread}'
+        work=p.fixture(args.project,name,{0:2},auto=(0,),spreads={0:spread})
+        setup=c.PANEL+'''1500 key 0x2d down
 1600 key 0x22 down
 1700 key 0x22 up
 1800 key 0x2d up
 2000 key 0x3d down
 2050 key 0x3d up
 '''
-            if width:setup+='2200 enc 5 4\n'
-            c.run(work,'page',setup+'2500 quit\n')
-            assert ((work/'page-part.bin').read_bytes()[0x4e2+12]>>2)&1==width
-            subprocess.run([p.sys.executable,str(p.ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True,stdout=subprocess.DEVNULL)
-            # Fresh fixture between runs: WIDTH defaults FULL and is selected anew.
-            script=setup+'''2500 key 0x32 down
+
+        c.run(work,'baseline',setup+'2100 quit\n')
+        setup+='2200 enc 4 4\n2300 enc 5 4\n'
+        c.run(work,'page',setup+'2500 quit\n')
+        assert (work/'page-part.bin').read_bytes()==(work/'baseline-part.bin').read_bytes(), 'Inactive E/F changed native Part'
+        subprocess.run([p.sys.executable,str(p.ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True,stdout=subprocess.DEVNULL)
+        script=setup+'''2500 key 0x32 down
 2550 key 0x32 up
 2700 key 0x32 down
 2750 key 0x32 up
 '''
-            keys=(0,3,4,0,4,3,0,7,0,0)
-            for i,key in enumerate(keys):
-                at=3200+i*600;script+=f'{at} key {key} down\n{at+350} key {key} up\n'
-            script+='9600 quit\n'
-            events=c.run(work,'play',script)
-            pitches=[e[2] for e in events if e[:2]==('on',1)]
-            assert len(pitches)==len(keys)*3,(name,pitches)
-            chords=[pitches[i:i+3] for i in range(0,len(pitches),3)]
-            roots=[48,53,55,48,55,53,48,60,48,48]
-            assert all(root in chord for root,chord in zip(roots,chords)),(name,chords)
-            assert chords[-1]==chords[-2],(name,chords)
-            if width==1 and spread==1:assert chords[0]==[43,48,52],chords
-            if width==1 and spread==2:assert chords[0]==[48,55,64],chords
-            results[name]=chords
-            print(f'[ok] {name}: physical F control, anchored roots, repeated roots, octave return and balanced MIDI',flush=True)
+
+        keys=(0,3,4,0,4,3,0,7,0,0)
+        for i,key in enumerate(keys):
+            at=3200+i*600;script+=f'{at} key {key} down\n{at+350} key {key} up\n'
+        script+='9600 quit\n'
+        events=c.run(work,'play',script)
+        pitches=[e[2] for e in events if e[:2]==('on',1)]
+        assert len(pitches)==len(keys)*3,(name,pitches)
+        chords=[pitches[i:i+3] for i in range(0,len(pitches),3)]
+        roots=[48,53,55,48,55,53,48,60,48,48]
+        assert all(root in chord for root,chord in zip(roots,chords)),(name,chords)
+        assert chords[-1]==chords[-2],(name,chords)
+        assert chords[0]==([48,52,55],[48,55,64],[48,64,67])[spread],chords
+        results[name]=chords
+        print(f'[ok] {name}: inactive E/F, SPRD spacing, anchored roots, repeated roots, octave return and balanced MIDI',flush=True)
     (out/'receipt.json').write_text(json.dumps(results,indent=2)+'\n')
 
 if __name__=='__main__':main()

@@ -52,16 +52,12 @@ mh_page_encoder:
     movem.l %d2-%d4,(%sp)
     move.l 16(%sp),%d2 /* knob */
     move.l 20(%sp),%d3 /* signed detents */
-    cmpi.l #5,%d2
+    cmpi.l #3,%d2
     bhi.w .page_encoder_done
     move.l %d2,%d0
     move.l %d3,%d1
     jsr mh_ui_delta
     move.l %d0,%d3
-    cmpi.l #5,%d2
-    beq.w .page_width
-    cmpi.l #4,%d2
-    beq.w .page_encoder_done
     cmpi.l #3,%d2
     beq.w .page_omit
     move.l mh_page_track,%d4
@@ -137,22 +133,6 @@ mh_page_encoder:
     move.l %d0,%d1
     move.l %d4,%d0
     jsr mh_root_set
-    bra.w .page_encoder_draw
-.page_width:
-    move.l mh_page_track,%d4
-    move.l %d4,%d0
-    jsr mh_width_get
-    add.l %d3,%d0 /* mh_ui_delta returns at most one choice */
-    bpl.s .page_width_max
-    moveq #0,%d0
-.page_width_max:
-    cmpi.l #1,%d0
-    ble.s .page_width_set
-    moveq #1,%d0
-.page_width_set:
-    move.l %d0,%d1
-    move.l %d4,%d0
-    jsr mh_width_set
     bra.w .page_encoder_draw
 .page_voic:
     jsr mh_voic_get
@@ -246,13 +226,6 @@ mh_page_draw:
     lea mh_page_omit_format,%a0
     lea 0x40046c28,%a1 /* four-position ROOT widget */
     bsr.w .page_selector_bottom
-    move.l mh_page_track,%d0
-    jsr mh_width_get
-    move.l %d0,%d1
-    moveq #87,%d0
-    lea mh_page_width_format,%a0
-    lea 0x400467a4,%a1 /* native text value widget */
-    bsr.w .page_selector_bottom
     bsr.w .page_grid
     move.l mh_page_track,%d0
     addq.l #1,%d0
@@ -280,10 +253,6 @@ mh_page_draw:
     moveq #12,%d0
     moveq #29,%d1
     lea .page_omit_label,%a0
-    bsr.w .page_text
-    moveq #89,%d0
-    moveq #29,%d1
-    lea .page_width_label,%a0
     bsr.w .page_text
     moveq #85,%d0
     moveq #4,%d1
@@ -332,10 +301,6 @@ mh_page_draw:
     lea 28(%sp),%sp
     rts
     .global mh_page_voic_format,mh_page_sprd_format
-mh_page_width_format:
-    lea .page_widths,%a1
-    moveq #1,%d1
-    bra.s .page_value_format
 mh_page_omit_format:
     lea .page_omits,%a1
     moveq #3,%d1
@@ -386,9 +351,6 @@ mh_page_sprd_format:
 .page_first: .asciz "1ST"
 .page_second: .asciz "2ND"
 .page_third: .asciz "3RD"
-.page_width_label: .asciz "WIDTH"
-.page_full: .asciz "FULL"
-.page_soft: .asciz "SOFT"
 .page_back: .asciz "NO:BACK"
     .balign 4
 .page_grid_lines:
@@ -396,7 +358,6 @@ mh_page_sprd_format:
     .long 77,12,77,58
     .long 0,35,115,35
     .long 0,12,115,12
-.page_widths: .long .page_full,.page_soft
 .page_omits: .long .page_keep,.page_omit_value,.page_down1,.page_down2
 .page_voices: .long .page_root,.page_first,.page_second,.page_third,.page_auto
 .page_spreads: .long .page_close,.page_open,.page_wide

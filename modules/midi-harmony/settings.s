@@ -1,7 +1,7 @@
 /* Native Part settings. UI getters/setters use the selected working Part;
  * explicit getters take d0 track,d1 context and preserve everything but d0.
  * Playback uses mh_active or explicit getters, never the UI context.
- * Offset 16: VOIC[2:0], SPRD[4:3], ROOT[6:5]. Offset 12 bit 2: WIDTH (0 FULL, 1 SOFT). */
+ * Offset 16: VOIC[2:0], SPRD[4:3], ROOT[6:5]. */
     .include "remix.inc"
     .text
     .macro SETTING prefix,field,shift,mask,maximum
@@ -97,7 +97,6 @@ mh_set_native:
     SETTING mh_voic,16,0,7,4
     SETTING mh_sprd,16,3,3,2
     SETTING mh_root,16,5,3,3
-    SETTING mh_width,12,2,1,1
 
     .global mh_omit_get,mh_omit_set
 mh_omit_get:

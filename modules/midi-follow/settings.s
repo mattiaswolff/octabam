@@ -49,7 +49,7 @@ bf_\name\()_at:
     FIELD offset,15,0,255,4,2,2
 
 /* UI write helpers. d0 track,d1 value. Preserve all except d0/CC.
- * Packed mode and response preserve the other flags, including Harmony WIDTH. */
+ * Packed mode and response preserve each other. */
     .macro STORE name,slot,mask,shift,maximum,bias
     .global bf_\name\()_set
 bf_\name\()_set:
@@ -86,8 +86,8 @@ bf_\name\()_set:
     rts
     .endm
     STORE source,3,0,0,8,0
-    STORE mode,12,6,0,1,0
-    STORE response_value,12,5,1,1,0
+    STORE mode,12,2,0,1,0
+    STORE response_value,12,1,1,1,0
     STORE fixed,13,0,0,10,0
     STORE offset,15,0,0,4,2
 
