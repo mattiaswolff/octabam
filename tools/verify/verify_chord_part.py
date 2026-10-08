@@ -148,8 +148,9 @@ def main():
     # The real queued recorder freezes that quality before subsequent edits.
     ui(2, 1)
     physical_cases = 0
-    for mode in (0, 1, 6):
+    for mode, grid in ((0, 0), (1, 0), (6, 0), (6, 1)):
         put(0x460d16f0, mode, 4)
+        put(0x460d1736, grid, 4)
         for track in range(8):
             quality = (track+1) % 8
             latched = (quality+3) % 8
@@ -159,7 +160,7 @@ def main():
             put(0x8000182a+track, 5)
             put(0x80001832+track, 2)
             put(m.sym['ch_live']+track, latched)
-            expected = latched if mode == 6 else quality
+            expected = latched if mode == 6 and not grid else quality
             assert m.call('ch_live_get', track) == expected
             m.call('ch_live_context', track)
             assert u.mem_read(m.sym['ch_current']+track, 1)[0] == expected

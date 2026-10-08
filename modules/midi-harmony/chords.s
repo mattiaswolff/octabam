@@ -127,6 +127,8 @@ ch_live_get:
     movem.l (%sp),%d1
     lea 4(%sp),%sp
     bne.s .live_default
+    tst.l 0x460d1736 /* grid recording uses stock keys, not CHORD PLAY variations */
+    bne.s .live_default
     move.l %a0,-(%sp)
     lea ch_live,%a0
     move.b (%a0,%d0.l),%d0
