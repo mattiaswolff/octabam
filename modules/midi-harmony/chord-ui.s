@@ -64,24 +64,30 @@ ch_draw_value:
     lea -24(%sp),%sp
     movem.l %d0-%d3/%a0-%a1,(%sp)
     tst.l 8(%fp)
-    bne.s .draw_restore
+    bne.w .draw_restore
     cmpa.l #3,%a4
-    bne.s .draw_restore
+    bne.w .draw_restore
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     jsr mh_get
     cmpi.l #2,%d0
-    bcs.s .draw_restore
+    bcs.w .draw_restore
     moveq #0,%d2
     move.b 0x100b14cc,%d2
-    lea ch_live,%a0
+    lea ch_base,%a0 /* The knob shows its default, never a live override. */
     moveq #0,%d0
     move.b (%a0,%d2.l),%d0
+    bclr #0,%d5 /* Native NOT2 locks must not highlight the CHRD default. */
     tst.l 0x460d173a /* lock-inspection flag */
     beq.s .draw_live
     jsr 0x40041760
     tst.l %d0
-    bmi.s .draw_live
+    bpl.s .draw_step
+    lea ch_base,%a0
+    moveq #0,%d0
+    move.b (%a0,%d2.l),%d0
+    bra.s .draw_live
+.draw_step:
     move.l %d0,%d3
     moveq #0,%d1
     move.b 0x100b14d0,%d1

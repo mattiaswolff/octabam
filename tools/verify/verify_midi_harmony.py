@@ -388,7 +388,7 @@ def voicing_gate():
                     else:
                         all_notes=[n for n in range(128) if n%12 in pcs]
                         candidates=[all_notes[i:i+count] for i in range(len(all_notes)-count+1)
-                                    if all_notes[i+count-1]-all_notes[i]<12 and abs(all_notes[i]-raw[0])<=12]
+                                    if all_notes[i+count-1]-all_notes[i]<12 and abs(all_notes[i]-raw[0])<=12 and raw[0] in all_notes[i:i+count]]
                         target=register_reference(previous,previous_root,raw[0])
                         assert cost(pitches,target)==min(cost(c,target) for c in candidates)
                     previous=pitches;previous_root=raw[0]
@@ -468,7 +468,7 @@ def spread_gate():
                                 close=all_notes[i:i+count]
                                 if close[-1]-close[0]<12 and abs(close[0]-raw[0])<=12:
                                     spaced=spread_notes(close,spread)
-                                    if spaced is not None:candidates.append(spaced)
+                                    if spaced is not None and raw[0] in spaced:candidates.append(spaced)
                             if not auto or previous is None or not candidates:assert actual[:count]==seed
                             else:
                                 target=register_reference(previous,previous_root,raw[0])

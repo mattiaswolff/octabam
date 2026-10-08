@@ -16,12 +16,12 @@ Knob **D: ROOT** selects **KEEP** (default), **OMIT**, **-1 OCT** or **-2 OCT**.
 The controls use the stock PLAYBACK selector graphics: three positions for
 HARM, five for VOIC, three for SPRD and four for ROOT, with the value printed underneath.
 HARM, VOIC and SPRD occupy the top row of a six-cell grid, matching the
-physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; the other two lower cells are inactive;
+physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; F selects the temporary WIDTH comparison; E is inactive;
 the footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The footer identifies
 the track being edited. Transport and chromatic trig keys remain usable.
-The other encoders are inactive, leaving room for future controls. Turning F on NOTE SETUP still edits HARM directly.
+Encoder E remains inactive. Turning F on NOTE SETUP still edits HARM directly.
 
 Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
 Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales
@@ -94,7 +94,8 @@ hardware timing, MIDI electrical behavior or physical battery retention.
 Set HARM to CHORD, then return to the main MIDI NOTE page. D displays CHRD
 in the old NOT2 position; E/F are inactive. Native NOT2–4 values remain stored
 and become available again with HARM OFF. Turning D alone selects the live
-chord. Hold one or more sequencer steps and turn D to edit their CHRD locks;
+chord. The CHRD knob displays this base value during performance; temporary
+extensions appear in the sounding-chord guide. Hold one or more sequencer steps and turn D to edit their CHRD locks;
 press D while holding steps to toggle their locks. Unlocked steps display
 and play TRI, independently of the live selection or the previous step.
 
@@ -122,12 +123,15 @@ select these choices, in fixed positions:
 | 15 | MIN | Root + 0, 3, 7 semitones |
 | 16 | DOM7 | Root + 0, 4, 7, 10 semitones |
 
-The last pressed held variation wins. Releasing it reveals the previous held
-variation, or D's live choice when none remain. A quality change retriggers
-held roots. In C natural minor: hold key 1 for Cm, hold key 10 for Cm7, then
-key 13 for Csus4. Release both variations to return to Cm, then play key 4
-for Fm. With live recording active, these become separate root-plus-CHRD
-trigs. Changes quantized to the same step leave the last root and quality.
+The last pressed variation takes effect immediately and retriggers held roots.
+Releasing a variation is silent: the sounding quality stays latched until a
+new root is pressed. That new root uses the newest still-held variation, or
+D's base CHRD when no variation remains held. There is no carry-over latch
+across root presses. In C minor: hold G for Gm, press MAJ for G major, release
+MAJ (no new notes), then press DOM7 for G7. Releasing DOM7 then G sends no new
+note-ons; the next G starts as Gm. With live recording active, only presses
+that sound a chord create root-plus-CHRD trigs; releases do not record an
+intermediate return to the base. Same-step changes leave the final choice.
 Generated chord tones are never recorded into NOT2–4.
 
 The LCD shows the resulting chord name below CHORD PLAY, leaving the native
@@ -216,12 +220,12 @@ After a separately authorized firmware transfer, use a disposable project:
    stopped and running, and held keys are distinguishable.
 2. Hold trig 1, then hold trig 10, then trig 13. Hear Cm, Cm7 and Csus4 and
    check the chord name. Release trig 10 first: Csus4 stays. Release trig 13:
-   Cm returns. Release the root, then play trig 4 for Fm.
+   Csus4 keeps sounding without a retrigger. Release the root, then play trig 4 for Fm.
 3. Turn D to 7TH. A root now starts as a seventh; held variations temporarily
    override it. Hold trig 5 plus trig 16 and verify G–B–D–F, including through
    the stock arp. Exit the mode, switch to grid and change MIDI/audio mode
    with notes held: no note should remain sounding.
-4. Record the Cm/Cm7/Csus4/Cm/Fm gesture. Replay it; inspect native NOTE and
+4. Record the Cm/Cm7/Csus4/Fm gesture. Replay it; inspect native NOTE and
    CHRD locks. Turn D live to another quality: recorded locks remain intact.
    Clear one CHRD lock after a different-quality step: it must play TRI.
    Hold a step and turn/push D; check its lock without changing NOT2–4.
@@ -271,6 +275,8 @@ Smaller root changes keep ordinary voice leading; crossing B3 → C4 does not
 force an octave jump. MIDI limits still apply. This uses transient history
 only; project settings and recorded notes are unchanged.
 
+AUTO keeps the exact requested root pitch in every candidate; ROOT can still
+lower or omit it afterward. Repeated roots keep their previous voicing.
 The bounded search considers each inversion at octave offsets 0, -12 and
 +12. Each starts as a compact inversion within one octave, then applies the
 selected spread. Every sounded candidate must remain inside MIDI 0–127 and
@@ -530,3 +536,34 @@ uses the same four-count stock accumulator as Harmony's other new controls.
 `tools/verify/verify_chord_display.py --project DIR` checks captured pitches,
 release/STOP clearing, native octave changes and sequencer UART agreement on a
 copied virtual card. These remain emulator checks, not hardware acceptance.
+
+### Playability candidate: root anchoring and WIDTH
+
+AUTO now admits only candidates containing the exact generated root pitch.
+Playing C4 keeps C4 in the chord, regardless of earlier progressions; other
+voices can still invert around it. KEY snapping and TRAN happen before this
+anchor, and ROOT OMIT/-1 OCT/-2 OCT still apply afterward. A root need not be
+the lowest voice. The bounded search and MIDI limits remain unchanged.
+
+Harmony window **F: WIDTH** is a temporary per-track audition control:
+**FULL** (default) retains existing OPEN/WIDE. **SOFT** makes OPEN lower the
+third sorted voice by one octave, and makes WIDE use the former OPEN shape.
+For a C4 major triad with VOIC ROOT and ROOT KEEP:
+
+| WIDTH | OPEN | WIDE |
+| --- | --- | --- |
+| FULL | C4–G4–E5 | C4–E5–G5 |
+| SOFT | G3–C4–E4 | C4–G4–E5 |
+
+SOFT OPEN on a seventh is a drop-2 voicing; on a triad it lowers the fifth.
+This keeps the root's register while reducing the upper register's weight;
+it can put another chord tone below the root. CLOSE is identical in both.
+At MIDI boundaries a spread that cannot fit falls back to the unspread chord.
+WIDTH clears AUTO history when edited. It is intentionally volatile: it is
+not saved into project comments or battery RAM and starts FULL at firmware
+boot. Hardware playing feel remains to be evaluated.
+
+`tools/verify/verify_harmony_playability.py` exercises anchored AUTO through
+repeated scale/fifths progressions, octave changes, all available keys/scales,
+all spreads, both WIDTH choices and MIDI boundaries. This is machine-code
+emulation, not electrical MIDI or hardware acceptance.
