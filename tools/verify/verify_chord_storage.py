@@ -9,6 +9,8 @@ import verify_chord_play as c
 
 
 def main():
+    from verify_harmony_load_hooks import check
+    check()
     h.symbols=c.symbols
     m=h.Machine();u=m.uc;s=m.sym;table=s['ch_lock_table']
     u.mem_map(0x460b0000,0x40000)

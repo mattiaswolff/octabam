@@ -25,6 +25,7 @@
 .endif
     .text
     .global ch_saveb,ch_loadall,ch_loadmask,ch_tocs1,ch_fromcs1
+    .global ch_loaded_all,ch_loaded_resume,ch_loaded_project,ch_loaded_bank
     .global ch_newproj,ch_newproj2,ch_fcopy
     .global ch_d5_ef9a,ch_d5_f02e,ch_d5_f2a6,ch_d5_f33a
     .global ch_file_read,ch_file_write,ch_native_hash
@@ -458,15 +459,36 @@ ch_saveb:
     moveq #-7,%d2
     jmp 0x400919d6
 
-/* Native loads first; identity is checked against the newly loaded bank.
- * ABI: full load has four arguments, masked load has five. */
-ch_loadall:
-    move.l 16(%sp),-(%sp)
-    move.l 16(%sp),-(%sp)
-    move.l 16(%sp),-(%sp)
-    move.l 16(%sp),-(%sp)
-    jsr 0x40090504
+/* Leave native load JSRs and their return addresses intact: other modules
+ * (notably KITS) classify project load/resume from the caller. These JMP
+ * detours run at the return sites, before the native arguments are removed.
+ * Each helper's BSR supplies a return slot, so the masked-load argument is
+ * still at 22(sp) after its 12-byte save frame. Replay the exact cleanup and
+ * TST result flags before continuing stock's success/error branch. No shared
+ * return-address scratch and no dependency on KITS symbols or layout. */
+ch_loaded_all:
+    bsr.w ch_loadall
     lea 16(%sp),%sp
+    tst.l %d0
+    jmp 0x400852d4
+ch_loaded_resume:
+    bsr.w ch_loadmask
+    lea 16(%sp),%sp
+    tst.l %d0
+    jmp 0x40084d6c
+ch_loaded_project:
+    bsr.w ch_loadmask
+    lea 28(%sp),%sp
+    tst.l %d0
+    jmp 0x400853e4
+ch_loaded_bank:
+    bsr.w ch_loadmask
+    lea 20(%sp),%sp
+    tst.l %d0
+    jmp 0x4008545e
+
+/* Native loads finished; identity uses the newly loaded bank. */
+ch_loadall:
     lea -12(%sp),%sp
     movem.l %d0/%d2-%d3,(%sp)
     jsr ch_lock_init
@@ -485,13 +507,6 @@ ch_loadall:
     lea 12(%sp),%sp
     rts
 ch_loadmask:
-    move.l 20(%sp),-(%sp)
-    move.l 20(%sp),-(%sp)
-    move.l 20(%sp),-(%sp)
-    move.l 20(%sp),-(%sp)
-    move.l 20(%sp),-(%sp)
-    jsr 0x400905d4
-    lea 20(%sp),%sp
     lea -12(%sp),%sp
     movem.l %d0/%d2-%d3,(%sp)
     jsr ch_lock_init
