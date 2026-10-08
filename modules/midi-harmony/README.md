@@ -530,7 +530,7 @@ sharps and separators to keep all four notes visible. Released chords disappear;
 sequencer playback supplies its own root/CHRD identity and native active-note
 ownership. With overlapping live roots, the latest still-held root is shown;
 releasing it reveals another held root or the sequencer. The display reads
-captured voices rather than rerunning AUTO. Live and held-step CHRD selection
+captured voices and each held root's captured quality rather than rerunning AUTO. Live and held-step CHRD selection
 uses the same four-count stock accumulator as Harmony's other new controls.
 
 `tools/verify/verify_chord_display.py --project DIR` checks captured pitches,

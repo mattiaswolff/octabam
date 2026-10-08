@@ -207,6 +207,18 @@ ch_play_key:
     move.b (%a0),%d6
     rts
 .key_send:
+    tst.l %d6
+    beq.s .key_send_captured
+    /* Capture quality beside this physical key's owned notes. A new root
+     * can reset ch_live while an older root still sounds its latched shape. */
+    move.l %a2,%d0
+    subi.l #ch_pressed,%d0
+    lsr.l #2,%d0
+    lea ch_live,%a0
+    move.b (%a0,%d4.l),%d1
+    lea ch_pressed_quality,%a0
+    move.b %d1,(%a0,%d0.l)
+.key_send_captured:
     pea 1
     move.l %d6,-(%sp)
     move.l %d5,-(%sp)
@@ -534,3 +546,7 @@ ch_grid_toggle:
 .grid_stock:
     lea 0x4007e998,%a0
     jmp 0x40048790
+
+    .balign 4
+    .global ch_pressed_quality
+ch_pressed_quality: .space 8,0

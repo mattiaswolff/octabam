@@ -21,7 +21,7 @@ def machine():
     assert text()==''
     u.mem_write(s['ch_pressed'],struct.pack('>I',60)+b'\xff'*28)
     u.mem_write(s['ch_last_root'],bytes((60,)))
-    u.mem_write(s['ch_live'],b'\x01')
+    u.mem_write(s['ch_live'],b'\x01');u.mem_write(s['ch_pressed_quality'],b'\x01')
     u.mem_write(s['mh_held']+60*4,bytes((48,64,79,255)))
     assert text()=='Cmaj7'
     assert row(0,4)=='C3-E4-G5'
@@ -36,7 +36,7 @@ def machine():
     m.setting(0,2,0,0)
     u.mem_write(s['ch_pressed'],struct.pack('>I',60)+b'\xff'*28)
     u.mem_write(s['ch_last_root'],b'\x3c')
-    u.mem_write(s['ch_live'],b'\x01')
+    u.mem_write(s['ch_live'],b'\x01');u.mem_write(s['ch_pressed_quality'],b'\x01')
     u.mem_write(s['mh_held']+60*4,bytes((48,64,79,255)))
     # Settings can change while notes sustain: retain the actual captured notes.
     m.call('mh_root_set',0,3);m.call('mh_sprd_set',0,2)

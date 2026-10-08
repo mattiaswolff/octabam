@@ -66,6 +66,7 @@ def extra_voicings(m):
         m.uc.mem_write(m.sym['ch_pressed'],root.to_bytes(4,'big')+b'\xff'*28)
         m.uc.mem_write(m.sym['mh_held']+4*root,bytes((root,root,root,255)))
         m.uc.mem_write(m.sym['ch_live'],bytes((q,)))
+        m.uc.mem_write(m.sym['ch_pressed_quality'],bytes((q,)))
         m.call('ch_chord_name',0)
         actual=bytes(m.uc.mem_read(m.uc.reg_read(UC_M68K_REG_A0),32)).split(b'\0')[0].decode()
         assert actual==want,(actual,want)
@@ -179,7 +180,12 @@ def release_and_default_gate():
     assert edge(12,0)==[]
     assert edge(3,1)==[(0,53,100,1,1)]
     assert edge(9,0)==[]
-    assert edge(3,0)[0][2]==0 and edge(4,0)[0][2]==0
+    assert edge(3,0)[0][2]==0
+    u.mem_write(s['mh_held']+55*4,bytes((55,60,62,55)))
+    m.call('ch_display_snapshot',0)
+    assert u.mem_read(s['ch_display_root'],1)==bytes((55,))
+    assert u.mem_read(s['ch_display_quality'],1)==bytes((4,)), 'older held G retains SUS4 after newer F used 7TH'
+    assert edge(4,0)[0][2]==0
     # Release roots first, or extensions first: neither ordering creates notes.
     for root_first in (True,False):
         edge(0,1);edge(13,1)
