@@ -18,14 +18,12 @@ def main():
         name=f'response-{mode}-arp-{int(arp)}-harmony-{int(harmony)}'
         work=out/name;work.mkdir(exist_ok=True)
         project=work/'project';fixture(a.project,project)
-        for p in project.glob('project.*'):
-            raw=re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n',b'',p.read_bytes(),flags=re.M)
-            if harmony:raw+=b'\r\n#MIDI_HARMONY_TYPE_V1_T1=1\r\n#MIDI_HARMONY_TYPE_V1_T2=1\r\n'
-            p.write_bytes(raw)
         for bank in project.glob('bank*.work'):
             def mutate(data):
                 for part in range(8):
                     base=otp.PART_BASE+part*otp.PART_STRIDE+9
+                    data[base+0x4e2+5]=int(harmony)
+                    data[base+0x4e2+36+5]=int(harmony)
                     data[base+0x4e2+17]=1 if harmony else 0
                     data[base+0x4e2+36+17]=1 if harmony else 0
                     if arp:
@@ -35,12 +33,13 @@ def main():
         card,_=emu_card.stage_project(project,'OCTABAM','BASS',tree=work/'tree');(work/'card.img').write_bytes(card)
         script=work/'panel.txt'
         script.write_text(SETUP+('1500 enc 3 4\n' if mode else '')+'1900 key 0x28 down\n1950 key 0x28 up\n5200 key 0x27 down\n5250 key 0x27 up\n5600 quit\n')
-        cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(work/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi'),'--lcd',str(work/'screen.lcd'),'--mem-dump',f'{sym["bf_response_modes"]:#x},8={work}/response.bin;{sym["bf_sources"]:#x},8={work}/sources.bin']
+        cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(work/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi'),'--lcd',str(work/'screen.lcd'),'--mem-dump',f'0x100a4ece,6322={work}/part.bin']
         with (work/'run.log').open('w') as log:r=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
         assert r.returncode==0,work
         events=notes((work/'notes.midi').read_bytes());(work/'notes.json').write_text(json.dumps(events,indent=2)+'\n')
-        assert (work/'sources.bin').read_bytes()[1]==1
-        assert (work/'response.bin').read_bytes()==bytes((0,mode,0,0,0,0,0,0))
+        state=(work/'part.bin').read_bytes()
+        assert state[0x4e2+36+3]==1
+        assert bytes((state[0x4e2+36*t+12]>>1)&1 for t in range(8))==bytes((0,mode,0,0,0,0,0,0))
         bass=[e[2] for e in events if e[:2]==('on',2)]
         want=[48,36,36,41,43,43] if not mode else [48,36,36,41,41,43,43]
         if not arp:assert bass==want,(name,bass,want)
@@ -62,14 +61,15 @@ def main():
             name=f'live-source-{mode}'
             work=out/name;work.mkdir(exist_ok=True)
             project=work/'project';fixture(a.project,project)
-            for p in project.glob('project.*'):
-                raw=re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n',b'',p.read_bytes(),flags=re.M)
-                p.write_bytes(raw+b'\r\n#MIDI_HARMONY_TYPE_V1_T1=2\r\n#MIDI_HARMONY_TYPE_V1_T2=1\r\n')
             for bank in project.glob('bank*.work'):
                 def mutate_live(data):
                     for part in range(8):
                         base=otp.PART_BASE+part*otp.PART_STRIDE+9
-                        for t in (0,1):data[base+0x4e2+36*t+17]=1
+                        for t in (0,1):
+                            data[base+0x4e2+36*t+17]=1
+                            data[base+0x4e2+36*t+5]=2 if t==0 else 1
+                        data[base+0x4e2+36+3]=1
+                        data[base+0x4e2+36+12]=mode<<1
                     for pat in range(16):
                         for t in range(8):
                             at=0x492e+pat*0x8eec+t*0x8b9
@@ -81,7 +81,7 @@ def main():
             card,_=emu_card.stage_project(project,'OCTABAM','BASS',tree=work/'tree');(work/'card.img').write_bytes(card)
             script=work/'panel.txt'
             script.write_text(chord.PANEL+'1600 key 0 down\n1750 key 0 up\n1900 key 0x28 down\n1950 key 0x28 up\n2600 key 3 down\n2750 key 3 up\n3300 key 4 down\n3450 key 4 up\n4200 key 0x27 down\n4250 key 0x27 up\n4500 quit\n')
-            cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(work/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi'),'--step',f'-:poke:{sym["bf_sources"]+1:#x}=1','--step',f'-:poke:{sym["bf_response_modes"]+1:#x}={mode}']
+            cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(work/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi')]
             with (work/'run.log').open('w') as log:r=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
             assert r.returncode==0,work
             events=notes((work/'notes.midi').read_bytes());(work/'notes.json').write_text(json.dumps(events,indent=2)+'\n')

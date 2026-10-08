@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual-panel/UART acceptance for silent releases and the temporary WIDTH control."""
+"""Actual-panel/UART acceptance for silent releases and the Part-owned WIDTH control."""
 import argparse
 import json
 import subprocess
@@ -18,7 +18,7 @@ def main():
     else:p.freeze_candidate(out)
     c.SYMBOLS=p.harmony.symbols();sym=c.SYMBOLS
     original_dump=c.dump
-    c.dump=lambda work,name:original_dump(work,name)+f';{sym["mh_width"]:#x},8={work}/{name}-width.bin'
+    c.dump=lambda work,name:original_dump(work,name)+f';0x100a4ece,6322={work}/{name}-part.bin'
 
     results={}
     # Both release orders, an idle gap between MAJ and DOM7, and the new-root reset.
@@ -75,9 +75,9 @@ def main():
 '''
             if width:setup+='2200 enc 5 4\n'
             c.run(work,'page',setup+'2500 quit\n')
-            assert (work/'page-width.bin').read_bytes()[0]==width
+            assert ((work/'page-part.bin').read_bytes()[0x4e2+12]>>2)&1==width
             subprocess.run([p.sys.executable,str(p.ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True,stdout=subprocess.DEVNULL)
-            # Reboot between runs: WIDTH starts FULL and is selected anew.
+            # Fresh fixture between runs: WIDTH defaults FULL and is selected anew.
             script=setup+'''2500 key 0x32 down
 2550 key 0x32 up
 2700 key 0x32 down

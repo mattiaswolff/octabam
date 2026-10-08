@@ -47,3 +47,12 @@ SETUP offset 12 is a shared flags byte: bit 0 Follow MODE, bit 1 Follow
 TRIG/LIVE response, bit 2 Harmony WIDTH. This module owns its native range
 (0..7) and byte claim so either consumer works alone. Each writer preserves
 the other flags. Fresh Parts initialize all three flags to zero.
+
+For full firmware checks on a copied project, run
+`tools/verify/verify_midi_part_port.py --project DIR` for native Part
+Save/Reload/Clear/Paste, and
+`tools/verify/verify_midi_harmony_port.py --project DIR --settings-only`
+for actual panel edits, project SAVE, disk reload and retained-memory resume.
+The latter requires Harmony and also checks Follow fields when present.
+The low-level native Clear initializes both working and saved Part; unlike
+Reload/Paste, its CS1 working mirror refresh belongs to its caller.

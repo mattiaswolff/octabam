@@ -16,25 +16,27 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None, widths=None):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
     follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
-    for p in (work/'project').glob('project.*'):
-        raw=re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n',b'',p.read_bytes(),flags=re.M)
-        raw+=b'\r\n'+b''.join(f'#MIDI_HARMONY_TYPE_V1_T{t+1}={v}\r\n'.encode() for t,v in records.items())
-        raw+=b''.join(f'#MIDI_HARMONY_VOIC_V1_T{t+1}=1\r\n'.encode() for t in auto)
-        raw+=b''.join(f'#MIDI_HARMONY_SPRD_V1_T{t+1}={v}\r\n'.encode() for t,v in (spreads or {}).items())
-        raw+=b''.join(f'#MIDI_HARMONY_VOIC_V1_T{t+1}={v}\r\n'.encode() for t,v in (voicings or {}).items())
-        raw+=b''.join(f'#MIDI_HARMONY_OMIT_V1_T{t+1}={v}\r\n'.encode() for t,v in (omits or {}).items())
-        raw+=b''.join(f'#MIDI_HARMONY_ROOT_V1_T{t+1}={v}\r\n'.encode() for t,v in (roots or {}).items())
-        p.write_bytes(raw)
     for path in (work/'project').glob('bank*.work'):
         def mutate(data):
             for part in range(8):
                 base=otp.PART_BASE+part*otp.PART_STRIDE+9
                 for t in range(8):
-                    data[base+0x4e2+36*t+17]=key_raw if t!=1 else 4
+                    setup=base+0x4e2+36*t
+                    # Fixture records select OFF/NOTE/triad/seventh; native
+                    # HARM remains OFF/NOTE/CHORD and CHRD owns the quality.
+                    kind=records.get(t,0)
+                    assert kind in range(4)
+                    data[setup+5]=min(kind,2)
+                    data[setup+18]=int(kind==3)
+                    voic=(voicings or {}).get(t,int(t in auto))
+                    root=(roots or {}).get(t,(omits or {}).get(t,0))
+                    data[setup+16]=voic | ((spreads or {}).get(t,0)<<3) | (root<<5)
+                    data[setup+12]=((widths or {}).get(t,0)<<2)
+                    data[setup+17]=key_raw if t!=1 else 4
                 for t,offset in (tran or {}).items():
                     data[base+0x3e2+32*t+12]=64+offset
                 if arp:
@@ -114,7 +116,7 @@ def balanced(events):
 
 
 def sequence(source):
-    sym=harmony.symbols();has_follow='bf_sources' in sym
+    sym=harmony.symbols();has_follow='bf_source_get' in sym
     cases={}
     for arp,reverse in [(False,False),(True,False)]+([(False,True),(True,True)] if has_follow else []):
         name=('reverse-' if reverse else '')+('arp' if arp else 'chords')
@@ -159,13 +161,13 @@ def extended_scale(source):
     if 'ms_decode' not in sym:return {}
     work=fixture(source,'dorian-output',{},key_raw=25,first_note=64)
     extra=['--sequencer','--internal-clock','--frames','7000']
-    if 'bf_sources' in sym:
+    if 'bf_source_get' in sym:
         extra+=['--step','-:poke:0x100b14cc=1','--step',f'-:call:{sym["bf_encoder"]:#x},3,4']
     events=run(work,'patched',extra);balanced(events)
     lead=[e[2] for e in events if e[:2]==('on',1)]
     bass=[e[2] for e in events if e[:2]==('on',2)]
     assert lead[0]==63 and all(n%12 in harmony.MODES[1] for n in lead),lead
-    if 'bf_sources' in sym:assert bass[:3]==[48,39,39],bass
+    if 'bf_source_get' in sym:assert bass[:3]==[48,39,39],bass
     print('  [ok] full firmware added scale with HARM OFF: E snaps to Eb; follower uses Eb root',flush=True)
     return {'dorian-output':dict(leader=lead,follower=bass)}
 
@@ -193,7 +195,7 @@ def keyboard(source):
 
 
 def note_rules(source):
-    sym=harmony.symbols();has_follow='bf_sources' in sym;results={}
+    sym=harmony.symbols();has_follow='bf_source_get' in sym;results={}
     for reverse in ([False,True] if has_follow else [False]):
         leader=7 if reverse else 0
         name='note-transpose-reverse' if reverse else 'note-transpose'
@@ -227,7 +229,7 @@ def note_rules(source):
 
 
 def chord_rules(source):
-    sym=harmony.symbols();has_follow='bf_sources' in sym;results={}
+    sym=harmony.symbols();has_follow='bf_source_get' in sym;results={}
     def chord(root,kind):
         notes=[n for n in range(root,160) if n%12 in harmony.MODES[0]]
         return [notes[i*2] for i in range(kind+1) if notes[i*2]<=127]
@@ -292,7 +294,7 @@ def recording(source):
         script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x29 down\n700 key 0x28 down\n800 key 0x28 up\n900 key 0x29 up\n1600 key 1 down\n1900 key 1 up\n2600 key 2 down\n2900 key 2 up\n3600 key 5 down\n3900 key 5 up\n4400 key 0x29 down\n4500 key 0x29 up\n14500 key 0x27 down\n14600 key 0x27 up\n15500 quit\n')
         extra=['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                '--step','-:poke:0x100b14cc=0','--internal-clock','--live-script',script,
-               '--mem-dump',f'0x400e21e0,0x9b340={work}/bank-ram.bin;0x100b14e2,1={work}/harm.bin;0x46c76df1,1={work}/key.bin']
+               '--mem-dump',f'0x400e21e0,0x9b340={work}/bank-ram.bin;0x100a4ece,6322={work}/part.bin;0x46c76df1,1={work}/key.bin']
         events=run(work,'record',extra);balanced(events)
         pitches=[e[2] for e in events if e[:2]==('on',1)]
         expected=[]
@@ -319,7 +321,9 @@ def recording(source):
         recorded=[lane for lane in lanes if lane[0]<128]
         assert [lane[0] for lane in recorded]==[49,50,53],recorded
         assert all(lane[3:6]==b'\xff'*3 for lane in recorded),recorded
-        assert (work/'harm.bin').read_bytes()==bytes((min(kind,2)+4*spread+64*omit+(16*(voic-1) if voic>1 else 0),))
+        state=(work/'part.bin').read_bytes()
+        assert state[0x4e2+5]==min(kind,2)
+        assert state[0x4e2+16]==voic+8*spread+32*omit
         assert (work/'key.bin').read_bytes()==b'\x01'
         results[name]=dict(notes=pitches,recorded_roots=[lane[0] for lane in recorded])
         print(f'  [ok] {name}: REC+PLAY -> chromatic C#/D/F -> physical keys recorded once -> identical chord playback',flush=True)
@@ -356,6 +360,18 @@ def persistence(source,voic=1,omit=0):
     expected_key=25 if 'ms_decode' in harmony.symbols() else 2
     name=('persistence' if voic==1 else f'persistence-voic{voic}')+(f'-root{omit}' if omit else '')
     work=fixture(source,name,{0:2,1:1})
+    follow_settings={}
+    if 'bf_source_get' in harmony.symbols():
+        follow_settings={t:{3:int(t!=0),12:(t&1)|(((t//2)&1)<<1),13:t+2,15:t%5} for t in range(8)}
+        for path in (work/'project').glob('bank*.work'):
+            def seed(data):
+                for part in range(8):
+                    for t,fields in follow_settings.items():
+                        for field,value in fields.items():
+                            data[otp.PART_BASE+part*otp.PART_STRIDE+9+0x4e2+36*t+field]=value
+            otp._bank_write(work/'project',int(path.stem[4:]),seed,guard=False)
+        card,_=emu_card.stage_project(work/'project','OCTABAM','BASS',tree=work/'follow-tree')
+        (work/'card.img').write_bytes(card)
     lines=[]
     def key(at,k,hold=100):lines.extend([f'{at} key {k:#x} down',f'{at+hold} key {k:#x} up'])
     key(100,0x31);key(600,0x35);key(1100,0x10)
@@ -363,57 +379,50 @@ def persistence(source,voic=1,omit=0):
     # Open Harmony with the physical F press. Edit all three controls and exercise
     # an unused encoder; the NOTE/ARP native staged lanes must stay intact.
     key(2400,0x3d,50)
-    lines.extend([f'2500 enc 1 {4 if voic==1 else voic-1}','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1',f'2640 enc 3 {omit}','2650 enc 4 5'])
+    lines.extend([f'2500 enc 1 {4 if voic==1 else voic-1}','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1',f'2640 enc 3 {omit}','2650 enc 4 5','2660 enc 5 4'])
     key(2700,0x32,50)
     key(2800,0x32)
-    lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up','4000 enc 5 1'])
+    lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up','4000 enc 5 4'])
     key(4500,0x32)
     for at,k in zip(range(5000,9200,700),[0x1c,0x21,0x20,0x31,0x31]):key(at,k)
     lines.append('40000 quit')
     script=work/'save.txt';script.write_text('\n'.join(lines)+'\n')
     extra=['--rtc','1800000000','--live-script',script,'--lcd',work/'save.lcd',
-           '--mem-dump',f'0x10000000,0x100000={work}/saved-cs1.bin;0x100b14e2,10={work}/saved-state.bin']
+           '--mem-dump',f'0x10000000,0x100000={work}/saved-cs1.bin;0x100a4ece,6322={work}/saved-state.bin']
     run(work,'save',extra)
-    expected=bytes((6+64*omit+(16*(voic-1) if voic>1 else 0),1,0,0,0,0,0,0,int(voic==1),0x4f))
-    assert (work/'saved-state.bin').read_bytes()==expected
+    expected=(work/'saved-state.bin').read_bytes()
+    assert expected[0x4e2+5]==2
+    assert expected[0x4e2+16]==voic+8+32*omit
+    assert expected[0x4e2+12]==4, 'WIDTH not stored in native Part'
+    for t,fields in follow_settings.items():
+        for field,value in fields.items():
+            assert expected[0x4e2+36*t+field]==value+(4 if t==0 and field==12 else 0)
     files=emu_card.extract_image((work/'save-card.img').read_bytes())
-    for name in ('project.work','project.strd'):
-        assert b'#MIDI_HARMONY_TYPE_V1_T1=2' in files['OCTABAM/BASS/'+name]
-        assert f'#MIDI_HARMONY_VOIC_V1_T1={voic}'.encode() in files['OCTABAM/BASS/'+name]
-        assert b'#MIDI_HARMONY_SPRD_V1_T1=1' in files['OCTABAM/BASS/'+name]
-        assert f'#MIDI_HARMONY_ROOT_V1_T1={omit}'.encode() in files['OCTABAM/BASS/'+name]
-    # Added C Dorian when MIDI Scales is installed, otherwise stock C Minor.
     for name in ('bank01.work','bank01.strd'):
         data=files['OCTABAM/BASS/'+name]
-        assert data[otp.PART_BASE+9+0x4e2+17]==expected_key,(name,data[otp.PART_BASE+9+0x4e2+17])
+        part=data[otp.PART_BASE+9:otp.PART_BASE+9+6322]
+        assert part==expected,(name,'saved native Part differs from RAM')
+        assert part[0x4e2+17]==expected_key,(name,part[0x4e2+17])
     quit_script=work/'quit.txt';quit_script.write_text('1500 quit\n')
     for name,options in [('reload',[]),('warm',['--no-post','--cs1-in',work/'saved-cs1.bin'])]:
         run(work,name,['--rtc','1800000000','--live-script',quit_script,
-                      '--mem-dump',f'0x100b14e2,10={work}/{name}-state.bin;0x46c76df1,1={work}/{name}-key.bin']+options,
+                      '--mem-dump',f'0x100a4ece,6322={work}/{name}-state.bin;0x46c76df1,1={work}/{name}-key.bin']+options,
             card=work/'save-card.img')
         assert (work/f'{name}-state.bin').read_bytes()==expected,name
         assert (work/f'{name}-key.bin').read_bytes()==bytes((expected_key,)),name
-    # Simulated resume from the previous battery format preserves HARM/VOIC
-    # and adds CLOSE; do not confuse disk reload with this migration path.
-    legacy=bytearray((work/'saved-cs1.bin').read_bytes())
-    legacy[0xb14e2:0xb14ea]=bytes(v&3 for v in expected[:8])
-    legacy[0xb14ea]=1 # legacy AUTO for T1
-    legacy[0xb14eb]=0x4a
-    (work/'legacy-cs1.bin').write_bytes(legacy)
-    run(work,'migrate',['--rtc','1800000000','--no-post','--cs1-in',work/'legacy-cs1.bin',
-                       '--live-script',quit_script,'--mem-dump',f'0x100b14e2,10={work}/migrate-state.bin'],
-        card=work/'save-card.img')
-    assert (work/'migrate-state.bin').read_bytes()==bytes((2,1,0,0,0,0,0,0,1,0x4f))
-    old=fixture(source,'old-project',{})
-    run(old,'load',['--rtc','1800000000','--cs1-in',work/'saved-cs1.bin','--live-script',quit_script,
-                    '--mem-dump',f'0x100b14e2,10={old}/state.bin'])
-    assert (old/'state.bin').read_bytes()==bytes(9)+b'O'
-    print('  [ok] UART Harmony page, HARM/VOIC/SPRD/KEY controls, actual SAVE, disk reload, CS1 warm boot/migration and old-project defaults',flush=True)
+    fresh=fixture(source,'fresh-project',{})
+    run(fresh,'load',['--rtc','1800000000','--cs1-in',work/'saved-cs1.bin','--live-script',quit_script,
+                    '--mem-dump',f'0x100a4ece,6322={fresh}/state.bin'])
+    state=(fresh/'state.bin').read_bytes()
+    for track in range(8):
+        at=0x4e2+36*track
+        assert state[at+5]==state[at+16]==state[at+12]==0
+    print('  [ok] UART Harmony controls including WIDTH, native bank SAVE, disk reload, CS1 warm boot and fresh-project defaults',flush=True)
     return {work.name:'pass'}
 
 
 def auto_voicing(source):
-    results={};sym=harmony.symbols();has_follow='bf_sources' in sym
+    results={};sym=harmony.symbols();has_follow='bf_source_get' in sym
     for arp in (False,True):
         work=fixture(source,'auto-sequence-'+('arp' if arp else 'chords'),{0:2,1:1},
                      arp=arp,first_note=60,auto=(0,))
@@ -449,8 +458,9 @@ def auto_voicing(source):
     script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1400 key 0x3d down\n1500 key 0x3d up\n2000 enc 1 4\n2100 enc 2 1\n2200 key 0 down\n2300 key 0 up\n2400 key 5 down\n2500 key 5 up\n3000 quit\n')
     events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                     '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
-                    '--mem-dump',f'0x100b14e2,10={work}/state.bin;{sym["mh_page_win"]:#x},4={work}/window.bin'])
-    assert (work/'state.bin').read_bytes()==bytes((6,0,0,0,0,0,0,0,1,0x4f))
+                    '--mem-dump',f'0x100a4ece,6322={work}/state.bin;{sym["mh_page_win"]:#x},4={work}/window.bin'])
+    state=(work/'state.bin').read_bytes()
+    assert state[0x4e2+5]==2 and state[0x4e2+16]==9
     assert int.from_bytes((work/'window.bin').read_bytes(),'big')!=0
     balanced(events)
     assert [e[2] for e in events if e[0]=='on']==[48,55,64,48,57,65],events
@@ -462,7 +472,7 @@ def auto_voicing(source):
 def bypass_follow(source, key_off_only=False):
     """Live roots drive followers with HARM OFF or no selected scale."""
     sym=harmony.symbols();results={}
-    if 'bf_sources' not in sym:return results
+    if 'bf_source_get' not in sym:return results
     for source_type,key_raw,dest_type in ((0,1,0),(0,1,1),(0,1,2),(2,0,0),(2,0,2),(1,1,1)):
         if key_off_only and key_raw:continue
         for arp in (False,True):
@@ -523,7 +533,7 @@ def octave_output(source):
 
 
 def spread_output(source):
-    results={};sym=harmony.symbols();has_follow='bf_sources' in sym
+    results={};sym=harmony.symbols();has_follow='bf_source_get' in sym
     # Fixed, musically readable expectations independently pin the candidate
     # search on a C/F/G progression. Machine checks cover all scales/registers.
     expected={
@@ -562,7 +572,7 @@ def spread_output(source):
 
 
 def manual_inversions(source):
-    results={};sym=harmony.symbols();has_follow='bf_sources' in sym
+    results={};sym=harmony.symbols();has_follow='bf_source_get' in sym
     examples={(2,2):[64,67,72,69,72,77,71,74,79],
               (2,3):[67,72,76,72,77,81,74,79,83],
               (3,4):[71,72,76,79,76,77,81,84,77,79,83,86]}
@@ -602,8 +612,9 @@ def manual_inversions(source):
     script.write_text('100 key 0x31 down\n200 key 0x31 up\n600 key 0x2d down\n700 key 0x22 down\n850 key 0x22 up\n950 key 0x2d up\n1400 key 0x3d down\n1500 key 0x3d up\n2000 enc 1 3\n2100 enc 2 2\n2150 enc 3 1\n2200 key 0 down\n2300 key 0 up\n2400 key 5 down\n2500 key 5 up\n3000 quit\n')
     events=run(work,'page',['--step','-:poke:0x80000015=1','--step','-:poke:0x460d16f3=1',
                     '--step','-:poke:0x100b14cc=0','--live-script',script,'--lcd',work/'page.lcd',
-                    '--mem-dump',f'0x100b14e2,10={work}/state.bin'])
-    assert (work/'state.bin').read_bytes()==bytes((122,0,0,0,0,0,0,0,0,0x4f))
+                    '--mem-dump',f'0x100a4ece,6322={work}/state.bin'])
+    state=(work/'state.bin').read_bytes()
+    assert state[0x4e2+5]==2 and state[0x4e2+16]==52
     balanced(events)
     assert [e[2] for e in events if e[0]=='on']==[59,76,79,64,81,84],events
     subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'page.lcd'),'--png',str(work/'page.png')],check=True)
@@ -726,6 +737,7 @@ def live_transpose_cleanup(source):
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=pathlib.Path)
+    ap.add_argument('--settings-only',action='store_true',help='native Part project SAVE, disk load, CS1 resume and fresh defaults')
     ap.add_argument('--live-transpose-only',action='store_true',help='stock-compatible live arp TRAN, direct-key identity, qualities and releases')
     ap.add_argument('--root-only',action='store_true',help='ROOT placement, arp, follower, recording, UI and persistence')
     ap.add_argument('--bypass-follow-only',action='store_true',help='live HARM OFF / KEY OFF source with rhythmic MIDI followers')
@@ -736,6 +748,10 @@ def main():
     ap.add_argument('--voicing-only',action='store_true',help='run AUTO MIDI, page, persistence and recording regressions')
     a=ap.parse_args();OUT.mkdir(exist_ok=True)
     freeze_candidate(OUT)
+    if a.settings_only:
+        cases=persistence(a.project)
+        (OUT/'result-settings.json').write_text(json.dumps(dict(cases=cases,image_sha256=hashlib.sha256(CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
+        return
     if a.live_transpose_only:
         cases=live_transpose(a.project)
         cases.update(live_transpose_cleanup(a.project))

@@ -57,18 +57,18 @@ def run(source,name,sym,image,channels,mode):
     if sequenced:
         frames=30000
         commands.append((28000,'call:0x4009f5bc'))
-        if 'bf_sources' in sym:
+        if 'bf_source_get' in sym:
             # Longest reverse chain: T1 -> T2 -> ... -> T8, shared scale/root.
             for t in range(7):
-                poke('-',sym['bf_sources']+t,t+2)
-                if mode=='change':poke('-',sym['bf_response_modes']+t,1)
+                poke('-',0x400e21e0+0x8ed80+0x4e2+36*t+3,t+2)
+                if mode=='change':poke('-',0x400e21e0+0x8ed80+0x4e2+36*t+12,2)
     elif mode=='bypass-first':
         for t in range(8):
-            poke('-',p.harmony.NV+t,0)
+            poke('-',0x400e21e0+0x8ed80+0x4e2+36*t+5,0)
             key(100,t,64+t,100)
             expected.append(('on',channels[t],64+t,100))
         for t in range(8):
-            poke(400,p.harmony.NV+t,2)
+            poke(400,0x400e21e0+0x8ed80+0x4e2+36*t+5,2)
             key(600,t,60+t,100)
             expected.extend(('on',channels[t],n+t,100) for n in (60,67))
         for t in range(8):
@@ -79,7 +79,7 @@ def run(source,name,sym,image,channels,mode):
             expected.append(('off',channels[t],64+t,0))
     elif mode=='stock-bypass':
         for t in range(8):
-            poke('-',p.harmony.NV+t,0)
+            poke('-',0x400e21e0+0x8ed80+0x4e2+36*t+5,0)
             key(100,t,24+t*12,100)
             expected.append(('on',channels[t],24+t*12,100))
         for t in range(8):
@@ -88,7 +88,7 @@ def run(source,name,sym,image,channels,mode):
     elif mode=='all-pitches':
         keys=[(t,n) for t in range(8) for n in range(128)]
         rng=random.Random(140);rng.shuffle(keys)
-        for t in range(8):poke('-',p.harmony.NV+t,1)
+        for t in range(8):poke('-',0x400e21e0+0x8ed80+0x4e2+36*t+5,1)
         for t,n in keys:
             key(100,t,n,100);expected.append(('on',channels[t],n,100))
         rng.shuffle(keys)
@@ -113,7 +113,7 @@ def run(source,name,sym,image,channels,mode):
         expected=[('on',ch,n,100) for ch in dict.fromkeys(channels) for n in (60,64,67)]
         if mode=='bypass':
             for t in range(8):
-                poke(400,p.harmony.NV+t,0)
+                poke(400,0x400e21e0+0x8ed80+0x4e2+36*t+5,0)
                 key(600,t,64,100);key(900,t,64,0)
         if mode in ('channel-off','channel-change'):
             for t in range(8):poke(600,0x40171442+36*t,0 if mode=='channel-off' else 16-t)
@@ -176,7 +176,7 @@ def main():
            'eight-arps':(list(range(1,9)),'arp'),
            'shared-channel-churn':([1,2,3,4]*2,'churn'),
            'eight-track-sequence':(list(range(1,9)),'sequence')}
-    if 'bf_response_modes' in sym:
+    if 'bf_response_get' in sym:
         cases['seven-held-change-followers']=(list(range(1,9)),'change')
     selected=args.case or list(cases)
     assert all(n in cases for n in selected),selected
