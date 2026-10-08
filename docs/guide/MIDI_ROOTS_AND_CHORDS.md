@@ -66,7 +66,8 @@ Live playing does not replace a running pattern's root progression.
 in the project. CHRD locks belong to sequencer steps and use project companion
 files; keep those files with the project when backing up or copying it.
 **RFOL, MODE and both OCT values are saved per MIDI track in the project**
-and restored on restart. Changing Parts does not change the Follow setup.
+and restored on restart. Use the normal project SAVE/RELOAD commands.
+Changing Parts does not change the Follow setup.
 
 See the module READMEs for full controls, storage details and verification
 status. These are development modules; hardware acceptance remains pending.

@@ -85,8 +85,9 @@ when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
 
 HARM, VOIC, SPRD and ROOT are stored per MIDI track per **project**, not per Part/pattern. They are
 saved in backward-compatible project comment lines and survive battery-RAM
-resume. KEY remains a native Part setting. MIDI Follow's RFOL selection is
-still its existing volatile setting; select it again after power-up.
+resume. KEY remains a native Part setting. With MIDI Follow's project-settings
+update, RFOL, MODE and both OCT values are also saved per track in the project
+and restored on restart.
 
 ## CHORD PLAY and CHRD
 
