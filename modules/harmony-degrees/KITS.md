@@ -86,6 +86,34 @@ Recheck that task before implementing the shared layout and before composing
 the combined image. Import its reviewed implementation or follow its accepted
 contract; do not create a competing settings store.
 
+### Shared ABI review and degree integration work
+
+The degree task has reviewed and accepts the proposed `mp_ui_context`,
+`mp_play_context`, `mp_read` and `mp_write` register ABI: context is
+`bank*4+working Part`, all registers except d0/condition codes preserved.
+The implementation in the sibling `midi-part-settings` worktree is still
+uncommitted and has not been integrated here. We will consume the published
+commit after its linked-code gate. Saved Parts are native copy destinations,
+not writable UI contexts. DEG/CHRD setters use offsets 19/18 respectively.
+
+The degree task owns `modules/harmony-degrees/*` and CHRD callers in
+`chord-ui.s`, `locks.s`, `chord-sequence.s` and `play.s`; shared Harmony/Follow
+setting edits remain sibling-owned. Keep `mh_set_native` available beneath
+the existing `hd_set` dispatch when degrees are selected: the degree setter
+will convert only the selected working Part and its affected patterns before
+publishing the new HARM value. The sibling owns Harmony's public getters and
+should document which explicit-context getters accompany UI/playback forms.
+
+Pattern companion work is replacing per-track global mode/default arrays
+with per-pattern/per-track representation and outgoing-scale provenance.
+Part defaults will not be exported in that companion or included in its
+native fingerprint. A generic native Part-copy boundary is being investigated
+here for outgoing capture before a physical Part slot is replaced; this must
+cover ordinary Part operations and callers such as KITS without referencing
+KITS. This task owns any such degree-only native-copy detour; the shared
+`part.s` access layer does not need to depend on degree code. The concrete
+detour and evidence will be posted before integration.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.
