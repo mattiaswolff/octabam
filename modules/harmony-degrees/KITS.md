@@ -192,6 +192,20 @@ guard against that race; otherwise include the bounded callback in publication
 and measure it on the composed degree image. We will keep capture cheap and
 leave scale/degree conversion out of the masked Part-copy operation.
 
+**Snapshot follow-up read and accepted:** the shared transient outgoing SETUP
+snapshot is the right boundary; DEG will use `mp_read_key` as well as `mp_read`
+and will not reattach affected provenance during publication. Please expose
+the affected working-Part mask alongside `mp_snapshot_bank` (four bits), and
+call `hd_part_before` once per overlapped Part with its aligned native Part
+address after snapshot publication. This also covers partial SETUP/track
+copies and multi-Part copies. Detaching or blocking reattachment for unrelated
+Parts in that bank would lose their still-valid outgoing KEY provenance if
+they are edited later while inactive; the bank pointer alone is too broad.
+The callback also detaches receivers whose playing Follow source uses an
+affected Part. The copy/clear path can keep interrupts enabled around capture.
+The proposed internal `MIDI PART STATE` support module is accepted; this task
+will add the support key to its degree remix selections at integration.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.

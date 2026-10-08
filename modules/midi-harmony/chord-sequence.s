@@ -1,8 +1,9 @@
     .include "remix.inc"
 /* CHRD travels beside native MIDI staging/pending locks, never in them.
  * The builder resolves the exact bank/pattern/track/step before scheduling.
- * A fired pending record publishes its own quality, including TRI on an
- * unlocked step. UI bank and currently selected live chord are irrelevant.
+ * A pending record retains explicit quality or the unlocked sentinel and
+ * its captured Part context. Inheritance resolves from that Part at fire,
+ * never from the UI bank or the currently selected live chord.
  */
     .text
     .global ch_stage_fill,ch_stage_copy_a,ch_stage_copy_b,ch_pending_fire
@@ -17,9 +18,16 @@ ch_stage_fill:
     move.l 88(%sp),%d4
     jsr hd_stage
     .endif
-    jsr ch_lock_get
+    jsr ch_lock_ptr
+    moveq #-1,%d4
+    tst.l %a0
+    beq.s .stage_context
+    move.b (%a0),%d4
+.stage_context:
+    jsr ch_pattern_context
     move.l 88(%sp),%d1 /* pending slot: original sp+60 */
     lea ch_staged,%a0
+    lea ch_staged_context,%a1
     tst.l %d1
     bmi.s .stage_ready
     cmpi.l #3,%d1
@@ -27,8 +35,11 @@ ch_stage_fill:
     lsl.l #3,%d1
     lea ch_pending,%a0
     adda.l %d1,%a0
+    lea ch_pending_context,%a1
+    adda.l %d1,%a1
 .stage_ready:
-    move.b %d0,(%a0,%d2.l)
+    move.b %d4,(%a0,%d2.l)
+    move.b %d0,(%a1,%d2.l)
 .stage_done:
     movem.l (%sp),%d0-%d4/%a0-%a1
     lea 28(%sp),%sp
@@ -47,6 +58,10 @@ ch_stage_copy_a:
     move.b (%a0,%d2.l),%d0
     lea ch_pending,%a0
     move.b %d0,(%a0,%d2.l)
+    lea ch_staged_context,%a0
+    move.b (%a0,%d2.l),%d0
+    lea ch_pending_context,%a0
+    move.b %d0,(%a0,%d2.l)
     movem.l (%sp),%d0/%a0
     addq.l #8,%sp
     adda.l #0x46c78960,%a0
@@ -62,13 +77,17 @@ ch_stage_copy_b:
     move.b (%a0,%d1.l),%d0
     lea ch_pending,%a0
     move.b %d0,(%a0,%d1.l)
+    lea ch_staged_context,%a0
+    move.b (%a0,%d1.l),%d0
+    lea ch_pending_context,%a0
+    move.b %d0,(%a0,%d1.l)
     movem.l (%sp),%d0/%a0
     addq.l #8,%sp
     adda.l #0x46c78960,%a0
     jmp 0x4009c10e
 ch_pending_fire:
-    lea -12(%sp),%sp
-    movem.l %d0/%a0/%a1,(%sp)
+    lea -16(%sp),%sp
+    movem.l %d0-%d1/%a0-%a1,(%sp)
     move.l %a0,%d0
     subi.l #0x46c78960,%d0
     lsr.l #5,%d0
@@ -77,16 +96,28 @@ ch_pending_fire:
     .ifdef HAVE_DEGREES
     jsr hd_fire
     .endif
+    move.l %d0,%d1
     lea ch_pending,%a0
     move.b (%a0,%d0.l),%d0
+    andi.l #255,%d0
+    cmpi.l #7,%d0
+    bls.s .fire_quality
+    lea ch_pending_context,%a0
+    move.b (%a0,%d1.l),%d1
+    andi.l #255,%d1
+    move.l %d5,%d0
+    jsr ch_base_at
+.fire_quality:
     lea ch_sequence_quality,%a0
     move.b %d0,(%a0,%d5.l)
 .fire_done:
-    movem.l (%sp),%d0/%a0/%a1
-    lea 12(%sp),%sp
+    movem.l (%sp),%d0-%d1/%a0-%a1
+    lea 16(%sp),%sp
     movem.l (%a0),%d1-%d4/%d6-%d7/%a4-%a5
     movem.l %d1-%d4/%d6-%d7/%a4-%a5,(%a1)
     jmp 0x400a19e2
     .balign 4
-ch_staged: .space 8,0
-ch_pending: .space 32,0
+ch_staged: .space 8,255
+ch_pending: .space 32,255
+ch_staged_context: .space 8,255
+ch_pending_context: .space 32,255

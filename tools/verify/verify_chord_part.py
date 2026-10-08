@@ -56,6 +56,32 @@ def main():
     put(at(7, 3, 0), 1)
     assert lock(7, 4, 0, 6) == 3, 'Part changes must not overwrite explicit CHRD'
     assert lock(7, 4, 0, 7) == 1, 'unlocked CHRD must inherit current Part'
+    # Exercise the real staging/fire detours. Pending defaults use captured
+    # context even when UI and engine move elsewhere before the trigger.
+    def stage(step, slot):
+        put(m.stack+48, 7, 4)
+        put(m.stack+60, slot & 0xffffffff, 4)
+        m.call('ch_stage_fill', stop=0x4009d188,
+               regs={UC_M68K_REG_D3: 0, UC_M68K_REG_D7: step,
+                     UC_M68K_REG_A3: 4, UC_M68K_REG_A5: m.scratch})
+    def fire(slot):
+        m.call('ch_pending_fire', stop=0x400a19e2,
+               regs={UC_M68K_REG_A0: 0x46c78960+slot*8*32,
+                     UC_M68K_REG_A1: m.scratch, UC_M68K_REG_D5: 0})
+        return u.mem_read(m.sym['ch_sequence_quality'], 1)[0]
+    stage(6, 0)  # explicit quality 3
+    stage(7, 1)  # inherit captured bank 7, Part 3
+    put(at(7, 3, 0), 6)
+    put(0x8000182a, 1)
+    put(0x80001832, 0)
+    assert fire(0) == 3
+    assert fire(1) == 6
+    for name, track_reg, continuation in (('ch_stage_copy_a', UC_M68K_REG_D2, 0x4009b922),
+                                          ('ch_stage_copy_b', UC_M68K_REG_D1, 0x4009c10e)):
+        stage(7, -1)
+        m.call(name, stop=continuation, regs={track_reg: 0, UC_M68K_REG_A0: 0})
+        put(at(7, 3, 0), 4)
+        assert fire(0) == 4, name
     # Every track in all working Parts and banks has independent storage.
     writes = 0
     for bank in range(16):
@@ -117,7 +143,7 @@ def main():
     m.call('native_part_init')
     assert all(u.mem_read(fresh+0x4e2+track*36+18, 1)[0] == 0 for track in range(8))
     assert int.from_bytes(u.mem_read(0x400d43a6, 4), 'big') == 8
-    print(json.dumps({'part_default_writes': writes, 'distinct_contexts': 4,
+    print(json.dumps({'part_default_writes': writes, 'distinct_contexts': 4, 'pending_context_paths': 4,
                       'inheritance_explicit_locks_invalid_values_abi': 'passed',
                       'evidence': 'linked ColdFire', 'hardware_tested': False}))
 
