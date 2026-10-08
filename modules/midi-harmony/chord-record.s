@@ -44,8 +44,7 @@ ch_record_post:
     moveq #0,%d0
     move.b 2(%a1),%d0
     move.l %d5,%d1
-    jsr hd_capture
-    jsr hd_capture_transition
+    jsr hd_capture_message
     move.b %d0,15(%a1)
     .endif
     move.l %a1,56(%sp) /* original sp+36: posted pointer argument */
@@ -86,6 +85,9 @@ ch_record_on:
     moveq #15,%d1
     and.l %d0,%d1
     bne.s .on_call
+    .ifdef HAVE_DEGREES
+    jsr hd_record_consume
+    .endif
     moveq #0,%d2
     move.b 12(%a2),%d2
     .ifdef HAVE_DEGREES
@@ -192,6 +194,7 @@ hd_record_active: .long -1
 ch_record_overflow: .long 0
     .bss
     .balign 4
+    .global ch_messages
 ch_messages: .space 4096
 
     .text
@@ -217,88 +220,3 @@ ch_record_grid_off:
     move.l %d0,8(%sp)
 .off_owner_done:
     rts
-
-.ifdef HAVE_DEGREES
-/* d0 track,d1 new mode. Enqueued HARM roots cross the same representation
- * boundary as their sequence; native physical key and release bytes stay put.
- * The UI consumer is serialized with the setter. ISR enqueue handles an
- * in-progress transition before publishing its new message. */
-    .global hd_record_modes
-hd_record_modes:
-    lea -32(%sp),%sp
-    movem.l %d0-%d5/%a0-%a1,(%sp)
-    move.l %d0,%d4
-    move.l %d1,%d5
-    jsr mh_scale_record
-    move.l %d0,%d3
-    lea ch_messages,%a1
-    move.l #256,%d2
-.record_mode_loop:
-    tst.b 14(%a1)
-    beq.s .record_mode_next
-    cmp.b 13(%a1),%d4
-    bne.s .record_mode_next
-    moveq #0,%d0
-    move.b 15(%a1),%d0
-    move.l %d3,%d1
-    tst.l %d5
-    beq.s .record_mode_off
-    btst #7,%d0
-    beq.s .record_mode_next
-    andi.l #127,%d0
-    jsr hd_encode
-    bra.s .record_mode_store
-.record_mode_off:
-    btst #7,%d0
-    bne.s .record_mode_next
-    move.l %d0,-(%sp)
-    jsr hd_decode
-    tst.l %d0
-    bpl.s .record_mode_absolute
-    moveq #0,%d0
-    move.l (%sp),%d1
-    cmpi.l #7,%d1
-    bcs.s .record_mode_absolute
-    moveq #127,%d0
-.record_mode_absolute:
-    addq.l #4,%sp
-    ori.l #128,%d0
-.record_mode_store:
-    move.b %d0,15(%a1)
-.record_mode_next:
-    lea 16(%a1),%a1
-    subq.l #1,%d2
-    bne.s .record_mode_loop
-    movem.l (%sp),%d0-%d5/%a0-%a1
-    lea 32(%sp),%sp
-    rts
-/* d0 captured degree,d1 track; entering messages already obey the target
- * mode while an interruptible OFF conversion is visiting existing messages. */
-hd_capture_transition:
-    lea -20(%sp),%sp
-    movem.l %d1-%d3/%a0-%a1,(%sp)
-    lea hd_busy,%a0
-    tst.b (%a0,%d1.l)
-    beq.s .capture_transition_done
-    lea hd_target,%a0
-    tst.b (%a0,%d1.l)
-    bne.s .capture_transition_done
-    move.l %d0,%d2
-    move.l %d1,%d0
-    jsr mh_scale_record
-    move.l %d0,%d1
-    move.l %d2,%d0
-    jsr hd_decode
-    tst.l %d0
-    bpl.s .capture_transition_absolute
-    moveq #0,%d0
-    cmpi.l #7,%d2
-    bcs.s .capture_transition_absolute
-    moveq #127,%d0
-.capture_transition_absolute:
-    ori.l #128,%d0
-.capture_transition_done:
-    movem.l (%sp),%d1-%d3/%a0-%a1
-    lea 20(%sp),%sp
-    rts
-.endif

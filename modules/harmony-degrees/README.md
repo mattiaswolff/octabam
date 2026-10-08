@@ -1,8 +1,8 @@
 # Harmony degrees
 
-Production replacement candidate for MIDI Harmony's root model. It is selected
-separately while acceptance is in progress; the ordinary MIDI HARMONY selection
-must retain its existing behavior and bytes. This is not a reduced prototype.
+Production replacement for MIDI Harmony's root model, undergoing integration
+and acceptance. Settings use native Parts, with the same behavior whether KITS
+is selected or absent. This is a greenfield format with no migration path.
 
 ## Musical contract
 
@@ -45,19 +45,27 @@ interrupt mask. Recording uses the same boundary; bank retention runs after
 interrupts are restored. Clearing a HARM root removes its native mirror with
 the degree so an intervening reader cannot reconstruct the deleted value.
 
-HARM remains project-wide per MIDI track. A transition covers the working
-data for that track across all banks and patterns, resolving each pattern's
-assigned Part KEY (or ultimate Follow source's Part KEY). Stored Part snapshots
-are kept coherent with their corresponding degree defaults. This is not a
-current-pattern-only rewrite. Loading/copying/restoring data must reconcile its
-representation before playback. Native dirty flags and retained mirrors must
-be updated when converting into NOTE.
+HARM, Follow, voicing, DEG and CHRD defaults belong to each native Part.
+Explicit DEG/CHRD locks stay with their patterns. An explicit HARM edit converts
+the edited Part's default and its attached pattern roots. Recall inherits the
+incoming Part's defaults. HARM-to-OFF locks preserve the outgoing scale's root;
+for example, C-minor 1:3 becomes native C3 even when the incoming OFF Part has
+D-minor KEY. A transient outgoing snapshot protects replacement of the same
+physical slot. Inactive patterns retain their last scale until next used.
+
+Native Part Save/Reload/copy/clear carries defaults directly. The companion
+contains only 128 pattern/track root records: 64 degrees, 64 native edit
+snapshots, representation, outgoing scale and context. Reusable slot context
+is detached on load and before replacement. Part assignment and defaults are
+excluded from the native pattern fingerprint. Dirty flags and retained mirrors
+follow native bank ownership.
 
 Native pitch consumers and generated note ownership receive real pitches.
 Recording captures degree identity at the event, not a later queue-consumption
 KEY. Releases retain their original track and emitted pitches. Pending events
 cannot mix old representation data with a new mode. UI reads do not regenerate
-AUTO voicing or mutate musical state.
+AUTO voicing. The UI queue boundary reconciles the selected pattern even when
+stopped; no trig is required for an OFF/HARM mode boundary.
 
 Copy, paste, undo, clear, new trigs, new projects, bank load/store/reload,
 Part save/reload/copy, Save As and battery retention carry the degree data
@@ -68,14 +76,10 @@ separate filesystem operations; arbitrary power-loss atomicity is not claimed.
 No legacy degree migration is required. The candidate uses its own companion
 identity so it cannot masquerade as the current module's CHRD format.
 
-The candidate supports native Parts. KITS and MIDI SCENES require their own
-degree-aware storage/interpolation contracts; the composition ledger rejects
-those combinations. The personal-bus candidate does not select either module.
-
-The planned combined successor moves custom musical settings to Parts/Kits,
-including DEG and CHRD defaults. See [the shared integration plan](KITS.md).
-Its revised ownership supersedes the project-wide HARM assumption above for
-that successor; D0 and the current implementation still have that assumption.
+KITS uses the same native Part fields and requires no special adapter. The
+composition guard remains until the combined gates pass. MIDI SCENES remains
+incompatible because native NOTE interpolation has no degree contract.
+See [the integration plan and ownership record](KITS.md).
 
 ## Implementation and evidence plan
 
@@ -116,46 +120,26 @@ that successor; D0 and the current implementation still have that assumption.
 
 ## Current evidence
 
-The D0 candidate has passed these automated component checks:
+The Part-owned core passes 16-bank native-byte comparisons, same-slot outgoing
+C3, rapid stopped recall, Follow chains/cycles, queued sequence/recording
+provenance, snapshot reattachment guards and 15 corrupt retained payloads.
+The payload is 24,960 bytes (CHRD plus pattern roots), with HDP2 file and HDN2
+retained identities. No default is restored from a companion.
 
-- Codec: 10,752 encode cases, 7,056 decode cases, 84 display values, fallback,
-  invalid inputs and register preservation.
-- Bank conversion: 16 banks / 256 patterns, 128 Part defaults, 16,384 root
-  positions, inheritance, Follow source selection and current-bank mirrors;
-  every unrelated native byte compared.
-- Combined retention: all 24,720 payload bytes round-trip; 16 malformed or
-  mismatched snapshots rejected before either live table is overwritten.
-- Linked native hooks: staging/pending/fire, KEY change before firing,
-  OFF/NOTE/CHORD conversion, degree editing, clipboard copies across modes,
-  CS1 copies and Part default save/reload.
-- Root publication: an interruptible reader sees the old or new root, never
-  mixed degree/native metadata. Twelve edit cases cover initial interrupt
-  levels 0/5/7; clear cannot resurrect a deleted degree; recorded KEY identity
-  survives queue consumption. Retention copying runs with interrupts restored.
-- Filesystem boundary: complete companion round-trip, malformed-file rejection,
-  and open/header/payload/close failure paths preserve the stored backup.
-
-All nine dedicated full-firmware port groups passed on the frozen D0 image:
-scale transposition, recording/save, panel editing, copy/clear/undo, native Parts,
-project lifecycle, rejected-file recovery, playback, and active HARM/OFF mode
-boundaries. This includes unsaved retained-memory resume and exact stock-OFF
-MIDI comparison. Nineteen additional physical TRAN cases passed, covering
-direct keys, live arps, every chord quality, register treatments and MIDI bounds.
-
-The package records the selected carrier's complete `make check` results,
-ordinary-selection byte comparison, exact source reference, toolchain and
-firmware hashes. Hardware timing and acceptance remain separate. The standalone
-selection is available for focused builds; full-firmware acceptance evidence
-belongs to `mattias-bus-degrees`, not every possible module combination.
+Codec/root checks cover all 84 scales and 7,056 scale/degree combinations.
+CHRD native defaults and pending inheritance have linked-code checks. Full
+composed hooks, files, publication and firmware lifecycle acceptance are in
+progress. Earlier D0 receipts belong to the preserved D0 image and do not
+validate these new Part-owned changes. Hardware acceptance remains separate.
 
 ## Reproduce and accept
 
-Build with `make bus REMIX=mattias-bus-degrees BUILD=D0`. The module's declared
+Build with `make bus REMIX=mattias-bus-degrees BUILD=DP`. The module's declared
 image gates cover the codec, core, linked hooks and filesystem failure paths.
 An interrupt-publication gate checks old-or-new root visibility, recorded KEY
 identity, clear behavior, mask restoration and unmasked retention copying.
 Run the complete carrier checks with `make check REMIX=mattias-bus-degrees
-BUILD=D0`; use `OT_PROJECT` for the existing full-project/USB/concert gates.
+BUILD=DP`; use `OT_PROJECT` for the existing full-project/USB/concert gates.
 
 Run the dedicated panel/files/playback suite with:
 
@@ -175,5 +159,5 @@ regenerates their checked-in ColdFire assembly. `--check` refuses stale output.
 No runtime C library or new firmware build dependency is introduced.
 
 Follow the [hardware acceptance sequence](ACCEPTANCE.md) for the exact packaged
-image. The ordinary `mattias-bus` selection is the control and must remain
-byte-identical to the branch's original base when this module is omitted.
+image. Stock-OFF output and native Part behavior must be checked on the exact image,
+both with and without KITS.

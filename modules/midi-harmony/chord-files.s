@@ -15,13 +15,13 @@
 
     .set BANK_B,8192
 .ifdef HAVE_DEGREES
-    .set FILE_B,24720
-    .set FILE_MAGIC,0x48444547 /* HDEG */
-    .set FILE_NONE,0x48444e4f  /* HDNO */
+    .set FILE_B,24960
+    .set FILE_MAGIC,0x48445032 /* HDP2: pattern degrees, Part-owned defaults */
+    .set FILE_NONE,0x48445030  /* HDP0: explicit empty companion */
 .else
     .set FILE_B,8192
-    .set FILE_MAGIC,0x43485244
-    .set FILE_NONE,0x43484e4f
+    .set FILE_MAGIC,0x43484432
+    .set FILE_NONE,0x43484430
 .endif
     .text
     .global ch_saveb,ch_loadall,ch_loadmask,ch_tocs1,ch_fromcs1
@@ -96,7 +96,7 @@ bl_loop:
 | hdr: d0 = bank -> HDR filled.
 hdr:    lea     HDR,%a0
         movel   #FILE_MAGIC,%a0@
-        moveq   #1,%d1
+        moveq   #2,%d1
         movel   %d1,%a0@(4)
         movel   %d0,%a0@(8)
         movel   #FILE_B,%d1
@@ -342,12 +342,12 @@ ch_file_read:
     cmpi.l #1,%d0
     bne.w .rd_bad
     move.l HDR,%d0
-    cmpi.l #FILE_NONE,%d0 /* CHNO: stored bank predates companions */
+    cmpi.l #FILE_NONE,%d0 /* explicit empty companion */
     beq.w .rd_none
     cmpi.l #FILE_MAGIC,%d0
     bne.w .rd_bad
     move.l HDR+4,%d0
-    cmpi.l #1,%d0
+    cmpi.l #2,%d0
     bne.w .rd_bad
     cmp.l HDR+8,%d2
     bne.w .rd_bad
@@ -415,11 +415,6 @@ ch_file_read:
     move.l %d2,%d0
     bsr.w blank
 .rd_status:
-    tst.l %d3
-    bne.s .rd_no_migration
-    move.l %d2,%d0
-    jsr ch_migrate_bank
-.rd_no_migration:
 .ifdef HAVE_DEGREES
     move.l %d2,%d0
     jsr hd_bank_loaded

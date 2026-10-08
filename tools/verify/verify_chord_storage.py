@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Linked CHRD table/retention/edit/migration checks; no hardware proof."""
+"""Linked CHRD table/retention/edit checks; no hardware proof."""
 import json
 import struct
 from pathlib import Path
@@ -31,10 +31,10 @@ def main():
     assert m.call('ch_lock_get',regs={UC_M68K_REG_D2:0,UC_M68K_REG_D3:0})==0
     # Full, dense bank: no sparse capacity loss with 8192 explicit locks.
     dense=bytes(i%8 for i in range(8192));u.mem_write(table+3*8192,dense)
-    u.mem_write(s['ch_legacy7_mask'],struct.pack('>I',0x81))
     u.mem_write(s['ch_lock_status']+3,b'\x03')
     m.call('ch_nv_save',3)
-    snapshot=bytes(u.mem_read(0x100f8600,8224))
+    retained_size=32+int.from_bytes(u.mem_read(0x100f860c,4),'big')
+    snapshot=bytes(u.mem_read(0x100f8600,retained_size))
     u.mem_write(table+3*8192,b'\xff'*8192)
     u.mem_write(s['ch_lock_status']+3,b'\x00')
     assert m.call('ch_nv_restore',3)==1
@@ -50,8 +50,8 @@ def main():
     # Current-bank edits update the retained snapshot, distant banks do not.
     setq(3,15,7,63,6)
     assert u.mem_read(0x100f8600+32+8191,1)==b'\x06'
-    snapshot=bytes(u.mem_read(0x100f8600,8224));setq(1,0,0,0,2)
-    assert bytes(u.mem_read(0x100f8600,8224))==snapshot
+    snapshot=bytes(u.mem_read(0x100f8600,retained_size));setq(1,0,0,0,2)
+    assert bytes(u.mem_read(0x100f8600,retained_size))==snapshot
     # Failed native saves must not copy corrupt work over the stored backup.
     for bank in range(16):
         for status in range(5):
@@ -86,24 +86,8 @@ def main():
     assert u.mem_read(table+512+5*64+47,1)==b'\xff'
     call_args('ch_clear_track',[1,5,1],0x40039b08)
     assert bytes(u.mem_read(table+512+5*64,64))==b'\xff'*64
-    # Migration materializes sevenths on old NOTE trigs only, independently
-    # for every bank/pattern; blank new trigs retain TRI.
-    u.mem_write(table,b'\xff'*131072)
-    u.mem_write(0x400e21e0,b'\0'*(0x9b340*16))
-    u.mem_write(s['ch_legacy7_mask'],struct.pack('>I',0x81))
-    for b in (0,15):
-        for p in (0,15):
-            for t in (0,1,7):
-                base=0x400e21e0+b*0x9b340+p*0x8ed8+0x48d0+t*0x8b0
-                u.mem_write(base,b'\x80'+b'\0'*6+b'\x01')
-        m.call('ch_migrate_bank',b)
-        for p in (0,15):
-            for t in (0,1,7):
-                got=bytes(u.mem_read(table+index(b,p,t,0),64))
-                expected=(b'\x01'+b'\xff'*62+b'\x01') if t in (0,7) else b'\xff'*64
-                assert got==expected,(b,p,t)
-    print('[ok] CHRD indices, invalid input guards, dense CS1 retention, corruption rejection, rejected-save backup protection, pattern/track copy and undo, clear, legacy seventh migration')
+    print('[ok] CHRD indices, invalid input guards, dense CS1 retention, corruption rejection, rejected-save backup protection, pattern/track copy and undo, clear')
     c.OUT.mkdir(parents=True,exist_ok=True)
-    (c.OUT/'storage-machine.json').write_text(json.dumps({'dense_locks':8192,'nv_corruption_cases':9,'copy_guard_cases':165,'copy_clear_migration':'passed'},indent=2)+'\n')
+    (c.OUT/'storage-machine.json').write_text(json.dumps({'dense_locks':8192,'nv_corruption_cases':9,'copy_guard_cases':165,'copy_clear':'passed'},indent=2)+'\n')
 
 if __name__=='__main__':main()

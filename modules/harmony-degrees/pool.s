@@ -8,6 +8,9 @@
 hd_tick:
     lea -68(%sp),%sp
     movem.l %d0-%d7/%a0-%a6,(%sp)
+    move.l %d7,-(%sp)
+    jsr hd_event_tick_c
+    addq.l #4,%sp
     lea hd_rebuild,%a0
     tst.b (%a0,%d7.l)
     beq.w .tick_done

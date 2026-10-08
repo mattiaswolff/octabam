@@ -116,8 +116,7 @@ hd_native_hash:
     rts
 
     .global hd_set,hd_prepare,hd_sequence_prepare,hd_stage,hd_stage_copy,hd_fire
-/* Interactive mode setter only. Project comment restoration uses the raw
- * setter; bank load reconciles its companion after native data is loaded. */
+/* Explicit selected-Part mode edit. Native recall does not use this setter. */
 hd_set:
     cmpi.l #7,%d0
     bhi.w .set_return
@@ -134,15 +133,15 @@ hd_set:
     move.l (%sp),%d0
     move.l 4(%sp),%d1
     jsr hd_record_modes
-    /* Converting banks runs with interrupts enabled. The small pending-event
-     * commit must be indivisible with publishing the new mode. */
+    /* Each queued event publishes under its own bounded mask. Conversion
+     * does not keep interrupts disabled for the entire queue scan. */
+    move.l 4(%sp),-(%sp)
+    move.l 4(%sp),-(%sp)
+    jsr hd_events_mode_c
+    addq.l #8,%sp
     move.w %sr,%d0
     move.l %d0,-(%sp)
     move.w #0x2700,%sr
-    move.l 8(%sp),-(%sp)
-    move.l 8(%sp),-(%sp)
-    jsr hd_events_mode_c
-    addq.l #8,%sp
     move.l 4(%sp),%d0
     move.l 8(%sp),%d1
     jsr mh_set_native
@@ -176,9 +175,6 @@ hd_prepare:
 hd_sequence_prepare:
     lea -16(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
-    jsr mh_get
-    tst.l %d0
-    beq.s .sequence_done
     move.l (%sp),%d1
     move.l 8(%sp),%a0
     moveq #0,%d0
@@ -231,18 +227,49 @@ hd_fire:
     rts
 
     .global hd_capture,hd_record
-/* Physical note -> degree at enqueue time, using the effective engine KEY.
- * d0 note, d1 track -> degree. Release still uses the captured physical pitch. */
+/* UI physical note -> captured degree; release keeps physical pitch. */
 hd_capture:
+    lea -12(%sp),%sp
+    movem.l %d1/%a0-%a1,(%sp)
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr hd_capture_c
+    addq.l #8,%sp
+    movem.l (%sp),%d1/%a0-%a1
+    lea 12(%sp),%sp
+    rts
+    .global hd_capture_message,hd_record_consume,hd_record_modes
+/* a1 message,d0 physical note,d1 track -> code, other registers kept. */
+hd_capture_message:
+    lea -12(%sp),%sp
+    movem.l %d1/%a0-%a1,(%sp)
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    move.l %a1,-(%sp)
+    jsr hd_capture_message_c
+    lea 12(%sp),%sp
+    movem.l (%sp),%d1/%a0-%a1
+    lea 12(%sp),%sp
+    rts
+/* a2 queued physical message; all registers kept. */
+hd_record_consume:
     lea -16(%sp),%sp
-    movem.l %d1-%d2/%a0-%a1,(%sp)
-    move.l %d0,%d2
-    move.l %d1,%d0
-    jsr mh_scale_record
-    move.l %d0,%d1
-    move.l %d2,%d0
-    jsr hd_encode
-    movem.l (%sp),%d1-%d2/%a0-%a1
+    movem.l %d0-%d1/%a0-%a1,(%sp)
+    move.l %a2,-(%sp)
+    jsr hd_record_consume_c
+    addq.l #4,%sp
+    movem.l (%sp),%d0-%d1/%a0-%a1
+    lea 16(%sp),%sp
+    rts
+/* d0 track,d1 new mode, selected Part only; all registers kept. */
+hd_record_modes:
+    lea -16(%sp),%sp
+    movem.l %d0-%d1/%a0-%a1,(%sp)
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    jsr hd_record_modes_c
+    addq.l #8,%sp
+    movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
     rts
 /* d0 bank, d1 pattern, d2 track, d3 step, d4 captured degree.

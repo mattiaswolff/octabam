@@ -1,5 +1,5 @@
     .text
-    .global hd_memcpy,hd_part_init,hd_step_copy,hd_step_apply
+    .global hd_memcpy,hd_step_copy,hd_step_apply
 /* Native memcpy ABI, with source identity captured before any aliasing write. */
 hd_memcpy:
     lea -12(%sp),%sp
@@ -25,24 +25,6 @@ hd_memcpy:
     jsr ch_nv_save
 .copy_done:
     move.l (%sp)+,%d0
-    movem.l (%sp),%d1/%a0-%a1
-    lea 12(%sp),%sp
-    rts
-/* One Part initialized by native Clear (both working and saved copies). */
-hd_part_init:
-    lea -12(%sp),%sp
-    movem.l %d1/%a0-%a1,(%sp)
-    move.l 16(%sp),-(%sp)
-    jsr 0x40005638
-    move.l %d0,-(%sp)
-    move.l 4(%sp),-(%sp)
-    jsr hd_part_reset_c
-    addq.l #4,%sp
-    moveq #0,%d0
-    move.b 0x80000002,%d0
-    jsr ch_nv_save
-    move.l (%sp)+,%d0
-    addq.l #4,%sp
     movem.l (%sp),%d1/%a0-%a1
     lea 12(%sp),%sp
     rts

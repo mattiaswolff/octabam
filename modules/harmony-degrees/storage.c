@@ -6,12 +6,11 @@
 enum { QUALITY_BYTES = 8192, PAYLOAD_BYTES = QUALITY_BYTES + sizeof(HdBank) };
 extern uint8_t ch_lock_table[16 * QUALITY_BYTES];
 extern uint8_t ch_lock_status[16];
-extern uint32_t ch_legacy7_mask;
 extern volatile uint32_t ch_nv_bank;
 static volatile uint32_t generation;
 #define NV ((volatile uint32_t *)(uintptr_t)0x100f8600)
 #define NV_PAYLOAD ((volatile uint8_t *)(uintptr_t)0x100f8620)
-#define MAGIC 0x48444e56u
+#define MAGIC 0x48444e32u
 
 static uint16_t mask(void) {
     uint16_t sr;
@@ -35,8 +34,13 @@ uint32_t hd_payload_hash_c(const uint8_t *p) {
 }
 void hd_export_c(unsigned bank, uint8_t *p) {
     if (bank >= 16) return;
+    hd_checkpoint_c(bank);
     const uint8_t *src = (const uint8_t *)&hd_banks[bank];
-    for (unsigned i = 0; i < sizeof(HdBank); ++i) p[i] = src[i];
+    uint32_t ticket;
+    do {
+        ticket = hd_revision_c(bank);
+        for (unsigned i = 0; i < sizeof(HdBank); ++i) p[i] = src[i];
+    } while (ticket != hd_revision_c(bank));
 }
 void hd_import_c(unsigned bank, const uint8_t *p) {
     if (bank >= 16 || !hd_validate_c((const HdBank *)p)) return;
@@ -46,18 +50,13 @@ void hd_import_c(unsigned bank, const uint8_t *p) {
 }
 uint32_t hd_native_hash_c(unsigned bank, uint32_t h) {
     if (bank >= 16) return 0;
-    const volatile uint8_t *p = (const volatile uint8_t *)(uintptr_t)(0x400e21e0 + bank*0x9b340);
-    /* Bind the native Part assignment and default root snapshots, too. KEY
-     * is deliberately absent: changing it must preserve degree identity. */
-    for (unsigned pat = 0; pat < 16; ++pat) h = hash(p + pat*0x8ed8 + 0x8e57, 1, h);
-    for (unsigned part = 0; part < 8; ++part) {
-        unsigned offset = part < 4 ? 0x8ed80 + part*0x18b2 : 0x9504a + (part-4)*0x18b2;
-        for (unsigned track = 0; track < 8; ++track) h = hash(p+offset+0x3e2+track*32, 1, h);
-    }
+    /* The caller fingerprints pattern NOTE/trig data. Reassigning a Part
+     * slot or changing its defaults must not invalidate explicit locks. */
     return h;
 }
 void hd_nv_save_c(unsigned bank) {
     if (bank >= 16) return;
+    hd_checkpoint_c(bank);
     uint16_t sr = mask();
     ch_nv_bank = bank;
     ++generation;
@@ -65,6 +64,7 @@ void hd_nv_save_c(unsigned bank) {
     for (;;) {
         uint32_t ticket = generation;
         bank = ch_nv_bank;
+        uint32_t roots_ticket = hd_revision_c(bank);
         NV[0] = 0;
         const volatile uint8_t *q = ch_lock_table + bank*QUALITY_BYTES;
         const volatile uint8_t *d = (const uint8_t *)&hd_banks[bank];
@@ -77,13 +77,13 @@ void hd_nv_save_c(unsigned bank) {
             sum = (sum ^ v) * 0x01000193u;
         }
         sr = mask();
-        if (i == PAYLOAD_BYTES && ticket == generation) {
-            NV[1] = 1;
+        if (i == PAYLOAD_BYTES && ticket == generation && roots_ticket == hd_revision_c(bank)) {
+            NV[1] = 2;
             NV[2] = bank;
             NV[3] = PAYLOAD_BYTES;
             NV[4] = sum;
             NV[5] = ticket;
-            NV[6] = ((uint32_t)ch_lock_status[bank] << 8) | ch_legacy7_mask;
+            NV[6] = ch_lock_status[bank];
             NV[7] = ~NV[6];
             NV[0] = MAGIC;
             unmask(sr);
@@ -93,8 +93,8 @@ void hd_nv_save_c(unsigned bank) {
     }
 }
 int hd_nv_restore_c(unsigned bank) {
-    if (bank >= 16 || NV[0] != MAGIC || NV[1] != 1 || NV[2] != bank ||
-        NV[3] != PAYLOAD_BYTES || NV[6] > 0x4ff || NV[7] != ~NV[6] ||
+    if (bank >= 16 || NV[0] != MAGIC || NV[1] != 2 || NV[2] != bank ||
+        NV[3] != PAYLOAD_BYTES || NV[6] > 4 || NV[7] != ~NV[6] ||
         NV[4] != hash(NV_PAYLOAD, PAYLOAD_BYTES, 0x811c9dc5u) ||
         !hd_payload_valid_c((const uint8_t *)NV_PAYLOAD)) return 0;
     /* Restore runs on the serialized bank-load path; no live publication
@@ -103,8 +103,7 @@ int hd_nv_restore_c(unsigned bank) {
         ch_lock_table[bank*QUALITY_BYTES+i] = NV_PAYLOAD[i];
     uint8_t *d = (uint8_t *)&hd_banks[bank];
     for (unsigned i = 0; i < sizeof(HdBank); ++i) d[i] = NV_PAYLOAD[QUALITY_BYTES+i];
-    ch_legacy7_mask = NV[6] & 255;
-    ch_lock_status[bank] = (uint8_t)(NV[6] >> 8);
+    ch_lock_status[bank] = (uint8_t)NV[6];
     ch_nv_bank = bank;
     hd_bank_loaded_c(bank);
     return 1;

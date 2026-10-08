@@ -1,9 +1,6 @@
-/* Working data and OFF/HARM boundary conversion. No allocation, libc,
- * files, UI, or generated-note ownership in this unit. The wrappers provide
- * ordered publication and invoke the persistence/edit lifecycle. */
+/* Pattern-owned degree roots; defaults belong to native Parts. No KITS or files. */
 #include "core.h"
-
-#define NATIVE_BANK_SIZE 0x9b340u
+#define BANK_SIZE 0x9b340u
 #define PATTERN_SIZE 0x8ed8u
 #define PART_SIZE 0x18b2u
 #define WORK_PARTS 0x8ed80u
@@ -11,59 +8,111 @@
 #define NATIVE_BASE 0x400e21e0u
 #define BYTE(a) (*(volatile uint8_t *)(uintptr_t)(a))
 #define WORD(a) (*(volatile uint32_t *)(uintptr_t)(a))
-#define ORDER() __asm__ volatile("" ::: "memory")
 
-/* Publish a root and its native edit-detection snapshot together. Keep
- * conversion and retained-bank hashing outside these small critical sections. */
-static uint16_t root_mask(void) {
+HdBank hd_banks[HD_BANKS];
+volatile uint8_t hd_busy[HD_TRACKS], hd_target[HD_TRACKS], hd_busy_context[HD_TRACKS];
+static volatile uint32_t revision[HD_BANKS][HD_LANES], bank_revision[HD_BANKS];
+extern volatile uint32_t mp_snapshot_bank, mp_snapshot_parts;
+static uint16_t mask(void) {
     uint16_t sr;
     __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) :: "cc", "memory");
     return sr;
 }
-static void root_unmask(uint16_t sr) {
+static void unmask(uint16_t sr) {
     __asm__ volatile("move.w %0,%%sr" :: "d"(sr) : "cc", "memory");
 }
-
-HdBank hd_banks[HD_BANKS];
-volatile uint8_t hd_busy[HD_TRACKS];
-volatile uint8_t hd_target[HD_TRACKS];
-
 static volatile uint8_t *native(unsigned bank) {
-    return (volatile uint8_t *)(uintptr_t)(NATIVE_BASE + NATIVE_BANK_SIZE*bank);
-}
-static unsigned index_of(unsigned pattern, unsigned track, unsigned step) {
-    return (pattern*8 + track)*64 + step;
-}
-static unsigned part_of(unsigned bank, unsigned pattern) {
-    return native(bank)[pattern*PATTERN_SIZE + 0x8e57] & 3;
+    return (volatile uint8_t *)(uintptr_t)(NATIVE_BASE+BANK_SIZE*bank);
 }
 static unsigned part_offset(unsigned part) {
-    return part < 4 ? WORK_PARTS + part*PART_SIZE : SAVED_PARTS + (part-4)*PART_SIZE;
+    return part < 4 ? WORK_PARTS+part*PART_SIZE : SAVED_PARTS+(part-4)*PART_SIZE;
 }
 static volatile uint8_t *base_note(unsigned bank, unsigned part, unsigned track) {
-    return native(bank) + part_offset(part) + 0x3e2 + 32*track;
+    return native(bank)+part_offset(part)+0x3e2 + 32*track;
 }
 static volatile uint8_t *step_note(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
-    return native(bank) + pattern*PATTERN_SIZE + 0x4900 + track*0x8b0 + step*32;
+    return native(bank)+pattern*PATTERN_SIZE+0x4900 + track*0x8b0 + step*32;
 }
-static int valid_code(unsigned value) { return value < HD_CODES || value == HD_NONE; }
-
+static HdRoots *roots(unsigned bank, unsigned pattern, unsigned track) {
+    return &hd_banks[bank].roots[pattern*8+track];
+}
+static void changed(unsigned bank, unsigned pattern, unsigned track) {
+    ++revision[bank][pattern*8+track];
+    ++bank_revision[bank];
+}
+uint32_t hd_revision_c(unsigned bank) {
+    return bank < HD_BANKS ? bank_revision[bank] : 0;
+}
+static unsigned scale_id(unsigned scale) {
+    return (scale >> 6)*12+((scale >> 2)&15u);
+}
+int hd_pattern_context_c(unsigned bank, unsigned pattern) {
+    if (bank >= 16 || pattern >= 16) return -1;
+    unsigned part = native(bank)[pattern*PATTERN_SIZE+0x8e57];
+    return part < 4 ? (int)(bank*4+part) : -1;
+}
+unsigned hd_part_type_c(unsigned bank, unsigned part, unsigned track) {
+    if (bank >= 16 || part >= 8 || track >= 8) return 0;
+    unsigned mode = part < 4 ? (unsigned)hd_part_read_c(track,bank*4+part,5) :
+                    native(bank)[part_offset(part)+0x4e2 + track*36+5];
+    return mode <= 2 ? mode : 0;
+}
 int hd_scale_c(unsigned bank, unsigned part, unsigned track) {
     if (bank >= 16 || part >= 8 || track >= 8) return 0;
-    unsigned source = hd_source_c(track);
-    if (source >= 8) source = track;
-    unsigned raw = native(bank)[part_offset(part) + 0x4e2 + source*36 + 17];
-    if (!raw || raw > 84) return 0; /* KEY OFF -> C-major reference */
-    if (raw <= 24) return (int)(((raw-1)/2)*4 + ((raw-1)&1)*320);
-    static const unsigned modes[5] = {1, 2, 3, 4, 6};
-    return (int)(((raw-25)/5)*4 + modes[(raw-25)%5]*64);
+    unsigned own_bank = bank, own_part = part, own_track = track, seen = 1u << track;
+    if (hd_follow_c()) for (;;) {
+        unsigned source = part < 4 ? (unsigned)hd_part_read_c(track,bank*4+part,3) :
+                          native(bank)[part_offset(part)+0x4e2 + track*36+3];
+        if (!source) break;
+        if (source > 8 || (seen & (1u << (source-1)))) {
+            bank = own_bank; part = own_part; track = own_track;
+            break;
+        }
+        track = source-1;
+        seen |= 1u << track;
+        int context = hd_play_context_c(track);
+        if (context < 0 || context >= 64) {
+            bank = own_bank; part = own_part; track = own_track;
+            break;
+        }
+        bank = (unsigned)context/4;
+        part = (unsigned)context%4;
+    }
+    unsigned raw = part < 4 ? (unsigned)hd_part_key_c(track,bank*4+part) :
+                   native(bank)[part_offset(part)+0x4e2 + track*36+17];
+    if (!raw || raw > 84) return 0;
+    if (raw <= 24) return (int)(((raw-1)/2)*4+((raw-1)&1)*320);
+    static const unsigned modes[5] = {1,2,3,4,6};
+    return (int)(((raw-25)/5)*4+modes[(raw-25)%5]*64);
 }
-
-/* Native mirrors have different bases for patterns, working and saved Parts. */
+int hd_context_depends_c(unsigned context, unsigned track, unsigned source_context) {
+    if (context >= 64 || track >= 8) return 0;
+    unsigned seen = 1u << track;
+    for (;;) {
+        if (context == source_context) return 1;
+        if (!hd_follow_c()) return 0;
+        unsigned source = (unsigned)hd_part_read_c(track,context,3);
+        if (!source || source > 8 || (seen & (1u << (source-1)))) return 0;
+        track = source-1;
+        seen |= 1u << track;
+        int next = hd_play_context_c(track);
+        if (next < 0 || next >= 64) return 0;
+        context = (unsigned)next;
+    }
+}
+int hd_context_replacing_c(unsigned context, unsigned track) {
+    uintptr_t bank = mp_snapshot_bank;
+    if (!bank) return 0;
+    unsigned first = (unsigned)(bank-NATIVE_BASE)/BANK_SIZE*4;
+    unsigned parts = mp_snapshot_parts;
+    for (unsigned part = 0; part < 4; ++part)
+        if ((parts & (1u << part)) && hd_context_depends_c(context,track,first+part)) return 1;
+    return 0;
+}
 static void write_native(unsigned bank, volatile uint8_t *p, unsigned value) {
     *p = (uint8_t)value;
-    if (BYTE(0x80000002) != bank) return;
-    unsigned offset = (unsigned)(p - native(bank));
+    if (WORD(0x46c82456) != (uintptr_t)native(bank)) return;
+    unsigned offset = (unsigned)(p-native(bank));
     if (offset < WORK_PARTS) BYTE(0x1001614e + offset) = (uint8_t)value;
     else if (offset >= WORK_PARTS && offset < WORK_PARTS+4*PART_SIZE)
         BYTE(0x100a4ece + offset-WORK_PARTS) = (uint8_t)value;
@@ -72,242 +121,270 @@ static void write_native(unsigned bank, volatile uint8_t *p, unsigned value) {
 }
 static void dirty(unsigned bank) {
     *(volatile uint32_t *)(native(bank)+0x9b332) = 1;
-    if (BYTE(0x80000002) == bank) WORD(0x100f8598) = 1;
+    if (WORD(0x46c82456) == (uintptr_t)native(bank)) WORD(0x100f8598) = 1;
+}
+static void part_dirty(unsigned bank, unsigned part) {
+    if (part < 4) {
+        native(bank)[0x95048] |= (uint8_t)(1u << part);
+        if (WORD(0x46c82456) == (uintptr_t)native(bank)) BYTE(0x100b145e) |= (uint8_t)(1u << part);
+    }
+    dirty(bank);
 }
 static unsigned absolute(unsigned degree, int scale) {
-    int note = hd_decode_c((int)degree, scale);
-    /* Native NOTE has no silent-root sentinel independent of lock presence.
-     * Commit the closest MIDI boundary on OFF; never wrap or erase a lock. */
+    int note = hd_decode_c((int)degree,scale);
     return note >= 0 ? (unsigned)note : degree < 7 ? 0u : 127u;
 }
-
+static void copy_roots(HdRoots *dst, const HdRoots *src) {
+    for (unsigned i = 0; i < sizeof(HdRoots); ++i) ((uint8_t *)dst)[i] = ((const uint8_t *)src)[i];
+}
 void hd_bank_reset_c(unsigned bank) {
     if (bank >= 16) return;
-    uint8_t *p = (uint8_t *)&hd_banks[bank];
-    for (unsigned i = 0; i < sizeof(HdBank); ++i) p[i] = HD_NONE;
-    for (unsigned t = 0; t < 8; ++t) {
-        hd_banks[bank].active[t] = 0;
-        hd_banks[bank].valid[t] = 0;
+    for (unsigned i = 0; i < HD_LANES; ++i) {
+        hd_roots_reset_c(&hd_banks[bank].roots[i]);
+        revision[bank][i] = 0;
     }
+    ++bank_revision[bank];
 }
 void hd_reset_c(void) {
-    for (unsigned b = 0; b < 16; ++b) hd_bank_reset_c(b);
-    for (unsigned t = 0; t < 8; ++t) hd_busy[t] = hd_target[t] = 0;
+    for (unsigned bank = 0; bank < 16; ++bank) hd_bank_reset_c(bank);
+    for (unsigned track = 0; track < 8; ++track) hd_busy[track] = hd_target[track] = 0;
 }
-
-static void enter(unsigned bank, unsigned track) {
-    HdBank *h = &hd_banks[bank];
-    for (unsigned part = 0; part < 8; ++part) {
-        unsigned i = part*8 + track, note = *base_note(bank, part, track);
-        h->base_note[i] = (uint8_t)note;
-        h->base[i] = (uint8_t)hd_encode_c((int)note, hd_scale_c(bank, part, track));
-    }
-    for (unsigned p = 0; p < 16; ++p) {
-        int scale = hd_scale_c(bank, part_of(bank, p), track);
-        for (unsigned s = 0; s < 64; ++s) {
-            unsigned i = index_of(p, track, s), note = *step_note(bank, p, track, s);
-            h->note[i] = (uint8_t)note;
-            h->degree[i] = (uint8_t)hd_encode_c((int)note, scale);
-        }
-    }
-    ORDER();
-    h->active[track] = 1;
-    h->valid[track] = 1;
-}
-
-/* Reconcile native edits without interpreting a degree as a MIDI note. This
- * also handles ordinary Part Clear/Reload paths; explicit degree copy hooks
- * preserve degree identity when copying while a different KEY is selected. */
-int hd_base_c(unsigned bank, unsigned part, unsigned track) {
-    if (bank >= 16 || part >= 8 || track >= 8) return -1;
-    HdBank *h = &hd_banks[bank];
-    if (!h->valid[track] || !h->active[track]) return -1;
-    unsigned i = part*8 + track, note = *base_note(bank, part, track);
-    if (note != h->base_note[i]) {
-        h->base[i] = (uint8_t)hd_encode_c((int)note, hd_scale_c(bank, part, track));
-        h->base_note[i] = (uint8_t)note;
-    }
-    return h->base[i] < HD_CODES ? h->base[i] : -1;
-}
-int hd_degree_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
-    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return -1;
-    HdBank *h = &hd_banks[bank];
-    if (!h->valid[track] || !h->active[track]) return -1;
-    unsigned i = index_of(pattern, track, step), part = part_of(bank, pattern);
-    unsigned note = *step_note(bank, pattern, track, step);
-    if (note != h->note[i]) {
-        h->degree[i] = (uint8_t)hd_encode_c((int)note, hd_scale_c(bank, part, track));
-        h->note[i] = (uint8_t)note;
-    }
-    return h->degree[i] < HD_CODES ? h->degree[i] : hd_base_c(bank, part, track);
-}
-int hd_resolve_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
-    int degree = hd_degree_c(bank, pattern, track, step);
-    return degree < 0 ? -1 : hd_decode_c(degree, hd_scale_c(bank, part_of(bank, pattern), track));
-}
-
-static void leave(unsigned bank, unsigned track) {
-    HdBank *h = &hd_banks[bank];
-    for (unsigned part = 0; part < 8; ++part) {
-        int code = hd_base_c(bank, part, track);
-        if (code >= 0) {
-            unsigned note = absolute((unsigned)code, hd_scale_c(bank, part, track));
-            write_native(bank, base_note(bank, part, track), note);
-            h->base_note[part*8+track] = (uint8_t)note;
-        }
-    }
-    for (unsigned p = 0; p < 16; ++p) {
-        int scale = hd_scale_c(bank, part_of(bank, p), track);
-        for (unsigned s = 0; s < 64; ++s) {
-            unsigned i = index_of(p, track, s);
-            /* Inheritance is preserved: never materialize an unlocked root. */
-            if (*step_note(bank, p, track, s) == HD_NONE) continue;
-            int code = hd_degree_c(bank, p, track, s);
-            if (code >= 0) {
-                unsigned note = absolute((unsigned)code, scale);
-                write_native(bank, step_note(bank, p, track, s), note);
-                h->note[i] = (uint8_t)note;
-            }
-        }
-    }
-    ORDER();
-    h->active[track] = 0;
-    dirty(bank);
-}
-
+/* Loading bytes does not play every pattern through a reusable Part slot.
+ * Imported representation remains authoritative; physical slot indices do not. */
 void hd_bank_loaded_c(unsigned bank) {
     if (bank >= 16) return;
-    HdBank *h = &hd_banks[bank];
-    for (unsigned t = 0; t < 8; ++t) {
-        unsigned mode = hd_type_c(t) != 0;
-        if (mode && (!h->valid[t] || !h->active[t])) enter(bank, t);
-        else if (!mode && h->valid[t] && h->active[t]) leave(bank, t);
-        h->valid[t] = 1;
+    for (unsigned i = 0; i < HD_LANES; ++i) {
+        hd_banks[bank].roots[i].context = HD_NONE;
+        ++revision[bank][i];
     }
+    ++bank_revision[bank];
 }
 void hd_ready_all_c(void) {
-    for (unsigned b = 0; b < 16; ++b) hd_bank_loaded_c(b);
+    for (unsigned bank = 0; bank < 16; ++bank) hd_bank_loaded_c(bank);
+}
+static int sync_context(unsigned bank, unsigned pattern, unsigned track,
+                        unsigned context, unsigned mode, unsigned scale) {
+    HdRoots *r = roots(bank,pattern,track);
+    if (!mode && r->state != HD_ROOT_HARM) return 0;
+    if (mode && r->state == HD_ROOT_HARM && r->context == context && r->scale == scale_id(scale)) return 1;
+    for (;;) {
+        HdRoots next;
+        uint8_t notes[64], result[64];
+        uint16_t sr = mask();
+        uint32_t ticket = revision[bank][pattern*8+track];
+        copy_roots(&next,r);
+        for (unsigned step = 0; step < 64; ++step) notes[step] = *step_note(bank,pattern,track,step);
+        if (next.state == HD_ROOT_HARM && next.context < 64)
+            next.scale = (uint8_t)scale_id((unsigned)hd_scale_c(next.context/4,next.context%4,track));
+        unmask(sr);
+        int edits = hd_roots_sync_c(&next,notes,result,mode,scale,context);
+        if (edits < 0) return -1;
+        /* An engine interrupt may consume the outgoing snapshot while the
+         * native writer is halfway through replacement. It must not attach
+         * provenance to the slot the writer is about to publish anew. */
+        if (hd_context_replacing_c(context,track)) next.context = HD_NONE;
+        sr = mask();
+        unsigned step = 0;
+        if (ticket == revision[bank][pattern*8+track])
+            while (step < 64 && notes[step] == *step_note(bank,pattern,track,step)) ++step;
+        if (step != 64) { unmask(sr); continue; }
+        for (step = 0; step < 64; ++step)
+            if (notes[step] != result[step]) write_native(bank,step_note(bank,pattern,track,step),result[step]);
+        copy_roots(r,&next);
+        changed(bank,pattern,track);
+        dirty(bank);
+        unmask(sr);
+        return mode != 0;
+    }
+}
+int hd_sync_c(unsigned bank, unsigned pattern, unsigned track) {
+    if (track >= 8) return -1;
+    int context = hd_pattern_context_c(bank,pattern);
+    if (context < 0) return -1;
+    unsigned part = (unsigned)context%4;
+    return sync_context(bank,pattern,track,(unsigned)context,
+                        hd_part_type_c(bank,part,track),(unsigned)hd_scale_c(bank,part,track));
+}
+int hd_base_c(unsigned bank, unsigned part, unsigned track) {
+    if (bank >= 16 || part >= 8 || track >= 8) return -1;
+    unsigned code = part < 4 ? (unsigned)hd_part_read_c(track,bank*4+part,19) :
+                    native(bank)[part_offset(part)+0x4e2 + track*36+19];
+    return code < HD_CODES ? (int)code : 35;
+}
+int hd_lock_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
+    if (step >= 64 || hd_sync_c(bank,pattern,track) != 1) return -1;
+    HdRoots *r = roots(bank,pattern,track);
+    uint16_t sr = mask();
+    unsigned note = *step_note(bank,pattern,track,step);
+    if (note != r->note[step]) {
+        int context = hd_pattern_context_c(bank,pattern);
+        r->degree[step] = (uint8_t)hd_encode_c((int)note,hd_scale_c(bank,(unsigned)context%4,track));
+        r->note[step] = (uint8_t)note;
+        changed(bank,pattern,track);
+        dirty(bank);
+    }
+    unsigned degree = r->degree[step];
+    unmask(sr);
+    return degree < HD_CODES ? (int)degree : -1;
+}
+int hd_degree_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
+    if (step >= 64 || hd_sync_c(bank,pattern,track) != 1) return -1;
+    int degree = hd_lock_c(bank,pattern,track,step);
+    int context = hd_pattern_context_c(bank,pattern);
+    return degree >= 0 ? degree : hd_base_c(bank,(unsigned)context%4,track);
+}
+int hd_resolve_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
+    int degree = hd_degree_c(bank,pattern,track,step);
+    int context = hd_pattern_context_c(bank,pattern);
+    return degree < 0 ? -1 : hd_decode_c(degree,hd_scale_c(bank,(unsigned)context%4,track));
+}
+/* Shared layer calls this inside its replacement transaction. Capture only
+ * attached provenance. Do not encode notes, write Parts or convert inactive
+ * patterns here. The composed-image gate must bound this callback's cost. */
+void hd_ui_observe_c(void) {
+    int context = hd_ui_context_c();
+    unsigned pattern = BYTE(0x100b14d0);
+    if (context < 0 || hd_pattern_context_c((unsigned)context/4,pattern) != context) return;
+    for (unsigned track = 0; track < 8; ++track)
+        if (!hd_busy[track]) (void)hd_sync_c((unsigned)context/4,pattern,track);
+}
+void hd_part_before_c(uintptr_t destination) {
+    if (destination >= 0x100a4ece && destination < 0x100a4ece + 4*PART_SIZE) {
+        int ui = hd_ui_context_c();
+        if (ui < 0) return;
+        destination = (uintptr_t)native((unsigned)ui/4)+WORK_PARTS+destination-0x100a4ece;
+    }
+    if (destination < NATIVE_BASE || destination >= NATIVE_BASE+16*BANK_SIZE) return;
+    unsigned offset = (unsigned)(destination-NATIVE_BASE)%BANK_SIZE;
+    if (offset < WORK_PARTS || offset >= WORK_PARTS+4*PART_SIZE || (offset-WORK_PARTS)%PART_SIZE) return;
+    unsigned replaced = (unsigned)(destination-NATIVE_BASE)/BANK_SIZE*4+(offset-WORK_PARTS)/PART_SIZE;
+    /* A second recall may arrive without a trig. Observe the currently
+     * selected pattern against the complete outgoing snapshot first. */
+    hd_ui_observe_c();
+    for (unsigned bank = 0; bank < 16; ++bank) for (unsigned i = 0; i < HD_LANES; ++i) {
+        HdRoots *r = &hd_banks[bank].roots[i];
+        unsigned context = r->context, track = i%8;
+        if (context >= 64 || r->state != HD_ROOT_HARM) continue;
+        if (!hd_context_depends_c(context,track,replaced)) continue;
+        unsigned scale = (unsigned)hd_scale_c(context/4,context%4,track);
+        uint16_t sr = mask();
+        if (r->context == context) {
+            r->scale = (uint8_t)scale_id(scale);
+            r->context = HD_NONE;
+            ++revision[bank][i];
+            ++bank_revision[bank];
+        }
+        unmask(sr);
+    }
+    hd_events_part_before_c(replaced);
+}
+void hd_checkpoint_c(unsigned bank) {
+    if (bank >= 16) return;
+    for (unsigned i = 0; i < HD_LANES; ++i) {
+        HdRoots *r = &hd_banks[bank].roots[i];
+        uint16_t sr = mask();
+        if (r->state == HD_ROOT_HARM && r->context < 64) {
+            r->scale = (uint8_t)scale_id((unsigned)hd_scale_c(r->context/4,r->context%4,i%8));
+            ++revision[bank][i];
+            ++bank_revision[bank];
+        }
+        unmask(sr);
+    }
 }
 void hd_mode_c(unsigned track, unsigned mode) {
-    if (track >= 8 || mode > 2) return;
+    int context = hd_ui_context_c();
+    if (track >= 8 || mode > 2 || context < 0) return;
+    unsigned bank = (unsigned)context/4, part = (unsigned)context%4;
+    unsigned old = hd_part_type_c(bank,part,track);
+    int scale = hd_scale_c(bank,part,track);
+    hd_busy_context[track] = (uint8_t)context;
     hd_target[track] = (uint8_t)mode;
-    ORDER();
     hd_busy[track] = 1;
-    ORDER();
-    for (unsigned b = 0; b < 16; ++b) {
-        HdBank *h = &hd_banks[b];
-        if (!h->valid[track]) continue; /* native bank not loaded yet */
-        if (mode && !h->active[track]) enter(b, track);
-        else if (!mode && h->active[track]) leave(b, track);
+    /* Only an explicit HARM edit converts the Part default. Recall carries
+     * the incoming Part's own defaults and never calls this setter. */
+    if (!old && mode) {
+        int degree = hd_encode_c(*base_note(bank,part,track),scale);
+        hd_edit_base_c(bank,part,track,degree < 0 ? 35 : degree);
+    } else if (old && !mode) {
+        uint16_t sr = mask();
+        write_native(bank,base_note(bank,part,track),absolute((unsigned)hd_base_c(bank,part,track),scale));
+        part_dirty(bank,part);
+        unmask(sr);
     }
-    ORDER();
-    /* Wrapper publishes HARM setting and refreshes live/pending roots before
-     * clearing hd_busy. No engine consumer may read partially converted data. */
-}
-void hd_record_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree) {
-    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return;
-    /* A HARM event can still be queued when HARM is turned off. Its metadata
-     * then holds the resolved absolute root, frozen at that boundary. */
-    if (degree >= 128 && degree <= 255) {
-        hd_copy_note_c(bank,pattern,track,step,-1,degree & 127);
-        return;
-    }
-    if ((unsigned)degree >= HD_CODES) return;
-    HdBank *h = &hd_banks[bank];
-    unsigned i = index_of(pattern, track, step);
-    uint16_t sr = root_mask();
-    h->degree[i] = (uint8_t)degree;
-    h->note[i] = *step_note(bank, pattern, track, step);
-    h->active[track] = h->valid[track] = 1;
-    root_unmask(sr);
-    dirty(bank);
+    unsigned pattern = BYTE(0x100b14d0);
+    if (hd_pattern_context_c(bank,pattern) == context)
+        (void)sync_context(bank,pattern,track,(unsigned)context,old,(unsigned)scale);
+    /* An explicit Part edit crosses the boundary for every pattern still
+     * attached to this Part. Detached roots belong to previous occupants of
+     * a reused slot and must not be converted by editing the new occupant. */
+    for (unsigned p = 0; p < 16; ++p)
+        if (roots(bank,p,track)->context == (unsigned)context)
+            (void)sync_context(bank,p,track,(unsigned)context,mode,(unsigned)scale);
 }
 void hd_edit_base_c(unsigned bank, unsigned part, unsigned track, int degree) {
     if (bank >= 16 || part >= 8 || track >= 8 || (unsigned)degree >= HD_CODES) return;
-    HdBank *h = &hd_banks[bank];
-    unsigned i = part*8 + track;
-    uint16_t sr = root_mask();
-    h->base[i] = (uint8_t)degree;
-    h->base_note[i] = *base_note(bank, part, track);
-    h->active[track] = h->valid[track] = 1;
-    root_unmask(sr);
-    if (part < 4) {
-        unsigned mask = native(bank)[0x95048] | (1u << part);
-        native(bank)[0x95048] = (uint8_t)mask;
-        if (BYTE(0x80000002) == bank) BYTE(0x100b145e) = (uint8_t)mask;
-    }
+    if (part < 4) { (void)hd_part_write_c(track,bank*4+part,19,(unsigned)degree); return; }
+    uint16_t sr = mask();
+    write_native(bank,native(bank)+part_offset(part)+0x4e2 + track*36+19,(unsigned)degree);
     dirty(bank);
-}
-int hd_lock_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
-    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return -1;
-    (void)hd_degree_c(bank, pattern, track, step);
-    unsigned code = hd_banks[bank].degree[index_of(pattern,track,step)];
-    return code < HD_CODES ? (int)code : -1;
+    unmask(sr);
 }
 void hd_edit_step_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree) {
-    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64 ||
-        (degree != HD_NONE && (unsigned)degree >= HD_CODES)) return;
-    HdBank *h = &hd_banks[bank];
-    unsigned i = index_of(pattern, track, step);
-    unsigned note = degree == HD_NONE ? HD_NONE : absolute((unsigned)degree,
-                                          hd_scale_c(bank,part_of(bank,pattern),track));
-    uint16_t sr = root_mask();
+    if (step >= 64 || (degree != HD_NONE && (unsigned)degree >= HD_CODES) || hd_sync_c(bank,pattern,track) != 1) return;
+    int context = hd_pattern_context_c(bank,pattern);
+    unsigned note = degree == HD_NONE ? HD_NONE : absolute((unsigned)degree,hd_scale_c(bank,(unsigned)context%4,track));
+    HdRoots *r = roots(bank,pattern,track);
+    uint16_t sr = mask();
     write_native(bank,step_note(bank,pattern,track,step),note);
-    h->degree[i] = (uint8_t)degree;
-    h->note[i] = (uint8_t)note;
-    h->active[track] = h->valid[track] = 1;
-    root_unmask(sr);
+    r->degree[step] = (uint8_t)degree;
+    r->note[step] = (uint8_t)note;
+    changed(bank,pattern,track);
     dirty(bank);
+    unmask(sr);
 }
-/* Native memcpy has already copied all fields. Repair only the root's
- * representation at the destination; source degree -1 denotes stock. */
+void hd_record_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree) {
+    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return;
+    if (degree >= 128 && degree <= 255) { hd_copy_note_c(bank,pattern,track,step,-1,degree&127); return; }
+    if ((unsigned)degree >= HD_CODES || hd_sync_c(bank,pattern,track) != 1) return;
+    HdRoots *r = roots(bank,pattern,track);
+    uint16_t sr = mask();
+    r->degree[step] = (uint8_t)degree;
+    r->note[step] = *step_note(bank,pattern,track,step);
+    changed(bank,pattern,track);
+    dirty(bank);
+    unmask(sr);
+}
 void hd_copy_note_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree, int note) {
-    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64 ||
-        (note != HD_NONE && (unsigned)note > 127)) return;
-    if (hd_type_c(track)) {
+    if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64 || (note != HD_NONE && (unsigned)note > 127)) return;
+    int context = hd_pattern_context_c(bank,pattern);
+    if (context < 0) return;
+    if (hd_part_type_c(bank,(unsigned)context%4,track)) {
         if (note == HD_NONE) degree = HD_NONE;
-        else if (degree < 0) degree = hd_encode_c(note,hd_scale_c(bank,part_of(bank,pattern),track));
+        else if (degree < 0) degree = hd_encode_c(note,hd_scale_c(bank,(unsigned)context%4,track));
         hd_edit_step_c(bank,pattern,track,step,degree);
     } else {
+        (void)hd_sync_c(bank,pattern,track);
+        HdRoots *r = roots(bank,pattern,track);
+        uint16_t sr = mask();
         write_native(bank,step_note(bank,pattern,track,step),(unsigned)note);
-        hd_banks[bank].note[index_of(pattern,track,step)] = (uint8_t)note;
-        hd_banks[bank].active[track] = 0;
-        hd_banks[bank].valid[track] = 1;
+        if (r->state != HD_ROOT_UNKNOWN) { r->degree[step] = HD_NONE; r->note[step] = (uint8_t)note; }
+        changed(bank,pattern,track);
         dirty(bank);
+        unmask(sr);
     }
 }
-void hd_copy_base_c(unsigned bank, unsigned part, unsigned track, int degree, int note) {
-    if (bank >= 16 || part >= 8 || track >= 8 || (unsigned)note > 127) return;
-    if (hd_type_c(track)) {
-        if (degree < 0) degree = hd_encode_c(note,hd_scale_c(bank,part,track));
-        hd_edit_base_c(bank,part,track,degree);
-    } else {
-        write_native(bank,base_note(bank,part,track),(unsigned)note);
-        hd_banks[bank].base_note[part*8+track] = (uint8_t)note;
-        dirty(bank);
-    }
-}
-int hd_validate_c(const HdBank *h) {
-    for (unsigned i = 0; i < HD_LOCKS; ++i)
-        if (!valid_code(h->degree[i]) || (h->note[i] > 127 && h->note[i] != HD_NONE)) return 0;
-    for (unsigned i = 0; i < HD_BASES; ++i)
-        if (!valid_code(h->base[i]) || (h->base_note[i] > 127 && h->base_note[i] != HD_NONE)) return 0;
-    for (unsigned t = 0; t < 8; ++t)
-        if (h->active[t] > 1 || h->valid[t] > 1 || (h->active[t] && !h->valid[t])) return 0;
+int hd_validate_c(const HdBank *bank) {
+    for (unsigned i = 0; i < HD_LANES; ++i) if (!hd_roots_valid_c(&bank->roots[i])) return 0;
     return 1;
 }
-
-/* Native clear/place hooks run before stock clears the root. Invalidate its
- * degree explicitly so deleting and replacing an identical NOTE cannot
- * resurrect a degree that belonged to an earlier KEY. */
 void hd_forget_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
     if (bank >= 16 || pattern >= 16 || track >= 8 || step >= 64) return;
-    HdBank *h = &hd_banks[bank];
-    unsigned i = index_of(pattern,track,step);
-    uint16_t sr = root_mask();
-    /* A reader between this hook and native clear must not reconstruct the
-     * deleted degree from the still-present old NOTE. OFF stays native. */
-    if (h->active[track]) write_native(bank,step_note(bank,pattern,track,step),HD_NONE);
-    h->degree[i] = h->note[i] = HD_NONE;
-    root_unmask(sr);
+    HdRoots *r = roots(bank,pattern,track);
+    int context = hd_pattern_context_c(bank,pattern);
+    unsigned active = context >= 0 && hd_part_type_c(bank,(unsigned)context%4,track);
+    uint16_t sr = mask();
+    if (active && r->state == HD_ROOT_HARM) write_native(bank,step_note(bank,pattern,track,step),HD_NONE);
+    r->degree[step] = r->note[step] = HD_NONE;
+    changed(bank,pattern,track);
+    unmask(sr);
 }

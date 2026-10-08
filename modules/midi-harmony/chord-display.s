@@ -1,3 +1,4 @@
+    .include "remix.inc"
 /* UI-only snapshot of sounding notes. Native sequence ownership expires on
  * note-off/STOP; held live roots use Harmony's captured final pitches. Never
  * regenerate a voicing from UI code (AUTO would advance its history).
@@ -182,6 +183,9 @@ ch_notes_text: .space 32
 ch_display_tick:
     lea -60(%sp),%sp
     movem.l %d0-%d7/%a0-%a6,(%sp)
+    .ifdef HAVE_DEGREES
+    jsr hd_ui_observe_c
+    .endif
     bsr.w ch_display_poll
     movem.l (%sp),%d0-%d7/%a0-%a6
     lea 60(%sp),%sp

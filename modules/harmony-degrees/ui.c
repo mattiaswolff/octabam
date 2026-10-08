@@ -6,8 +6,10 @@
 #define LONG(a) (*(volatile uint32_t *)(uintptr_t)(a))
 
 int hd_ui_value_c(int step) {
-    unsigned bank = BYTE(0x80000002), pattern = BYTE(0x100b14d0);
-    unsigned track = BYTE(0x100b14cc), part = BYTE(0x100b14cf) & 3;
+    int context = hd_ui_context_c();
+    if (context < 0) return -1;
+    unsigned bank = (unsigned)context/4, part = (unsigned)context%4;
+    unsigned pattern = BYTE(0x100b14d0), track = BYTE(0x100b14cc);
     if (step < 0) return hd_base_c(bank,part,track);
     int lock = hd_lock_c(bank,pattern,track,(unsigned)step);
     return lock >= 0 ? lock | 256 : hd_degree_c(bank,pattern,track,(unsigned)step);
@@ -20,9 +22,11 @@ static int advance(int code, int delta) {
     return code < 0 ? 0 : code >= HD_CODES ? HD_CODES-1 : code;
 }
 int hd_ui_edit_c(int delta, int toggle, int steps) {
-    unsigned bank = BYTE(0x80000002), pattern = BYTE(0x100b14d0);
-    unsigned track = BYTE(0x100b14cc), part = BYTE(0x100b14cf) & 3;
-    if (track >= 8 || !hd_type_c(track) || (!delta && !toggle)) return 0;
+    int context = hd_ui_context_c();
+    if (context < 0) return 0;
+    unsigned bank = (unsigned)context/4, part = (unsigned)context%4;
+    unsigned pattern = BYTE(0x100b14d0), track = BYTE(0x100b14cc);
+    if (track >= 8 || !hd_part_type_c(bank,part,track) || (!delta && !toggle)) return 0;
     if (!steps) {
         hd_edit_base_c(bank,part,track,advance(hd_base_c(bank,part,track),delta));
         return 1;

@@ -9,7 +9,7 @@
     .set CH_BANK_BYTES,8192
     .set CH_BYTES,131072
     .set CH_NV,0x100f8600
-    .set CH_MAGIC,0x43484e56
+    .set CH_MAGIC,0x43484e32
     .text
     .global ch_lock_init,ch_lock_ptr,ch_lock_get,ch_lock_set,ch_lock_table
     .global ch_nv_save,ch_nv_restore,ch_nv_bank,ch_lock_status
@@ -149,7 +149,7 @@ ch_nv_save:
     cmp.l ch_nv_generation,%d5
     bne.s .nv_retry
     lea CH_NV,%a1
-    moveq #1,%d0
+    moveq #2,%d0
     move.l %d0,4(%a1)
     move.l %d4,8(%a1)
     move.l #CH_BANK_BYTES,%d0
@@ -159,8 +159,6 @@ ch_nv_save:
     lea ch_lock_status,%a0
     moveq #0,%d0
     move.b (%a0,%d4.l),%d0
-    lsl.l #8,%d0
-    or.l ch_legacy7_mask,%d0
     move.l %d0,24(%a1)
     not.l %d0
     move.l %d0,28(%a1)
@@ -192,7 +190,7 @@ ch_nv_restore:
     cmpi.l #CH_MAGIC,%d1
     bne.w .restore_bad
     move.l 4(%a0),%d1
-    cmpi.l #1,%d1
+    cmpi.l #2,%d1
     bne.w .restore_bad
     cmp.l 8(%a0),%d4
     bne.w .restore_bad
@@ -200,7 +198,7 @@ ch_nv_restore:
     cmpi.l #CH_BANK_BYTES,%d1
     bne.w .restore_bad
     move.l 24(%a0),%d1
-    cmpi.l #0x4ff,%d1 /* low byte legacy mask, next byte diagnostic */
+    cmpi.l #4,%d1 /* validated companion status */
     bhi.w .restore_bad
     not.l %d1
     cmp.l 28(%a0),%d1
@@ -240,9 +238,6 @@ ch_nv_restore:
     bne.s .restore_copy
     move.l CH_NV+24,%d0
     move.l %d0,%d1
-    andi.l #255,%d0
-    move.l %d0,ch_legacy7_mask
-    lsr.l #8,%d1
     lea ch_lock_status,%a0
     move.b %d1,(%a0,%d4.l)
     move.l %d4,ch_nv_bank

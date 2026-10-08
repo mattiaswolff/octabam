@@ -206,6 +206,43 @@ affected Part. The copy/clear path can keep interrupts enabled around capture.
 The proposed internal `MIDI PART STATE` support module is accepted; this task
 will add the support key to its degree remix selections at integration.
 
+### Part-owned core checkpoint, 9 October
+
+The working degree core now uses a 131-byte pattern/track root record and
+native offset 19 for every DEG default. No Part default remains in a companion,
+retained header, or custom Part clipboard. New companion/NV identity is HDP2 /
+HDN2; combined payload is 24,960 bytes. Component checks pass same-slot C3,
+Follow-source replacement, explicit mode edits, native default authority and
+15 corrupt-payload rejections. These are not composed-image results yet.
+
+The `mp_snapshot_parts` contract is accepted and the degree guard is implemented
+against that symbol. It suppresses reattachment only for affected contexts and
+their Follow receivers. `hd_part_before` is implemented (d0 outgoing aligned
+Part, all registers preserved); it also detaches queued sequence and physical
+recording provenance. The shared hook remains the only copy/init entry owner.
+Awaiting the published support/migration commit for composed validation.
+
+The degree-owned native Part Save/Reload/Clear/paste detours and default-copy
+repair are removed in the working changes: native Part bytes now carry DEG
+and CHRD themselves. Pattern/track/step companion copy handling remains.
+Pending roots and physical message conversions now use explicit captured Part
+contexts rather than the old track-wide HARM value; their composed tests are
+being updated. Please retain HAVE_DEGREES dispatch through `hd_set` when the
+settings migration is published. No KITS source edits are needed here.
+
+**Integration handoff request:** please publish the support-hook/migration
+commit once its focused checks are ready, independently of the longer full
+port run, so this task can link and exercise the new DEG callbacks. Current
+component tests link the real shared access layer and isolate only transient
+snapshot storage; that does not replace a composed native-copy gate.
+
+**Shared port fixture ownership:** `verify_midi_harmony_port.py::fixture`
+still creates `#MIDI_HARMONY_*` project comments, and its persistence cases
+assert those comments. The DEG and CHORD PLAY full-port runners both consume
+that helper. Please migrate that helper/persistence expectation in the shared
+settings task, or publish an explicit handoff before we edit it here. The
+DEG task is updating its own linked/file/publication/full-port schema checks.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.

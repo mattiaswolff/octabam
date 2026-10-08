@@ -73,23 +73,26 @@ def main():
         base=b+(0x8ed80+part*0x18b2 if part<4 else 0x9504a+(part-4)*0x18b2)
         for t in range(8):
             u.mem_write(base+0x3e2+t*32,b'\x30')
-            u.mem_write(base+0x4e2+t*36+17,b'\x02')
+            for slot,value in ((3,0),(5,0),(16,0),(17,2),(18,0),(19,35)):
+                u.mem_write(base+0x4e2+t*36+slot,bytes((value,)))
+    u.mem_write(0x46c82456,b.to_bytes(4,'big'))
     m.call('mh_set_native',0,2);m.call('hd_bank_loaded',0)
-    m.c('hd_edit_base_c',0,0,0,39) # Native NOTE stays C3: proves restored identity.
+    m.c('hd_edit_base_c',0,0,0,39) # Native default belongs to the Part, never the companion.
     m.c('hd_edit_step_c',0,0,0,3,38)
     u.mem_write(s['ch_lock_table']+3,b'\x04')
     assert m.call('ch_file_write',0)==1
     path='/SET/PROJECT/hdeg01.work';original=m.files[path]
-    assert len(original)==24752
+    assert len(original)==24992 and original[:8]==b'HDP2'+(2).to_bytes(4,'big')
     assert int.from_bytes(original[16:20],'big')==fnv(original[32:])
     # The validation helper may tail-call and rewrite its argument; the hash
     # wrapper must still hash the COMPLETE payload from its original pointer.
     payload=0x48000000;u.mem_map(payload,0x10000);u.mem_write(payload,original[32:])
     assert m.call('hd_payload_hash',a0=payload)==fnv(original[32:])
     m.call('hd_bank_reset',0);u.mem_write(s['ch_lock_table'],b'\xff'*8192)
+    m.c('hd_edit_base_c',0,0,0,41)
     m.call('ch_file_read',0)
     assert bytes(u.mem_read(s['ch_lock_status'],1))==b'\x01'
-    assert m.c('hd_base_c',0,0,0)==39
+    assert m.c('hd_base_c',0,0,0)==41
     assert bytes(u.mem_read(s['ch_lock_table']+3,1))==b'\x04'
     invalid=[('short',original[:-1],2),('long',original+b'\0',2),
              ('checksum',original[:100]+bytes((original[100]^1,))+original[101:],2),
@@ -98,7 +101,7 @@ def main():
         m.files[path]=data;m.call('ch_file_read',0)
         assert bytes(u.mem_read(s['ch_lock_status'],1))==bytes((status,)),name
         assert bytes(u.mem_read(s['ch_lock_table'],8192))==b'\xff'*8192,name
-        assert m.c('hd_base_c',0,0,0)==35,name
+        assert m.c('hd_base_c',0,0,0)==41,name
         assert m.call('ch_file_write',0)==0xfffffff9,name
         assert m.files[path]==data,name
     backup='/SET/PROJECT/hdeg01.strd'
@@ -110,7 +113,7 @@ def main():
         u.mem_write(m.scratch+0x200,b'/SET/PROJECT/bank01.work\0')
         assert m.call('ch_copy_guard',a0=m.scratch+0x200)==0xfffffff9
         assert m.files[backup]==original
-    result={'round_trip':'passed','full_payload_checksum':'passed','malformed_files':len(invalid),
+    result={'round_trip':'passed','incoming_part_default_preserved':'passed','full_payload_checksum':'passed','malformed_files':len(invalid),
             'injected_write_failures':4,'stored_backup_guard':'passed','hardware_tested':False}
     print(json.dumps(result))
     (ROOT/'out/harmony-degrees/files.json').write_text(json.dumps(result,indent=2)+'\n')
