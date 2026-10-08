@@ -159,3 +159,17 @@ Complete the remaining producer families and global panic handling, then
 add a panel destination control with a defined project lifecycle. Persistence
 needs an agreed storage mechanism. Expand shared-channel, receive-map,
 transition and module-integration coverage before a hardware timing trial.
+
+
+## Eight-producer overload gate
+
+`tools/verify/verify_midi_loopback_stress.py` executes 48 seeded floods:
+eight tracks hold the full 128 internal voices, a stalled receiver admits
+127 CCs and sheds 897 excess CCs, then all 128 releases must fit (255 slots).
+Alternate rounds change all routes while held and deliver late stock offs.
+The gate checks exact FIFO bytes, no phantom releases for rejected notes,
+ring wrap, recovery, and all 18,384 admitted messages delivered with no held
+notes left. A separately full 256-entry native receive queue checks alternating
+service and wake recovery. Run on both Loopback and Loopback+USB images.
+These are linked-code/stock-queue results; physical DIN/USB scheduling and
+hardware latency are not established by this test.

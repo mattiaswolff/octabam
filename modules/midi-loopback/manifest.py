@@ -23,5 +23,6 @@ MODULE = Module(
                       for site in (0x4009fbae, 0x4009fcf6, 0x4009feee, 0x4009ffba,
                                    0x4009f8be, 0x4009fc50, 0x4009fcd4,
                                    0x4009f328, 0x400a0020)),
-    gates=(Gate("tools/verify/verify_midi_loopback.py", venv=True, stage="image"),),
+    gates=(Gate('tools/verify/verify_midi_loopback_stress.py', venv=True, stage='image'),
+           Gate("tools/verify/verify_midi_loopback.py", venv=True, stage="image"),),
 )
