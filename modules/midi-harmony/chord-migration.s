@@ -18,9 +18,7 @@ ch_legacy_set: /* d0 track, d1 bool; preserve both */
     tst.l %d1
     beq.s .ls_save
     bset %d0,%d2
-    /* Preserve the old live seventh choice too; sequencer fallback remains TRI. */
-    lea ch_base,%a0
-    move.b %d1,(%a0,%d0.l)
+    /* Legacy comment parsing must never overwrite a native Part default. */
     lea ch_live,%a0
     move.b %d1,(%a0,%d0.l)
     lea ch_current,%a0

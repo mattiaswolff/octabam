@@ -106,18 +106,16 @@ ch_draw_value:
     bcs.w .draw_restore
     moveq #0,%d2
     move.b 0x100b14cc,%d2
-    lea ch_base,%a0 /* The knob shows its default, never a live override. */
-    moveq #0,%d0
-    move.b (%a0,%d2.l),%d0
+    move.l %d2,%d0 /* The knob shows its Part default, never a live override. */
+    jsr ch_base_get
     bclr #0,%d5 /* Native NOT2 locks must not highlight the CHRD default. */
     tst.l 0x460d173a /* lock-inspection flag */
     beq.s .draw_live
     jsr 0x40041760
     tst.l %d0
     bpl.s .draw_step
-    lea ch_base,%a0
-    moveq #0,%d0
-    move.b (%a0,%d2.l),%d0
+    move.l %d2,%d0
+    jsr ch_base_get
     bra.s .draw_live
 .draw_step:
     move.l %d0,%d3
@@ -129,11 +127,13 @@ ch_draw_value:
     moveq #0,%d0
     bclr #0,%d5
     move.l %a0,%d1
-    beq.s .draw_live
+    beq.s .draw_default
     move.b (%a0),%d0
     cmpi.l #7,%d0
     bls.s .draw_locked
-    moveq #0,%d0
+.draw_default:
+    move.l %d2,%d0
+    jsr ch_base_get
     bra.s .draw_live
 .draw_locked:
     bset #0,%d5
@@ -179,12 +179,13 @@ ch_encoder:
     move.l %d0,%d3
     moveq #0,%d2
     move.b 0x100b14cc,%d2
-    lea ch_base,%a2
-    moveq #0,%d0
-    move.b (%a2,%d2.l),%d0
+    move.l %d2,%d0
+    jsr ch_base_get
     move.l %d3,%d1
     bsr.w ch_clamp_delta
-    move.b %d0,(%a2,%d2.l)
+    move.l %d0,%d1
+    move.l %d2,%d0
+    jsr ch_base_set
     move.l %d2,%d1
     jsr ch_refresh_quality
     movem.l (%sp),%d2-%d3/%a2-%a3
@@ -252,16 +253,18 @@ ch_step_encoder:
     tst.l ch_toggle_active
     beq.s .step_turn
     cmpi.l #7,%d0
-    bhi.s .step_unlock_to_tri
+    bhi.s .step_lock_default
     moveq #-1,%d0
     bra.s .step_store
-.step_unlock_to_tri:
-    moveq #0,%d0
+.step_lock_default:
+    move.l %d2,%d0
+    jsr ch_base_get
     bra.s .step_store
 .step_turn:
     cmpi.l #7,%d0
     bls.s .step_value
-    moveq #0,%d0
+    move.l %d2,%d0
+    jsr ch_base_get
 .step_value:
     move.l %d7,%d1
     bsr.w ch_clamp_delta

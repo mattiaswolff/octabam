@@ -6,7 +6,7 @@
  */
     .text
     .global ch_play_key,ch_play_modes,ch_mode_names,ch_mode_icons
-    .global ch_base,ch_modifiers,ch_pressed,ch_octave_compare
+    .global ch_modifiers,ch_pressed,ch_octave_compare
 ch_play_key:
     move.l 0x460d16f0,%d0
     cmpi.l #6,%d0
@@ -87,8 +87,9 @@ ch_play_key:
     move.b (%a0,%d0.l),%d1
     cmpi.l #7,%d1
     bls.s .key_quality_store
-    lea ch_base,%a0
-    move.b (%a0,%d4.l),%d1
+    move.l %d4,%d0
+    jsr ch_base_play
+    move.l %d0,%d1
 .key_quality_store:
     lea ch_live,%a0
     move.b %d1,(%a0,%d4.l)
@@ -156,8 +157,8 @@ ch_play_key:
     move.b (%a2),%d0
     cmpi.l #7,%d0
     bls.s .modifier_apply
-    lea ch_base,%a0
-    move.b (%a0,%d4.l),%d0
+    move.l %d4,%d0
+    jsr ch_base_play
 .modifier_apply:
     lea ch_live,%a0
     cmp.b (%a0,%d4.l),%d0
@@ -260,7 +261,6 @@ ch_play_title: .asciz "CHORD PLAY"
     .balign 4
     .global ch_last_root
 ch_last_root: .space 8,255
-ch_base: .space 8,0
 ch_modifiers: .space 64,255
 ch_mod_owner: .space 8,255
 ch_pressed: .space 32,255
@@ -517,8 +517,8 @@ ch_release_track:
     addq.l #1,%a0
     subq.l #1,%d0
     bne.s .release_modifier
-    lea ch_base,%a0
-    move.b (%a0,%d4.l),%d0
+    move.l %d4,%d0
+    jsr ch_base_play
     lea ch_live,%a0
     move.b %d0,(%a0,%d4.l)
 .release_done:

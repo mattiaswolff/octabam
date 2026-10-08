@@ -1,7 +1,7 @@
     .include "remix.inc"
 /* Dedicated CHRD locks: bank x pattern x MIDI track x step.
  * Native NOTE / NOT2-4 / CC bytes are never storage for this module.
- * 0xff is unlocked; only the reader resolves it to TRI (0).
+ * 0xff is unlocked; the reader inherits that pattern's Part CHRD default.
  * The current bank has a dense CS1 mirror, with a generation ticket to
  * prevent an engine writer from committing over a preempting UI writer.
  * The manifest owns this SRAM and refuses composition with PLOCKS P2.
@@ -63,16 +63,22 @@ ch_lock_ptr:
 .ptr_done:
     rts
 ch_lock_get:
+    move.l %d0,-(%sp)
     jsr ch_lock_ptr
     move.l %a0,%d0
-    beq.s .get_default
+    beq.s .get_invalid
     moveq #0,%d0
     move.b (%a0),%d0
     cmpi.l #7,%d0
     bls.s .get_done
 .get_default:
+    move.l (%sp),%d0
+    jsr ch_base_pattern
+    bra.s .get_done
+.get_invalid:
     moveq #0,%d0
 .get_done:
+    addq.l #4,%sp
     rts
 
 /* Same indices, d4=quality or 255. All registers preserved.

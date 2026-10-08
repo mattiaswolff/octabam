@@ -131,6 +131,34 @@ pattern/track records, the same-slot C3 boundary, native edit/clear behavior,
 15 rejected invalid publications, and C ABI preservation. Native hooks,
 companion publication and the composed candidate are not yet integrated.
 
+### Implementation checkpoint, 9 October
+
+- Shared foundation `f4eb4876` imported here as `f42cc654`. Its exact Harmony
+  manifest activation is present; the sibling still owns Follow activation
+  and the HARM/Follow settings migration.
+- `chord-part.s` now supplies `ch_base_get` (UI), `ch_base_play` (engine),
+  `ch_base_at` (explicit) and `ch_base_set` (UI edit), using SETUP offset 18.
+  CHRD UI/live fallback and pattern lock fallback consume those functions.
+  The obsolete volatile `ch_base[8]` default store is removed. Held variation
+  and release ownership remain runtime state. The native CTRL1 SETUP A range
+  at `0x400d43a6` is 8; its stock default is already TRI (0).
+- `BUILD=DP make bus REMIX=harmony-degrees` passes. On that image,
+  `verify_chord_part.py` passes 512 Part/track writes, distinct UI/engine/
+  explicit/pattern contexts, lock precedence, dirty/mirror restrictions,
+  invalid values, ABI preservation and actual native Part initialization.
+  `verify_chord_play.py` passes its 1,792 chord, 8,400 voicing, 22,680 ROOT
+  combinations and held-key/default-display checks. This is linked-code
+  evidence; pending-event inheritance and native persistence remain open.
+- A degree-only generic Part-copy entry wrapper is implemented in
+  `part-copy.s`, targeting stock memcpy `0x40020898`, replaying its six-byte
+  prologue and returning to `0x4002089e`. The callback will restrict capture
+  to actual working Parts. `verify_harmony_degree_part_copy.py` passes 24
+  stock-versus-intercepted copies, including non-Part sizes, before-overwrite
+  observation, register/stack/argument preservation and byte canaries. This
+  wrapper is **not installed yet**; its root-provenance adapter is next.
+  KITS source remains unchanged. Existing native Part Clear interception
+  will capture before initialization as well.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.

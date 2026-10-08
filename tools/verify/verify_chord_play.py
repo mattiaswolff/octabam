@@ -201,7 +201,8 @@ def release_and_default_gate():
     frame=m.scratch+0x200;descriptor=m.scratch+0x300
     u.mem_write(frame-52,descriptor.to_bytes(4,'big'))
     u.mem_write(frame+8,bytes(4))
-    u.mem_write(s['ch_base'],b'\x02');u.mem_write(s['ch_live'],b'\x07')
+    assert m.call('ch_base_set',0,2)==1
+    u.mem_write(s['ch_live'],b'\x07')
     def draw(inspect,lock):
         u.mem_write(0x460d173a,int(inspect).to_bytes(4,'big'))
         u.mem_write(s['ch_lock_table']+7,bytes((lock,)))
@@ -211,7 +212,7 @@ def release_and_default_gate():
     u.mem_write(0x40041760,bytes.fromhex('70074e75'))
     assert draw(False,5)==(2,0)
     assert draw(True,5)==(5,1)
-    assert draw(True,255)==(0,0)
+    assert draw(True,255)==(2,0)
     assert draw(False,5)==(2,0)
     print('[ok] silent extension releases, both root/extension release orders, fresh-root reset, held priority/track ownership and CHRD default vs P-lock display',flush=True)
 
