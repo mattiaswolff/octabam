@@ -94,7 +94,8 @@ hardware timing, MIDI electrical behavior or physical battery retention.
 Set HARM to CHORD, then return to the main MIDI NOTE page. D displays CHRD
 in the old NOT2 position; E/F are inactive. Native NOT2–4 values remain stored
 and become available again with HARM OFF. Turning D alone selects the live
-chord. Hold one or more sequencer steps and turn D to edit their CHRD locks;
+chord. The CHRD knob displays this base value during performance; temporary
+extensions appear in the sounding-chord guide. Hold one or more sequencer steps and turn D to edit their CHRD locks;
 press D while holding steps to toggle their locks. Unlocked steps display
 and play TRI, independently of the live selection or the previous step.
 
@@ -122,12 +123,15 @@ select these choices, in fixed positions:
 | 15 | MIN | Root + 0, 3, 7 semitones |
 | 16 | DOM7 | Root + 0, 4, 7, 10 semitones |
 
-The last pressed held variation wins. Releasing it reveals the previous held
-variation, or D's live choice when none remain. A quality change retriggers
-held roots. In C natural minor: hold key 1 for Cm, hold key 10 for Cm7, then
-key 13 for Csus4. Release both variations to return to Cm, then play key 4
-for Fm. With live recording active, these become separate root-plus-CHRD
-trigs. Changes quantized to the same step leave the last root and quality.
+The last pressed variation takes effect immediately and retriggers held roots.
+Releasing a variation is silent: the sounding quality stays latched until a
+new root is pressed. That new root uses the newest still-held variation, or
+D's base CHRD when no variation remains held. There is no carry-over latch
+across root presses. In C minor: hold G for Gm, press MAJ for G major, release
+MAJ (no new notes), then press DOM7 for G7. Releasing DOM7 then G sends no new
+note-ons; the next G starts as Gm. With live recording active, only presses
+that sound a chord create root-plus-CHRD trigs; releases do not record an
+intermediate return to the base. Same-step changes leave the final choice.
 Generated chord tones are never recorded into NOT2–4.
 
 The LCD shows the resulting chord name below CHORD PLAY, leaving the native
@@ -216,12 +220,12 @@ After a separately authorized firmware transfer, use a disposable project:
    stopped and running, and held keys are distinguishable.
 2. Hold trig 1, then hold trig 10, then trig 13. Hear Cm, Cm7 and Csus4 and
    check the chord name. Release trig 10 first: Csus4 stays. Release trig 13:
-   Cm returns. Release the root, then play trig 4 for Fm.
+   Csus4 keeps sounding without a retrigger. Release the root, then play trig 4 for Fm.
 3. Turn D to 7TH. A root now starts as a seventh; held variations temporarily
    override it. Hold trig 5 plus trig 16 and verify G–B–D–F, including through
    the stock arp. Exit the mode, switch to grid and change MIDI/audio mode
    with notes held: no note should remain sounding.
-4. Record the Cm/Cm7/Csus4/Cm/Fm gesture. Replay it; inspect native NOTE and
+4. Record the Cm/Cm7/Csus4/Fm gesture. Replay it; inspect native NOTE and
    CHRD locks. Turn D live to another quality: recorded locks remain intact.
    Clear one CHRD lock after a different-quality step: it must play TRI.
    Hold a step and turn/push D; check its lock without changing NOT2–4.

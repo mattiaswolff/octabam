@@ -15,7 +15,7 @@ import verify_midi_harmony_port as p
 
 OUT=c.ROOT/'out/chord-play-port'
 SYMBOLS={}
-EXPECTED=[48,51,55,48,51,55,58,48,53,55,48,51,55,53,56,60]
+EXPECTED=[48,51,55,48,51,55,58,48,53,55,53,56,60]
 PANEL='''100 key 0x31 down
 150 key 0x31 up
 300 key 0x35 down
@@ -79,7 +79,7 @@ def record_save(source,root_mode=0):
     p.OUT=OUT
     assert root_mode in range(4)
     work=p.fixture(source,'record-save'+(f'-root{root_mode}' if root_mode else ''),{0:2},key_raw=2,roots={0:root_mode})
-    chords=((48,51,55),(48,51,55,58),(48,53,55),(48,51,55),(53,56,60))
+    chords=((48,51,55),(48,51,55,58),(48,53,55),(53,56,60))
     expected=EXPECTED if root_mode==0 else [n for chord in chords for n in
         (([chord[0]-12*(root_mode-1)] if root_mode>1 else [])+list(chord[1:]))]
     for path in (work/'project').glob('bank*.work'):
@@ -97,7 +97,7 @@ def record_save(source,root_mode=0):
     assert actual==expected*2,(actual,expected*2)
     bank=(work/'save-bank.bin').read_bytes();locks=(work/'save-locks.bin').read_bytes()
     steps=[(i,bank[0x4900+i*32],locks[i]) for i in range(64) if bank[0x4900+i*32]<128]
-    assert steps==[(7,48,0),(11,48,1),(15,48,4),(19,48,0),(23,53,0)],steps
+    assert steps==[(7,48,0),(11,48,1),(15,48,4),(23,53,0)],steps
     for step,root,q in steps:
         assert bank[0x4903+step*32:0x4906+step*32]==b'\xff'*3
     files=p.emu_card.extract_image((work/'save-card.img').read_bytes())
@@ -205,7 +205,7 @@ def playing_layout(source):
 """
     events=run(work,'base-overrides',script)
     expected=[48,51,55, 48,51,55,58, 48,53,55, 48,51,55,58,
-              48,53,55, 48,51,55,58, 55,58,62,65, 55,58,62,68, 55,56,62, 55,60,62,
+              55,58,62,65, 55,58,62,68, 55,56,62, 55,60,62,
               55,59,62, 55,58,62, 55,59,62,65]
     assert [e[2] for e in events if e[:2]==('on',1)]==expected,events
     run(work,'held-groups',PANEL+'1600 key 0 down\n1700 key 9 down\n1800 key 0 up\n1900 key 9 up\n2000 quit\n')

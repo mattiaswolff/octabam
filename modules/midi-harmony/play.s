@@ -77,6 +77,21 @@ ch_play_key:
     move.l %d0,(%a2)
     lea ch_last_root,%a0
     move.b %d5,(%a0,%d4.l)
+    /* A new physical root resolves the currently held variation, or base.
+     * A released variation stays sounding only until this new root edge. */
+    move.l %d4,%d0
+    lsl.l #3,%d0
+    lea ch_modifiers,%a0
+    moveq #0,%d1
+    move.b (%a0,%d0.l),%d1
+    cmpi.l #7,%d1
+    bls.s .key_quality_store
+    lea ch_base,%a0
+    move.b (%a0,%d4.l),%d1
+.key_quality_store:
+    lea ch_live,%a0
+    move.b %d1,(%a0,%d4.l)
+.key_quality_ready:
     bsr.w .key_velocity
     bsr.w .key_send
     bra.w .key_done
@@ -127,7 +142,7 @@ ch_play_key:
     moveq #-1,%d0
     move.b %d0,7(%a2)
     tst.l %d3
-    beq.s .modifier_selected
+    beq.w .key_done /* Release updates held keys only; never retrigger. */
     moveq #7,%d5
 .modifier_shift:
     move.b -1(%a2,%d5.l),%d0
@@ -145,7 +160,7 @@ ch_play_key:
 .modifier_apply:
     lea ch_live,%a0
     cmp.b (%a0,%d4.l),%d0
-    beq.s .key_done
+    beq.w .key_done
     move.b %d0,(%a0,%d4.l)
     /* A quality change restarts each currently held root on this track. */
     lea ch_pressed,%a2
@@ -153,7 +168,7 @@ ch_play_key:
 .modifier_retrigger:
     move.l (%a2),%d5
     tst.l %d5
-    bmi.s .modifier_next
+    bmi.w .modifier_next
     move.l %d5,%d0
     lsr.l #8,%d0
     cmp.l %d4,%d0

@@ -138,6 +138,78 @@ def machine():
     return dict(chord_cases=count, voicing_cases=extra_voicings(m), root_quality_cases=root_qualities(m))
 
 
+def release_and_default_gate():
+    """Execute panel dispatch; intercept only the keyboard and paint boundaries."""
+    from unicorn.m68k_const import UC_M68K_REG_A7,UC_M68K_REG_SR,UC_M68K_REG_A4,UC_M68K_REG_A6,UC_M68K_REG_D0,UC_M68K_REG_D5
+    m=h.Machine();u=m.uc;s=m.sym
+    u.mem_map(0x460b0000,0x40000)
+    u.mem_write(0x460d16f0,(6).to_bytes(4,'big'))
+    u.mem_write(0x80000012,(1).to_bytes(4,'big'))
+    u.mem_write(0x400beba2,(4).to_bytes(4,'big'))
+    u.mem_write(0x46c82456,(0x400e21e0).to_bytes(4,'big'))
+    u.mem_write(0x400e21e0+0x8f163,b'\x64')
+    m.setting(0,2,0,5)
+    def edge(key,down,track=0):
+        u.mem_write(0x100b14cc,bytes((track,)))
+        u.mem_write(m.stack,m.done.to_bytes(4,'big')+key.to_bytes(4,'big')+down.to_bytes(4,'big'))
+        u.reg_write(UC_M68K_REG_A7,m.stack);u.reg_write(UC_M68K_REG_SR,0x2700)
+        m.stops={m.done,s['mh_keyboard'],s['ch_play_leds'],s['ch_play_guide']}
+        pc=s['ch_play_key'];calls=[]
+        for _ in range(30):
+            m.arrival=None;u.emu_start(pc,0,count=50000)
+            assert m.arrival in m.stops
+            if m.arrival==m.done:return calls
+            sp=u.reg_read(UC_M68K_REG_A7)
+            if m.arrival==s['mh_keyboard']:
+                args=[int.from_bytes(u.mem_read(sp+4+4*i,4),'big') for i in range(4)]
+                calls.append((*args,u.mem_read(s['ch_live']+args[0],1)[0]))
+            pc=int.from_bytes(u.mem_read(sp,4),'big');u.reg_write(UC_M68K_REG_A7,sp+4)
+        raise AssertionError('unbounded panel dispatch')
+    # G minor -> explicit MAJ -> release -> DOM7: no intermediate G minor.
+    assert edge(4,1)==[(0,55,100,1,0)]
+    assert edge(13,1)==[(0,55,100,1,5)]
+    assert edge(13,0)==[] and u.mem_read(s['ch_live'],1)==b'\x05'
+    assert edge(15,1)==[(0,55,100,1,7)]
+    assert edge(15,0)==[]
+    assert edge(4,0)==[(0,55,0,1,7)]
+    assert edge(4,1)==[(0,55,100,1,0)]
+    # Older held extension resumes only on a NEW root, never on release.
+    assert edge(9,1)==[(0,55,100,1,1)]
+    assert edge(12,1)==[(0,55,100,1,4)]
+    assert edge(12,0)==[]
+    assert edge(3,1)==[(0,53,100,1,1)]
+    assert edge(9,0)==[]
+    assert edge(3,0)[0][2]==0 and edge(4,0)[0][2]==0
+    # Release roots first, or extensions first: neither ordering creates notes.
+    for root_first in (True,False):
+        edge(0,1);edge(13,1)
+        actions=((0,0),(13,0)) if root_first else ((13,0),(0,0))
+        assert all(call[2]==0 for key,down in actions for call in edge(key,down))
+    # A modifier release retains its original track even after selecting T2.
+    edge(0,1);edge(15,1)
+    assert edge(15,0,1)==[]
+    assert edge(0,0,1)==[(0,48,0,1,7)]
+    u.mem_write(0x100b14cc,b'\0')
+    # Actual NOTE draw detour: default remains independent of live quality;
+    # native NOT2 flags are discarded and dedicated CHRD locks win on inspection.
+    frame=m.scratch+0x200;descriptor=m.scratch+0x300
+    u.mem_write(frame-52,descriptor.to_bytes(4,'big'))
+    u.mem_write(frame+8,bytes(4))
+    u.mem_write(s['ch_base'],b'\x02');u.mem_write(s['ch_live'],b'\x07')
+    def draw(inspect,lock):
+        u.mem_write(0x460d173a,int(inspect).to_bytes(4,'big'))
+        u.mem_write(s['ch_lock_table']+7,bytes((lock,)))
+        m.call('ch_draw_value',stop=0x4004e38a,regs={UC_M68K_REG_A4:3,UC_M68K_REG_A6:frame,UC_M68K_REG_D5:1})
+        return u.reg_read(UC_M68K_REG_D0),u.reg_read(UC_M68K_REG_D5)&1
+    # Stub the stock held-step resolver only; CHRD lookup and flags are linked code.
+    u.mem_write(0x40041760,bytes.fromhex('70074e75'))
+    assert draw(False,5)==(2,0)
+    assert draw(True,5)==(5,1)
+    assert draw(True,255)==(0,0)
+    assert draw(False,5)==(2,0)
+    print('[ok] silent extension releases, both root/extension release orders, fresh-root reset, held priority/track ownership and CHRD default vs P-lock display',flush=True)
+
+
 def playing(source):
     port.OUT = OUT
     work = port.fixture(source, 'held-variations', {0: 2}, key_raw=2)
@@ -159,11 +231,11 @@ def playing(source):
         '--live-script', script, '--lcd', work/'play.lcd'])
     port.balanced(events)
     notes = [e[2] for e in events if e[:2] == ('on', 1)]
-    expected = [48,51,55, 48,51,55,58, 48,53,55, 48,51,55, 53,56,60]
+    expected = [48,51,55, 48,51,55,58, 48,53,55, 53,56,60]
     assert notes == expected, (notes, expected)
     subprocess.run([sys.executable, str(ROOT/'tools/emu/lcd_view.py'),
                     str(work/'play.lcd'), '--png', str(work/'play.png')], check=True)
-    print('[ok] actual trig keys: Cm -> Cm7 -> Csus4 -> Cm -> Fm; balanced releases', flush=True)
+    print('[ok] actual trig keys: Cm -> Cm7 -> Csus4 -> Fm (silent variation releases); balanced releases', flush=True)
     return dict(played=notes)
 
 
@@ -173,6 +245,7 @@ def main():
     ap.add_argument('--project', type=pathlib.Path)
     args = ap.parse_args()
     result = machine()
+    release_and_default_gate()
     if args.project:
         result.update(playing(args.project))
     OUT.mkdir(parents=True, exist_ok=True)
