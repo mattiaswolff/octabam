@@ -1,5 +1,5 @@
-/* RFOL D press: RFOL, MODE and OCT. Native modal/input-layer pattern.
- * Transport/chromatic keys pass through; settings affect subsequent trigs. */
+/* RFOL D press: RFOL, MODE, OCT and UPDT. Native modal/input layer.
+ * Transport/chromatic keys pass through; UPDT arms at the next ordinary trig. */
     .text
     .global bf_page_open,bf_page_close,bf_page_noop,bf_page_encoder
     .global bf_page_win,bf_page_track,bf_page_draw
@@ -105,14 +105,12 @@ bf_page_draw:
     bsr.w .page_selector
     move.l bf_page_track,%d0
     jsr bf_oct_get
-    move.l %d0,-(%sp)
-    pea .number
-    move.l %a2,-(%sp)
-    jsr 0x40013a08
-    lea 12(%sp),%sp
-    moveq #40,%d1
-    move.l %a2,%a0
-    bsr.w .page_oct_center
+    addq.l #2,%d0 /* Stock field hides negative values; format index back to OCT. */
+    move.l %d0,%d1
+    moveq #87,%d0
+    lea bf_oct_format,%a0
+    lea 0x400467a4,%a1 /* same stock field and value baseline as RFOL */
+    bsr.w .page_selector
     move.l bf_page_track,%d0
     lea bf_sources,%a0
     moveq #0,%d1
@@ -126,7 +124,7 @@ bf_page_draw:
     move.l %d0,%d1
     moveq #10,%d0
     lea bf_response_format,%a0
-    lea 0x400467a4,%a1
+    lea 0x40046f10,%a1 /* native two-position switch, like MODE */
     bsr.w .page_selector_bottom
     bsr.w .page_grid
     moveq #12,%d0
@@ -190,12 +188,22 @@ bf_page_draw:
     jsr (%a1)
     lea 28(%sp),%sp
     rts
+bf_oct_format: /* Stock formatter ABI: destination, octave + 2. */
+    move.l 4(%sp),%a0
+    move.l 8(%sp),%d0
+    subq.l #2,%d0
+    move.l %d0,-(%sp)
+    pea .number
+    move.l %a0,-(%sp)
+    jsr 0x40013a08
+    lea 12(%sp),%sp
+    rts
 bf_response_format:
     move.l 4(%sp),%a0
-    lea .next,%a1
+    lea .trig,%a1
     tst.l 8(%sp)
     beq.s .mode_copy
-    lea .change,%a1
+    lea .live,%a1
     bra.s .mode_copy
 bf_mode_format:
     move.l 4(%sp),%a0
@@ -207,7 +215,7 @@ bf_mode_format:
     move.b (%a1)+,(%a0)+
     bne.s .mode_copy
     rts
-.page_oct_center: /* Center OCT label/value in cell bounded by x=77 and x=115. */
+.page_oct_center: /* Center OCT label in cell bounded by x=77 and x=115. */
     lea -8(%sp),%sp
     movem.l %d2/%a2,(%sp)
     move.l %d1,%d2
@@ -237,9 +245,9 @@ bf_mode_format:
     jsr 0x40012bd8
     lea 24(%sp),%sp
     rts
-.response_label: .asciz "RESP"
-.next: .asciz "NEXT"
-.change: .asciz "CHANGE"
+.response_label: .asciz "UPDT"
+.trig: .asciz "TRIG"
+.live: .asciz "LIVE"
 .source_label: .asciz "RFOL"
 .mode_label: .asciz "MODE"
 .oct_label: .asciz "OCT"

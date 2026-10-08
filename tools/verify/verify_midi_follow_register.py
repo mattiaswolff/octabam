@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Execute Follow register policy, capture and output bytes from the linked image."""
+import struct
+from pathlib import Path
 from midi_machine import Machine
 from unicorn.m68k_const import *
 
@@ -93,4 +95,57 @@ def main():
                             assert result==0xffffffff,(root,mode,octave,tran,result)
         print('[ok] Harmony NOTE inherits register before TRAN/scale, signed bounds, and live absolute-root capture')
     print(f'[ok] {cases} Follow register/TRAN/bounds cases, absolute source capture, chains, independent settings and UI clamps')
-if __name__=='__main__':main()
+
+def ui():
+    """Execute stock drawing into a modal surface; check pixels, not call arguments."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'emu'))
+    from lcd_view import png
+    m=Machine(); u=m.uc; s=m.sym
+    m.instruction_limit=lambda name: 200000 if name=='bf_page_draw' else 20000
+    win=m.scratch; plane=win+0x1000
+    u.mem_write(win+36,struct.pack('>IIII',120,60,2,plane))
+    u.mem_write(s['bf_page_win'],win.to_bytes(4,'big'))
+    u.mem_write(s['bf_sources'],b'\x02')
+    assert bytes(u.mem_read(s['bf_response_modes'],8))==bytes(8),'TRIG must default on all tracks'
+    out=Path(__file__).resolve().parents[2]/'out/follow-ui';out.mkdir(exist_ok=True)
+    icons={}
+    for mode,octaves in ((0,range(11)),(1,range(-2,3))):
+        for octave in octaves:
+            for response in (0,1):
+                u.mem_write(s['bf_reg_modes'],bytes((mode,)))
+                u.mem_write(s['bf_reg_offsets' if mode else 'bf_reg_fixed'],bytes((octave&255,)))
+                m.call('bf_response_set',0,response)
+                for formatter,value,want in (('bf_oct_format',octave+2,str(octave)),
+                                             ('bf_response_format',response,('TRIG','LIVE')[response])):
+                    u.mem_write(m.stack+4,struct.pack('>II',win+512,value))
+                    m.call(formatter)
+                    assert bytes(u.mem_read(win+512,16)).split(b'\0')[0].decode()==want
+                m.call('bf_page_draw')
+                data=bytes(u.mem_read(plane,960))
+                def pixel(x,y): return (data[x*8+y//8]>>(7-y%8))&1
+                def crop(x,y,w,h): return tuple(pixel(i,j) for j in range(y,y+h) for i in range(x,x+w))
+                # RFOL and OCT must share the stock field baseline. Negative
+                # offsets must draw too, and two-digit values stay centered.
+                rfol=[(x,y) for x in range(1,38) for y in range(36,51) if pixel(x,y)]
+                octink=[(x,y) for x in range(78,115) for y in range(36,51) if pixel(x,y)]
+                assert octink,(mode,octave,'missing octave')
+                assert {y for x,y in octink}=={y for x,y in rfol},(mode,octave,'baseline')
+                assert abs(min(x for x,y in octink)+max(x for x,y in octink)-192)<=2,(mode,octave,'center')
+                # Both switches use the same 17x7 stock artwork, translated
+                # by one column and one row; both positions must be distinct.
+                icon=crop(11,22,17,7)
+                if mode==response: assert icon==crop(50,45,17,7),'stock switch icon'
+                assert any(icon),'switch missing'
+                icons[response]=icon
+                name=f'{"fixed" if mode==0 else "source"}-{octave}-{"trig" if response==0 else "live"}'
+                rows=[[0]*128 for _ in range(64)]
+                for y in range(60):
+                    for x in range(120): rows[y+2][x+4]=pixel(x,59-y)
+                png(rows,out/(name+'.png'))
+    assert icons[0]!=icons[1],'switch must show selected position'
+    print('[ok] 32 native FOLLOW renders: all octaves aligned/centered, signed values visible, both stock switch icons; TRIG default on eight tracks')
+
+if __name__=='__main__':
+    main()
+    ui()

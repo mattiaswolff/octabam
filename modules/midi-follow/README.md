@@ -259,26 +259,30 @@ for live-source/follower UART regressions with source arp on/off and KEY OFF.
 The keyboard linked-code gate also checks bypass recording arguments, root
 retention on release, and protection from stale stored NOTE during live arp.
 
-Register verification: `tools/verify/verify_midi_follow_register.py` covers full MIDI range, both register modes, every octave choice, TRAN, chains, invalid roots and bounded writes. `tools/verify/verify_midi_follow_register_port.py --project DIR` exercises physical RFOL/window encoders, source octave changes, MIDI release balance and unchanged native Part bytes on a disposable virtual card.
+Register verification: `tools/verify/verify_midi_follow_register.py` covers full MIDI range, both register modes, every octave choice, TRAN, chains, invalid roots and bounded writes. It also executes native drawing for 32 settings combinations, checks OCT alignment and both switch icons, and writes previews to `out/follow-ui/`. `tools/verify/verify_midi_follow_register_port.py --project DIR` exercises physical RFOL/window encoders, source octave changes, MIDI release balance and unchanged native Part bytes on a disposable virtual card.
 
 FOLLOW uses the same six-cell grid as Harmony: **A RFOL, B MODE, C OCT**.
-RFOL and MODE use stock fields/selectors; OCT stays a numeric octave value.
+RFOL and OCT share the stock numeric/text field and value baseline. MODE and
+UPDT use the native two-position switch, including its stock icon.
 Custom selectors accumulate four raw encoder counts per choice and cap each
 report to one choice. Closing FOLLOW redraws RFOL on NOTE SETUP.
 
 The detail page has A=RFOL, B=MODE, C=OCT. Only C edits octave values.
 FIXED remembers an absolute octave; SOURCE remembers a relative octave offset.
 Changing MODE recalls that mode's own OCT value without editing either value.
-The OCT label/value are centered in cell C; the footer shows only NO:BACK.
+The OCT label/value are centered in cell C, including negative offsets and
+octave 10; the footer shows only NO:BACK. The stock field suppresses negative
+widget values, so OCT passes a nonnegative index and formats it back to the
+signed octave. Register values and behavior are unchanged.
 
-## Temporary response audition: NEXT / CHANGE
+## Root update timing: TRIG / LIVE
 
 Press D on MIDI NOTE SETUP to open RFOL, then turn D inside the window
-(**RESP**, lower left). A/B/C remain RFOL, MODE and OCT.
+(**UPDT**, lower left). A/B/C remain RFOL, MODE and OCT.
 
-- **NEXT** is the boot default and keeps the original behavior: the receiver
+- **TRIG** is the boot default and keeps the original behavior: the receiver
   uses the latest source root on its next scheduled note.
-- **CHANGE** also moves an already-sounding sequenced bass when the ultimate
+- **LIVE** also moves an already-sounding sequenced bass when the ultimate
   source changes root. It sends note-off for the old pitch and note-on for
   the new one, restarting the synth envelope. Rests stay silent. The original
   release deadline and the next programmed trig stay in place.
@@ -291,7 +295,7 @@ extra retrigger. Muted/disabled receivers and CHAN OFF do not generate notes.
 Only voices owned by that receiver may move; occupied channel/note pairs
 are not stolen. Out-of-range voices are omitted rather than wrapped.
 
-With Harmony chords, CHANGE shifts the currently sounding shape by the
+With Harmony chords, LIVE shifts the currently sounding shape by the
 logical-root interval; the next ordinary trig generates a fresh chord and
 voicing. With an arp, its clock/order are retained and outgoing cached-pool
 notes track the changed root. It does not trigger during an arp rest or

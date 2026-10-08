@@ -1,5 +1,5 @@
-/* Temporary receiver response: NEXT (0) or CHANGE (1).
- * CHANGE shifts currently owned sequencer voices when the ultimate source
+/* Receiver update timing: TRIG (0, boot default) or LIVE (1).
+ * LIVE shifts currently owned sequencer voices when the ultimate source
  * changes root. Runs in the stock sequencer service, after pending releases
  * and before output. No synthetic trig, arp reset, recorder call or length
  * write: stock retains the original release deadline. Live source keys are
