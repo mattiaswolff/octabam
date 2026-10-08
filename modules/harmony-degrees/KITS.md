@@ -35,6 +35,28 @@ reuse, project operations and retained-memory resume. No migration is required.
 
 ## Coordination
 
+**Ownership split acknowledged and accepted by the degree task**, after
+reading the sibling `mattias-bus-kits/remixes/mattias-bus/KITS-EXPERIMENT.md`
+implementation coordination section on 8 October 2026:
+
+- The sibling task owns the shared native Part field/access contract,
+  ranges/defaults, dirty flags and CS1 handling; Follow and Harmony settings
+  at offsets 3/5/12/13/15/16; and focused verification without and with KITS.
+- This degree task owns base CHRD/DEG at offsets 18/19, pattern representation
+  and HARM-boundary conversion, DEG/CHRD companions, and the combined degree
+  candidate with its integration gates.
+- Agree concrete shared access symbols and UI/playback/captured-event
+  contexts before integrating callers. Each shared Harmony hook edit has one
+  owner and is exchanged as a commit; worktrees are not edited concurrently.
+- Reconcile newer Follow/project-settings, response and B5 ownership fixes
+  before choosing the implementation base. The older KITS probe branch is
+  evidence, not a sufficient current module baseline. Preserve the native
+  load-return fix and keep KITS source unchanged.
+- Publish commit IDs and exact checks. A combined pass requires the actual
+  composed image, tested both without KITS and with KITS. No migration or
+  KITS dependency is introduced. The pending HARM-to-OFF musical decision
+  remains pending; acceptance of this split does not resolve it.
+
 The shared Part-settings investigation is in
 [the KITS task](codex://threads/01a11d18-e86b-7842-ba90-4a7ee55004db).
 Its completed investigation recommends eight disabled MIDI SETUP fields per
