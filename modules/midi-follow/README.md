@@ -286,3 +286,49 @@ The detail page has A=RFOL, B=MODE, C=OCT. Only C edits octave values.
 FIXED remembers an absolute octave; SOURCE remembers a relative octave offset.
 Changing MODE recalls that mode's own OCT value without editing either value.
 The OCT label/value are centered in cell C; the footer shows only NO:BACK.
+
+## Temporary response audition: NEXT / CHANGE
+
+Press D on MIDI NOTE SETUP to open RFOL, then turn D inside the window
+(**RESP**, lower left). A/B/C remain RFOL, MODE and OCT.
+
+- **NEXT** is the boot default and keeps the original behavior: the receiver
+  uses the latest source root on its next scheduled note.
+- **CHANGE** also moves an already-sounding sequenced bass when the ultimate
+  source changes root. It sends note-off for the old pitch and note-on for
+  the new one, restarting the synth envelope. Rests stay silent. The original
+  release deadline and the next programmed trig stay in place.
+
+The setting is per receiver, volatile, and takes effect from its next note.
+Live source-key changes are handled on the next sequencer service pass, not
+held until the next receiver trig. This is not a measured zero-latency claim.
+A source change coinciding with a scheduled receiver event does not add an
+extra retrigger. Muted/disabled receivers and CHAN OFF do not generate notes.
+Only voices owned by that receiver may move; occupied channel/note pairs
+are not stolen. Out-of-range voices are omitted rather than wrapped.
+
+With Harmony chords, CHANGE shifts the currently sounding shape by the
+logical-root interval; the next ordinary trig generates a fresh chord and
+voicing. With an arp, its clock/order are retained and outgoing cached-pool
+notes track the changed root. It does not trigger during an arp rest or
+restart the arp. This control targets sequenced/arp receivers, including
+those following a live Chord Play source; it does not retune manually held
+receiver keyboard notes.
+
+`tools/verify/verify_midi_follow_response.py` checks linked machine code,
+release deadlines, silence gates and MIDI ownership. The companion
+`tools/verify/verify_midi_follow_response_port.py --project /path/to/project`
+operates physical encoder D and captures the full firmware's MIDI output.
+These tests do not establish physical MIDI latency or external-synth timing.
+
+
+## Eight-track routing stress
+
+`tools/verify/verify_midi_follow_stress.py` is an image gate. It tests all
+40,320 permutations of a full eight-track chain, 12,000 seeded live routing
+edits, and 56,080 routed outputs with register/transpose extremes, unknown
+roots, cycles and invalid links. The independent graph model checks that
+editing one receiver cannot change another, no selectable route introduces
+a cycle, and runtime fallback terminates without writing outside its scratch
+and stack. Run it on both standalone Follow and the combined Harmony image.
+This exercises linked ColdFire code, not physical outgoing-MIDI timing.

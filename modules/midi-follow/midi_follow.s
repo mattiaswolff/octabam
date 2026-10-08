@@ -55,6 +55,16 @@ bf_pre_capture:
     addq.l #1,%d7
     cmpi.l #8,%d7
     bne.w .pre_loop
+    tst.l bf_response_modes
+    bne.s .pre_response
+    tst.l bf_response_modes+4
+    beq.s .pre_restore
+.pre_response:
+    move.l -42(%fp),%d0
+    moveq #0,%d1
+    move.b -37(%fp),%d1
+    jsr bf_response_tick
+.pre_restore:
     movem.l (%sp),%d0-%d3/%d7/%a0-%a1/%a4-%a5
     lea 36(%sp),%sp
     lea 0x80006676,%a0
@@ -192,6 +202,8 @@ bf_latch:
  * Chains resolve to the ultimate source; bounded defensively to eight hops.
  */
 bf_note:
+    jsr bf_response_adjust
+    jsr bf_response_observe
     lea -16(%sp),%sp
     movem.l %d0-%d2/%a0,(%sp)
     .ifdef HAVE_HARMONY
