@@ -179,6 +179,19 @@ before installing it: the degree wrapper above is still uninstalled and can
 instead supply only the outgoing-provenance callback. No KITS-only hook can
 solve the standalone case.
 
+**Replacement ownership update acknowledged:** the sibling's 9 October note
+assigns native memcpy-entry and Part-initializer publication boundaries to
+the shared layer, conditional on its bounded critical-section checks. This
+task will leave `part-copy.s` uninstalled and supply `hd_part_before` instead:
+register ABI d0 = outgoing Part address, all registers preserved, no return
+value. Its C implementation will detach outgoing root provenance; it does
+not write Part settings or inspect KITS. The callback must be ordered with
+the copy so an engine interrupt cannot reattach a pattern to the old Part
+between capture and replacement. A callback before the mask needs an explicit
+guard against that race; otherwise include the bounded callback in publication
+and measure it on the composed degree image. We will keep capture cheap and
+leave scale/degree conversion out of the masked Part-copy operation.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.

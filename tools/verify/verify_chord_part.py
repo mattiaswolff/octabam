@@ -15,8 +15,15 @@ def symbols():
     return {n: int(a, 16) for a, n in re.findall(r'^([0-9a-f]+) [TtBbDd] ((?:ch|mp|mh|hd)_\w+)$', raw, re.M)}
 
 
+class PartMachine(Machine):
+    def instruction_limit(self, name):
+        # Both initializers clear dense state. Give standalone Harmony the
+        # same bounded allowance as a build that also includes degrees.
+        return 1000000 if name in ('ch_lock_init', 'native_part_init') else super().instruction_limit(name)
+
+
 def main():
-    m = Machine(symbols)
+    m = PartMachine(symbols)
     u = m.uc
     def put(a, v, n=1):
         u.mem_write(a, v.to_bytes(n, 'big'))
