@@ -230,6 +230,17 @@ def main():
     # stock NOT2-4, including encoder pushes while a step is held.
     m.call('mh_set',0,1)
     put(0x80000012,1,4);put(0x460d1684,0,4);put(0x460d175c,0,4)
+    # Main-page input stays active under the stock 18-row page-change
+    # notification, as well as the 16-row held-step strip. A full SETUP
+    # window must keep its native controls. Exercise both degree and CHRD.
+    for mode in (1,2):
+        m.call('mh_set',0,mode)
+        for rows,want in ((16,True),(18,True),(64,False)):
+            put(0x460d175c,m.scratch,4);put(m.scratch+40,rows,4)
+            assert bool(m.call('hd_ui_owned',d1=0))==want,(mode,rows)
+            assert bool(m.call('ch_ui_owned',d1=3))==(want and mode==2),(mode,rows)
+    put(0x460d175c,0,4)
+    m.call('mh_set',0,1)
     before=bytes(u.mem_read(bank,0x9b340))
     degree_before=bytes(u.mem_read(s['hd_banks'],16528))
     for slot in (3,4,5):

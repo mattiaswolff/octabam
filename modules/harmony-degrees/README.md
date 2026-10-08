@@ -11,6 +11,10 @@ value, displayed as `1:3` (degree 1, tonic octave 3). Degree 7 advances to
 degree 1 of the next tonic octave. Thus `7:3` is B-flat3 in C minor but C4 in
 D minor. Octave names follow the native display (MIDI 60 = C4).
 
+When a fresh or missing Harmony value requires a fallback, use `1:3`,
+resolving to C3 under C major. Existing native notes are converted on entry;
+the fallback does not replace them.
+
 - OFF -> HARM converts absolute NOTE into degree/register using the applicable
   KEY. Nearest in-scale pitch wins; exact ties choose the lower pitch.
 - NOTE <-> CHORD keeps the degree unchanged.

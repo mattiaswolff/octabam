@@ -122,17 +122,20 @@ def panel(work):
     copied=(work/'degree-copy-degrees.bin').read_bytes()
     assert copied[4]==copied[11]==35
     live=cp.key(100,0x31)+cp.key(500,0x22)+'800 enc 0 1\n1200 enc 3 1\n1500 enc 4 1\n1800 enc 5 1\n2300 quit\n'
-    run(work,'note-default-edit',live,work/'save-card.img',
-        ('--step',f'-:call:{SYMBOLS["bf_encoder"]:#x},5,0xfffffffc'))
-    note_degree=(work/'note-default-edit-degrees.bin').read_bytes()
-    assert note_degree[16384]==before[16384]+1
-    native=(work/'save-bank.bin').read_bytes();edited=(work/'note-default-edit-bank.bin').read_bytes()
-    assert native[0x8ed80+0x3e5:0x8ed80+0x3e8]==edited[0x8ed80+0x3e5:0x8ed80+0x3e8]
+    # Edit while the native page-change notification is still visible.
+    # This must reach the degree editor, never the stock semitone editor.
+    for mode,extra in (('chord',()),('note',('--step',f'-:call:{SYMBOLS["bf_encoder"]:#x},5,0xfffffffc'))):
+        name=f'{mode}-default-edit'
+        run(work,name,live,work/'save-card.img',extra)
+        degree=(work/f'{name}-degrees.bin').read_bytes()
+        assert degree[16384]==before[16384]+1,(mode,before[16384],degree[16384])
+        native=(work/'save-bank.bin').read_bytes();edited=(work/f'{name}-bank.bin').read_bytes()
+        assert native[0x8ed80+0x3e2:0x8ed80+0x3e8]==edited[0x8ed80+0x3e2:0x8ed80+0x3e8],mode
     for name in ('degree-edit','degree-unlock'):
         subprocess.run([str(p.ROOT/'.venv/bin/python'),str(p.ROOT/'tools/emu/lcd_view.py'),str(work/f'{name}.lcd'),'--png',str(work/f'{name}.png')],check=True,stdout=subprocess.DEVNULL)
     print('[ok] held-step DEG encoder, unlock, copy/paste and unsaved warm resume',flush=True)
     return {'held_edit':True,'unlock':True,'copy':True,'unsaved_resume':True,
-            'note_default_edit':True,'hidden_controls_preserve_NOT2_4':True}
+            'note_chord_default_edit_under_notification':True,'hidden_controls_preserve_NOT2_4':True}
 
 
 def lifecycle(work):

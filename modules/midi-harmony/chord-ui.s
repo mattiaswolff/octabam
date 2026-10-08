@@ -303,6 +303,11 @@ ch_ui_owned:
     move.l 40(%a0),%d0 /* the held-step inspection strip has 16 rows */
     cmpi.l #16,%d0
     beq.s .owned_page
+    .ifdef HAVE_DEGREES
+    /* Main-page input remains active under the page-change notification. */
+    cmpi.l #18,%d0
+    beq.s .owned_page
+    .endif
     moveq #0,%d0 /* full NOTE SETUP and other modal editors keep their controls */
     rts
 .owned_page:

@@ -15,6 +15,10 @@ hd_ui_owned: /* d1 slot -> d0 boolean; same volatile set as ch_ui_owned */
     move.l 40(%a0),%d0
     cmpi.l #16,%d0
     beq.s .owned_mode
+    /* The stock page-change notification is an 18-row nonmodal popup.
+     * Native dispatch still routes its encoder gestures to the main page. */
+    cmpi.l #18,%d0
+    beq.s .owned_mode
     moveq #0,%d0
     rts
 .owned_mode:
