@@ -17,12 +17,12 @@ Knob **D: ROOT** selects **KEEP** (default), **OMIT**, **-1 OCT** or **-2 OCT**.
 The controls use the stock PLAYBACK selector graphics: four positions for
 HARM/ROOT, five for VOIC and three for SPRD, with the value printed underneath.
 HARM, VOIC and SPRD occupy the top row of a six-cell grid, matching the
-physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; the other two lower cells are inactive;
+physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; F selects the temporary WIDTH comparison; E is inactive;
 the footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The footer identifies
 the track being edited. Transport and chromatic trig keys remain usable.
-The other encoders are inactive, leaving room for future controls. Turning F on NOTE SETUP still edits HARM directly.
+Encoder E remains inactive. Turning F on NOTE SETUP still edits HARM directly.
 
 Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
 Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales
@@ -116,6 +116,8 @@ Smaller root changes keep ordinary voice leading; crossing B3 → C4 does not
 force an octave jump. MIDI limits still apply. This uses transient history
 only; project settings and recorded notes are unchanged.
 
+AUTO keeps the exact requested root pitch in every candidate; ROOT can still
+lower or omit it afterward. Repeated roots keep their previous voicing.
 The bounded search considers each inversion at octave offsets 0, -12 and
 +12. Each starts as a compact inversion within one octave, then applies the
 selected spread. Every sounded candidate must remain inside MIDI 0–127 and
