@@ -198,6 +198,14 @@ mh_voice:
     blt.s .voice_root_find
     bra.w .voice_next_octave
 .voice_root_found:
+    moveq #0,%d0
+    move.b (%a0),%d0
+    sub.l 68(%sp),%d0
+    bpl.s .voice_sounded_anchor
+    neg.l %d0
+.voice_sounded_anchor:
+    cmpi.l #12,%d0
+    bgt.w .voice_next_octave
     moveq #0,%d3
 .voice_score:
     moveq #0,%d0

@@ -43,6 +43,7 @@ def machine():
                             raw=m.chord(0,note);actual=voiced(raw)
                             pitches=sorted(set(actual)-{255}); pcs={n%12 for n in raw if n<128}
                             assert raw[0] in pitches,(width,spread,mode,key,quality,note,raw,actual)
+                            assert abs(pitches[0]-raw[0])<=12,("sounded bass escaped",width,spread,raw,actual)
                             assert {n%12 for n in pitches}==pcs
                             assert len(pitches)<=4 and all(0<=n<=127 for n in pitches)
                             assert voiced(raw)==actual, ("repeated root changed",width,spread,quality,raw,actual)
