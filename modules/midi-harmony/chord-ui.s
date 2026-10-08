@@ -64,14 +64,14 @@ ch_draw_value:
     lea -24(%sp),%sp
     movem.l %d0-%d3/%a0-%a1,(%sp)
     tst.l 8(%fp)
-    bne.s .draw_restore
+    bne.w .draw_restore
     cmpa.l #3,%a4
-    bne.s .draw_restore
+    bne.w .draw_restore
     moveq #0,%d0
     move.b 0x100b14cc,%d0
     jsr mh_get
     cmpi.l #2,%d0
-    bcs.s .draw_restore
+    bcs.w .draw_restore
     moveq #0,%d2
     move.b 0x100b14cc,%d2
     lea ch_base,%a0 /* The knob shows its default, never a live override. */
