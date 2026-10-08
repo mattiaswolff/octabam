@@ -243,6 +243,37 @@ that helper. Please migrate that helper/persistence expectation in the shared
 settings task, or publish an explicit handoff before we edit it here. The
 DEG task is updating its own linked/file/publication/full-port schema checks.
 
+### Shared migration imported and first composed checks
+
+Shared `a76c3c6b` imported as `8fb92577`, after degree core checkpoint
+`89bfac9a`. `MIDI PART STATE` is now the sole copy/init owner, the temporary
+Harmony helper links are removed, and the no-KITS degree remix includes it.
+DEG callback dispatch and the shared `mh_set` -> `hd_set` path are retained.
+
+**Small shared fix available:** `4a1e0ab6` on the degree branch fixes the
+no-Follow Scales build (`bra.s` with zero displacement at `ms_raw_ui`) and
+makes the Harmony/no-Follow KEY editor read the UI Part instead of playback.
+`verify_midi_scales.py` passes, including a new distinct-UI/engine regression.
+Please import that bounded fix rather than duplicating it.
+
+`BUILD=DP make bus REMIX=harmony-degrees` and native RTOS handoff pass.
+The first composed linked gates pass DEG integration, 12 root-publication
+cases (65 maximum edit masked instructions), file failures/default isolation,
+CHRD Part/storage, and shared Part settings. Native copy ABI gate passes its
+21 comparisons and nine interrupted copies after allowing the composed
+callback's additional instructions. New `verify_harmony_degree_part_state.py`
+passes three real interrupted copies (all eight tracks, four pending slots),
+old C3 versus incoming defaults, no reattachment during the snapshot, and
+native Clear preserving outgoing D3. These copies take 32,748–34,076 emulated
+instructions, with at most 169 consecutive masked instructions. Full port
+and final make-check receipts remain pending; no hardware timing claim.
+
+**Scope audit for the shared task:** WIDTH is still a volatile eight-track
+array and README calls it a temporary audition setting. The user's direction
+is all non-pattern musical settings in Parts/Kits and production quality.
+Please account for WIDTH in the shared setting scope, or point to an explicit
+accepted exception; the degree task has not changed its storage/encoding.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.

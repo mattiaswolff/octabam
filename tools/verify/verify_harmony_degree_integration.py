@@ -9,13 +9,14 @@ from midi_machine import Machine, ROOT
 
 def symbols():
     raw = subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')], text=True)
-    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [TtBbDd] ((?:hd|ch|mh|bf|ms)_\w+)$',raw,re.M)}
+    return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [TtBbDdAa] ((?:hd|ch|mh|bf|ms|mp)_\w+)$',raw,re.M)}
 
 
 class DegreeMachine(Machine):
     def __init__(self):
         super().__init__(symbols)
         self.uc.mem_map(0x46000000,0x200000)
+        self.call('mp_activate',stop=0x4000f938)
     def instruction_limit(self,name):
         return 30000000
     def c(self,name,*args):
@@ -36,7 +37,8 @@ def main():
         offset=(0x8ed80+part*0x18b2) if part<4 else (0x9504a+(part-4)*0x18b2)
         for t in range(8):
             put(bank+offset+0x3e2+t*32,48)
-            put(bank+offset+0x4e2+t*36+17,2)
+            for field,value in ((3,0),(5,0),(12,0),(13,3),(15,2),(16,0),(17,2),(18,0),(19,35)):
+                put(bank+offset+0x4e2+t*36+field,value)
     put(bank+0x4900,48)
     put(0x46c82456,bank,4)
     put(0x46c76df1,2)
@@ -89,19 +91,20 @@ def main():
     assert get(bank+0x4900)==255 and get(bank+0x4920)==255
     assert m.c('hd_ui_value_c',0)==37
     # Physical keyboard conversion is captured in the then-current scale.
-    put(0x46c76df1,6)
+    put(0x46c76df1,6);put(bank+0x8ed80+0x4e2+17,6)
     assert m.call('hd_capture',50,0)==35
-    put(0x46c76df1,1)
+    put(0x46c76df1,1);put(bank+0x8ed80+0x4e2+17,1)
     assert m.call('hd_capture',50,0)==36
     # Combined current-bank retention uses a separate identity.
     m.call('ch_nv_save',0)
-    assert get(0x100f8600,4)==0x48444e56
-    assert get(0x100f860c,4)==24720
+    assert get(0x100f8600,4)==0x48444e32
+    assert get(0x100f860c,4)==24960
     assert m.call('ch_nv_restore',0)==1
     # Copy a degree while the native NOTE snapshot is stale, then paste into
     # another Part/key and an OFF track. Exercise actual native memcpy too.
     put(bank+0x8ed80+0x4e2+17,2)
     put(bank+0x8ed80+0x18b2+0x4e2+17,6)
+    put(bank+0x8ed80+0x18b2+0x4e2+5,2)
     m.c('hd_edit_step_c',0,0,0,0,35)
     put(bank+0x8ed80+0x4e2+17,6) # source degree 1 is now D3; NOTE still C3
     assert get(bank+0x4900)==48
@@ -150,19 +153,20 @@ def main():
     assert get(bank+0x4900+3*32)==52
     m.call('mh_set',0,1)
     assert get(message+15)==37
-    # Track copying moves default NOTE in a separate native page slice.
-    # Carry its degree even when the stored native NOTE has the same old
-    # value as another Part, and repair the separate CS1 copy too.
+    # Native SETUP slices carry both defaults. NOTE-only slices do not
+    # overwrite DEG or CHRD; there is no second defaults clipboard to repair.
     m.c('hd_edit_base_c',0,0,0,40)
+    m.call('ch_base_set',0,4)
     put(bank+0x8ed80+0x4e2+17,6)
     m.c('hd_memcpy',clip,source,0x8b0)
     m.c('hd_memcpy',clip+0x8b0,bank+0x8ed80+0x3e2,0xf0)
-    m.c('hd_memcpy',bank+0x8ed80+0x3e2+32,clip+0x8b0,0xf0)
-    assert get(bank+0x8ed80+0x3e2+32)==58
-    m.c('hd_memcpy',0x100a4ece+0x3e2+32,clip+0x8b0,0xf0)
-    assert get(0x100a4ece+0x3e2+32)==58
     m.c('hd_memcpy',bank+0x8ed80+0x18b2+0x3e2,clip+0x8b0,0xf0)
+    assert m.c('hd_base_c',0,1,0)==35
+    setup=bank+0x8ed80+0x4e2
+    m.c('hd_memcpy',clip+0x8b0,setup,36)
+    m.c('hd_memcpy',setup+0x18b2,clip+0x8b0,36)
     assert m.c('hd_base_c',0,1,0)==40
+    assert get(setup+0x18b2+18)==4
     # Editing another bank must not replace the currently retained bank.
     m.c('hd_memcpy',bank+0x9b340+0x48d0,clip,0x8b0)
     assert get(s['ch_nv_bank'],4)==0
@@ -186,18 +190,19 @@ def main():
     put(s['hd_rebuild'],1)
     m.call('hd_tick',stop=0x4009f9cc,regs=tick)
     assert get(0x46c7a2a0)==73
-    # Reassign a pattern's Part after scheduling, then leave Harmony before
-    # firing. Resolve its degree under the newly assigned Part's KEY.
+    # A pending event keeps the Part captured when scheduled, including
+    # quality/default inheritance; UI navigation cannot redirect its root.
     m.call('mh_set',0,1)
     m.c('hd_edit_step_c',0,0,0,0,35)
     m.c('hd_event_stage_c',0,0,0,0,0)
     put(bank+0x8ed80+0x18b2+0x4e2+17,10)
     put(bank+0x8e57,1)
     m.call('mh_set',0,0)
-    assert m.c('hd_event_fire_c',0,0)==52
+    assert m.c('hd_event_fire_c',0,0)==50
+    put(bank+0x8e57,0)
     # An invalid degree cannot become valid via TRAN byte wrap. A follower
     # with a valid source must ignore that invalid own degree, however.
-    if 'bf_sources' in s:
+    if 'bf_source_resolve' in s:
         m.call('mh_set',0,1)
         m.c('hd_events_reset_c')
         m.c('hd_edit_base_c',0,0,0,0)
@@ -209,9 +214,9 @@ def main():
         assert get(s['bf_roots'])==41 and get(s['bf_pitches'])==53
         u.mem_write(m.scratch,b'\xff'*4)
         assert m.call('mh_generate',0,7,a0=m.scratch)==0xffffffff
-        put(s['bf_sources'],2)
+        m.follow_write('source',bytes((2,)))
         put(s['bf_roots']+1,38);put(s['bf_pitches']+1,50)
-        put(s['bf_reg_modes'],1)
+        m.follow_write('mode',bytes((1,)))
         u.mem_write(m.scratch,b'\xff'*4)
         assert m.call('mh_generate',0,0,a0=m.scratch)==1
         assert get(m.scratch)==50
@@ -225,7 +230,7 @@ def main():
         m.c('hd_edit_step_c',0,0,0,0,40)
         u.mem_write(m.stack+4,b''.join(v.to_bytes(4,'big') for v in args))
         m.call(name,stop=stop,regs=regs)
-        assert get(s['hd_banks'])==255 and get(s['hd_banks']+8192)==255,name
+        assert get(s['hd_banks'])==255 and get(s['hd_banks']+64)==255,name
     # In HARM NOTE, hidden D/E/F controls cannot silently change dormant
     # stock NOT2-4, including encoder pushes while a step is held.
     m.call('mh_set',0,1)
@@ -242,20 +247,20 @@ def main():
     put(0x460d175c,0,4)
     m.call('mh_set',0,1)
     before=bytes(u.mem_read(bank,0x9b340))
-    degree_before=bytes(u.mem_read(s['hd_banks'],16528))
+    degree_before=bytes(u.mem_read(s['hd_banks'],16768))
     for slot in (3,4,5):
         m.c('ch_encoder',slot,4)
         m.c('ch_step_encoder',slot,4)
         m.c('ch_step_push',slot+56,1)
     assert bytes(u.mem_read(bank,0x9b340))==before
-    assert bytes(u.mem_read(s['hd_banks'],16528))==degree_before
-    result={'note_hidden_controls_do_not_edit_stock':'passed','native_clear_place_invalidation':'passed','pending_part_reassignment':'passed','invalid_degree_follow_and_transpose':'passed',
+    assert bytes(u.mem_read(s['hd_banks'],16768))==degree_before
+    result={'note_hidden_controls_do_not_edit_stock':'passed','native_clear_place_invalidation':'passed','pending_captured_part_context':'passed','invalid_degree_follow_and_transpose':'passed',
             'linked_mode_conversion':'passed','native_staging_pending_fire':'passed',
             'key_before_fire':'passed','note_chord_identity':'passed','degree_edit_lock_toggle':'passed',
             'captured_key':'passed','combined_retention':'passed',
             'native_track_clipboard_cross_mode_cs1':'passed','part_defaults_save_reload':'passed',
             'queued_record_boundaries':'passed','unlocked_pending_inheritance':'passed',
-            'track_default_slices':'passed','current_bank_retention_owner':'passed',
+            'native_setup_default_slices':'passed','current_bank_retention_owner':'passed',
             'sequence_arp_mode_boundary':'passed','live_pool_preserved':'passed',
             'hardware_tested':False}
     print(json.dumps(result))

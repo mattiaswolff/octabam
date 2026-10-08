@@ -36,6 +36,7 @@ MODULE = Module(
            Gate('tools/verify/verify_harmony_degree_roots.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_core.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_integration.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_part_state.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_publication.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_files.py', stage='image', venv=True)),
 )

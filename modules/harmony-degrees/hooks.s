@@ -119,11 +119,15 @@ hd_native_hash:
 /* Explicit selected-Part mode edit. Native recall does not use this setter. */
 hd_set:
     cmpi.l #7,%d0
-    bhi.w .set_return
+    bhi.w .set_invalid
     cmpi.l #2,%d1
-    bhi.w .set_return
+    bhi.w .set_invalid
     lea -16(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
+    jsr mp_ui_context
+    tst.l %d0
+    bmi.w .set_unavailable
+    move.l (%sp),%d0
     jsr mh_get
     cmp.l 4(%sp),%d0
     beq.s .set_done
@@ -151,13 +155,19 @@ hd_set:
     move.l (%sp)+,%d0
     move.w %d0,%sr
     addq.l #8,%sp
-    moveq #0,%d0
-    move.b 0x80000002,%d0
+    jsr mp_ui_context
+    lsr.l #2,%d0
     jsr ch_nv_save
 .set_done:
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
-.set_return:
+    moveq #1,%d0
+    rts
+.set_unavailable:
+    movem.l (%sp),%d0-%d1/%a0-%a1
+    lea 16(%sp),%sp
+.set_invalid:
+    moveq #0,%d0
     rts
 
 /* d0 native pitch, d1 track -> d0 resolved pitch, other registers kept. */

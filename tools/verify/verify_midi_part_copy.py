@@ -49,7 +49,7 @@ def main():
         for i,reg in enumerate(REGS):u.reg_write(reg,0x12340000+i)
         u.reg_write(UC_M68K_REG_SR,sr);u.reg_write(UC_M68K_REG_A7,m.stack)
         u.mem_write(m.stack,b''.join(x.to_bytes(4,'big') for x in (m.done,*args)))
-        u.emu_start(entry,0,count=100000)
+        u.emu_start(entry,0,count=1000000)
         if pause:
             assert interrupted and m.arrival is None
             assert u.reg_read(UC_M68K_REG_SR)&0xff00==sr, 'native operation masked interrupts'
@@ -69,7 +69,7 @@ def main():
                         assert got==old_settings[part,track,field],(part,track,field,got)
             m.stack=oldstack;u.context_restore(saved);m.arrival=None;m.stops={m.done}
             active=False
-            u.emu_start(u.reg_read(UC_M68K_REG_PC),0,count=100000)
+            u.emu_start(u.reg_read(UC_M68K_REG_PC),0,count=1000000)
         assert m.arrival==m.done,(hex(entry),hex(u.reg_read(UC_M68K_REG_PC)))
         assert u.reg_read(UC_M68K_REG_A7)==m.stack+4
         assert bytes(u.mem_read(m.stack+4,4*len(args)))==b''.join(x.to_bytes(4,'big') for x in args)
