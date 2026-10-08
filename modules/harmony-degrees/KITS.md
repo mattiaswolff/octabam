@@ -159,6 +159,17 @@ companion publication and the composed candidate are not yet integrated.
   KITS source remains unchanged. Existing native Part Clear interception
   will capture before initialization as well.
 
+**Shared review item before publication:** explicit-context getters now read
+native Part bytes during playback. A native full-Part copy can replace HARM,
+Follow and voicing at different byte positions while the engine interrupts
+the copy. Capturing only a Part index does not make those settings coherent.
+Please cover this in the sibling's ordinary Part lifecycle validation,
+including Harmony/Follow without DEG. If the shared layer needs to own the
+native memcpy-entry boundary for atomic publication, coordinate ownership
+before installing it: the degree wrapper above is still uninstalled and can
+instead supply only the outgoing-provenance callback. No KITS-only hook can
+solve the standalone case.
+
 ## Composition baseline
 
 - Degree implementation: D0 source `540a7ef9`.
