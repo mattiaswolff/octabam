@@ -12,7 +12,8 @@ MODULE = Module(
     author_url='https://github.com/mattiaswolff/octabam', proof=Proof.PORT,
     proof_note='Development candidate; hardware untested',
     doc='MIDI NOTE SETUP HARM using stock ARP KEY/scale; optional MIDI Follow inheritance.',
-    linked=(Linked('midiharmony', 'modules/midi-harmony/harmony.s', dram=True, include=follow_inc),
+    linked=(Linked('harmonyownership', 'modules/midi-harmony/ownership.s', dram=True),
+            Linked('midiharmony', 'modules/midi-harmony/harmony.s', dram=True, include=follow_inc),
             Linked('harmonyvoice', 'modules/midi-harmony/voicing.s', dram=True),
             Linked('harmonypage', 'modules/midi-harmony/page.s', dram=True)),
     symbol_refs=(SymbolRef(0x400d3f34, 0, 'midiharmony', 'mh_type_format', 'NOTE SETUP F TYPE formatter'),
@@ -25,6 +26,10 @@ MODULE = Module(
         Poke(0x400d3fca, b'\x01', b'\x11', 'enable NOTE SETUP F only'),
     ),
     detours=(
+        *(Detour(addr, bytes.fromhex('41f946c78d70'), 'harmonyownership', symbol,
+                 'track-owned generated keyboard release slot') for addr,symbol in (
+                     (0x4009eab4,'mh_key_slot_on'), (0x4009eaea,'mh_key_slot_arp'),
+                     (0x4009eb02,'mh_key_slot_off'), (0x4009eb6e,'mh_key_slot_clear'))),
         Detour(0x4009fb3a, bytes.fromhex("102d022c2241"), "midiharmony", "mh_transpose", "generated pools bypass duplicate TRAN"),
         Detour(0x4009fb86, bytes.fromhex("77012006d083"), "midiharmony", "mh_output", "final scale correction before note ownership"),
         Detour(0x40036682, bytes.fromhex('2001e9882040'), 'midiharmony', 'mh_draw_type', 'NOTE SETUP F module value'),
@@ -39,6 +44,7 @@ MODULE = Module(
         Detour(0x40025ac8, bytes.fromhex('42b9100b14d8'), 'midiharmony', 'mh_defaults', 'new project settings defaults'),
         Detour(0x40010224, bytes.fromhex('7139100b14ae'), 'midiharmony', 'mh_boot', 'validate battery-backed settings'),
     ),
-    gates=(Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),
+    gates=(Gate('tools/verify/verify_midi_harmony_stress.py', stage='image', venv=True),
+           Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_playability.py', stage='image', venv=True),),
 )

@@ -1085,6 +1085,29 @@ mh_keyboard:
     bra.s .keyboard_duplicate
 .keyboard_send:
     move.b %d0,(%a3,%d6.l)
+    /* A key pressed in bypass can already own this generated tone. Adopt
+     * it before adding another owner, rather than letting its release cut
+     * the new chord short. Its physical-key recorder identity is retained. */
+    tst.b (%a4,%d0.l)
+    bne.s .keyboard_count
+    move.l %d2,%d1
+    lsl.l #7,%d1
+    add.l %d0,%d1
+    lea mh_held,%a0
+    lea (%a0,%d1.l*4),%a0
+    move.l (%a0),%d1
+    cmpi.l #0xfeffffff,%d1
+    bne.s .keyboard_count
+    move.l #-1,(%a0)
+    move.b %d0,(%a0)
+    moveq #1,%d1
+    move.b %d1,(%a4,%d0.l)
+    move.l %d0,-(%sp)
+    move.l %d0,%d1
+    move.l %d2,%d0
+    jsr mh_adopt_key
+    move.l (%sp)+,%d0
+.keyboard_count:
     moveq #0,%d1
     move.b (%a4,%d0.l),%d1
     addq.l #1,%d1
@@ -1095,7 +1118,7 @@ mh_keyboard:
     move.l %d4,-(%sp)
     move.l %d0,-(%sp)
     move.l %d2,-(%sp)
-    bsr.w mh_stock_key
+    jsr mh_owned_key
     lea 16(%sp),%sp
 .keyboard_next:
     addq.l #1,%d6
@@ -1124,7 +1147,25 @@ mh_keyboard:
     bra.w .keyboard_new
 .keyboard_passthrough:
     tst.l %d4
-    beq.s .keyboard_stock
+    beq.w .keyboard_stock
+    /* Bypass pressed over an existing chord tone joins its ownership.
+     * Unrelated bypass notes continue through the unmodified stock path. */
+    tst.b (%a4,%d3.l)
+    beq.s .keyboard_native_press
+    move.l #-1,(%a3)
+    move.b %d3,(%a3)
+    moveq #0,%d1
+    move.b (%a4,%d3.l),%d1
+    addq.l #1,%d1
+    move.b %d1,(%a4,%d3.l)
+    move.l %d5,-(%sp)
+    move.l %d4,-(%sp)
+    move.l %d3,-(%sp)
+    move.l %d2,-(%sp)
+    bsr.w mh_record_key
+    lea 16(%sp),%sp
+    bra.s .keyboard_done
+.keyboard_native_press:
 .ifdef HAVE_FOLLOW
     /* Bypass still publishes the physical root; do not change the stock
      * sender/recorder arguments or quantize a HARM OFF / KEY OFF key. */
@@ -1236,7 +1277,7 @@ mh_release:
     clr.l -(%sp)
     move.l %d0,-(%sp)
     move.l %d2,-(%sp)
-    bsr.w mh_stock_key
+    jsr mh_owned_key
     lea 16(%sp),%sp
 .release_next:
     addq.l #1,%d6
