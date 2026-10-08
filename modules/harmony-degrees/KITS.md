@@ -11,6 +11,10 @@ the storage and lifecycle contract below has passing evidence.
 Remove legacy settings/companion migration paths; do not add compatibility
 decoders or dual stores. Ordinary OFF/HARM musical conversion is current
 behavior, not a migration. Invalid/corrupt new-format input still fails safely.
+The degree task will remove `chord-migration.s`, its companion-load migration
+call and the legacy-seven retained-header state. Shared Harmony ownership:
+please remove its remaining `ch_legacy7_mask` reset and TYPE=3 legacy branch
+as part of the sibling migration, so no stub or compatibility symbol remains.
 
 Each Kit carries **both DEG and base CHRD**, per MIDI track. These are Part
 defaults: a pattern step with no corresponding lock inherits its current
