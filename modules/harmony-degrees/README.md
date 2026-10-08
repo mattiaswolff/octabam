@@ -111,7 +111,7 @@ those combinations. The personal-bus candidate does not select either module.
 
 ## Current evidence
 
-The isolated candidate builds. These automated component checks have passed:
+The D0 candidate has passed these automated component checks:
 
 - Codec: 10,752 encode cases, 7,056 decode cases, 84 display values, fallback,
   invalid inputs and register preservation.
@@ -123,13 +123,25 @@ The isolated candidate builds. These automated component checks have passed:
 - Linked native hooks: staging/pending/fire, KEY change before firing,
   OFF/NOTE/CHORD conversion, degree editing, clipboard copies across modes,
   CS1 copies and Part default save/reload.
+- Root publication: an interruptible reader sees the old or new root, never
+  mixed degree/native metadata. Twelve edit cases cover initial interrupt
+  levels 0/5/7; clear cannot resurrect a deleted degree; recorded KEY identity
+  survives queue consumption. Retention copying runs with interrupts restored.
+- Filesystem boundary: complete companion round-trip, malformed-file rejection,
+  and open/header/payload/close failure paths preserve the stored backup.
 
-Full-firmware port checks have also exercised real panel editing, live recording,
-project Save/Reload/Save To New, new projects, unsaved retained-memory resume,
-native Part Save/Reload/Clear, track/pattern/bank copy and undo, rejected-file
-recovery, and HARM/OFF boundaries during sequence arp playback. The selected
-remix gates and final immutable-image suite must complete before packaging.
-Hardware acceptance remains separate.
+All nine dedicated full-firmware port groups passed on the frozen D0 image:
+scale transposition, recording/save, panel editing, copy/clear/undo, native Parts,
+project lifecycle, rejected-file recovery, playback, and active HARM/OFF mode
+boundaries. This includes unsaved retained-memory resume and exact stock-OFF
+MIDI comparison. Nineteen additional physical TRAN cases passed, covering
+direct keys, live arps, every chord quality, register treatments and MIDI bounds.
+
+The package records the selected carrier's complete `make check` results,
+ordinary-selection byte comparison, exact source reference, toolchain and
+firmware hashes. Hardware timing and acceptance remain separate. The standalone
+selection is available for focused builds; full-firmware acceptance evidence
+belongs to `mattias-bus-degrees`, not every possible module combination.
 
 ## Reproduce and accept
 

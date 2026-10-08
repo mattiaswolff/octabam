@@ -4,8 +4,8 @@ from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, P
 MODULE = Module(
     name='harmony-degrees', key='HARMONY DEGREES', kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author='Mattias Wolff',
-    author_url='https://github.com/mattiaswolff/octabam', proof=Proof.CHECK,
-    proof_note='Degree replacement under development; no release or hardware acceptance yet',
+    author_url='https://github.com/mattiaswolff/octabam', proof=Proof.PORT,
+    proof_note='D0 port: degree conversion, editing, recording, retention and project lifecycle; hardware untested',
     doc='Degree/register roots with explicit conversion across stock/Harmony mode boundaries.',
     requires=('MIDI HARMONY',),
     conflicts=(('KITS', 'The external Kit library does not carry degree defaults'),
