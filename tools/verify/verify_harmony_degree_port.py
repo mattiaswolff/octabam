@@ -12,8 +12,31 @@ import verify_chord_play_port as cp
 OUT=p.ROOT/'out/harmony-degrees-port'
 BANK=0x400e21e0
 PART=BANK+0x8ed80
-SIZE=16528
+SIZE=16768
+LANE=131
 SYMBOLS={}
+
+
+def degree_positions(data):
+    """Validate every record, then compare musical identity across reloads.
+
+    Physical slot provenance is deliberately detached by a load. It is not
+    expected to be byte-identical to the previously attached runtime record.
+    """
+    assert len(data)%SIZE==0
+    result=bytearray()
+    for offset in range(0,len(data),LANE):
+        record=data[offset:offset+LANE]
+        degree,note=record[:64],record[64:128]
+        state,scale,context=record[128:]
+        assert state<=2 and scale<84 and (context<64 or context==255)
+        assert all(v<84 or v==255 for v in degree)
+        assert all(v<128 or v==255 for v in note)
+        if state==0:assert context==255 and degree==note==b'\xff'*64
+        elif state==1:assert degree==b'\xff'*64
+        else:assert all((d==255)==(n==255) for d,n in zip(degree,note))
+        result+=degree
+    return bytes(result)
 
 
 def dump(work,name):
@@ -47,7 +70,7 @@ def sequence(source):
         actual=[e[2] for e in events if e[:2]==('on',1)]
         assert actual==want,(name,actual,want)
         results[name]=actual
-    assert (work/'c-minor-degrees.bin').read_bytes()==(work/'d-minor-degrees.bin').read_bytes()
+    assert degree_positions((work/'c-minor-degrees.bin').read_bytes())==degree_positions((work/'d-minor-degrees.bin').read_bytes())
     off=p.fixture(source,'stock-off',{})
     args=['--sequencer','--internal-clock','--frames','7000']
     native=p.run(off,'native',args,image=p.ROOT/'out/raw/section_3_MAIN_OS.bin')
@@ -82,15 +105,15 @@ def record_save(source):
     files=p.emu_card.extract_image((work/'save-card.img').read_bytes())
     for suffix in ('work','strd'):
         data=files[f'OCTABAM/BASS/hdeg01.{suffix}']
-        assert len(data)==24752 and data[:4]==b'HDEG'
+        assert len(data)==24992 and data[:8]==b'HDP2'+(2).to_bytes(4,'big')
         assert data[32:8224]==locks[:8192]
         assert data[8224:]==degrees[:SIZE]
-    for bank in range(2,17):assert files[f'OCTABAM/BASS/hdeg{bank:02d}.strd']==b'HDNO'+bytes(28)
+    for bank in range(2,17):assert files[f'OCTABAM/BASS/hdeg{bank:02d}.strd']==b'HDP0'+bytes(28)
     print('[ok] real REC+PLAY captures degree and quality; project SAVE stores the complete companion',flush=True)
     script='100 key 0x31 down\n200 key 0x31 up\n500 key 0x28 down\n600 key 0x28 up\n9000 key 0x27 down\n9100 key 0x27 up\n10000 quit\n'
     for name,options in [('reload',()),('warm',('--no-post','--cs1-in',work/'save-cs1.bin'))]:
         events=run(work,name,script,work/'save-card.img',options)
-        assert (work/f'{name}-degrees.bin').read_bytes()==degrees,name
+        assert degree_positions((work/f'{name}-degrees.bin').read_bytes())==degree_positions(degrees),name
         assert (work/f'{name}-locks.bin').read_bytes()==locks,name
         actual=[e[2] for e in events if e[:2]==('on',1)]
         assert actual==cp.EXPECTED,(name,actual)
@@ -109,7 +132,7 @@ def panel(work):
     bank=(work/'degree-edit-bank.bin').read_bytes()
     assert bank[0x4900+7*32]==50
     run(work,'degree-edit-warm','2000 quit\n',work/'save-card.img',('--no-post','--cs1-in',work/'degree-edit-cs1.bin'))
-    assert (work/'degree-edit-warm-degrees.bin').read_bytes()==after
+    assert degree_positions((work/'degree-edit-warm-degrees.bin').read_bytes())==degree_positions(after)
     clear='2600 key 7 down\n3000 key 0x38 down\n3100 key 0x38 up\n3400 key 7 up\n4000 quit\n'
     run(work,'degree-unlock',setup+edit+clear,work/'save-card.img')
     assert (work/'degree-unlock-degrees.bin').read_bytes()[7]==255
@@ -128,8 +151,9 @@ def panel(work):
         name=f'{mode}-default-edit'
         run(work,name,live,work/'save-card.img',extra)
         degree=(work/f'{name}-degrees.bin').read_bytes()
-        assert degree[16384]==before[16384]+1,(mode,before[16384],degree[16384])
         native=(work/'save-bank.bin').read_bytes();edited=(work/f'{name}-bank.bin').read_bytes()
+        assert edited[0x8ed80+0x4e2+19]==native[0x8ed80+0x4e2+19]+1,mode
+        assert degree_positions(degree)==degree_positions(before)
         assert native[0x8ed80+0x3e2:0x8ed80+0x3e8]==edited[0x8ed80+0x3e2:0x8ed80+0x3e8],mode
     for name in ('degree-edit','degree-unlock'):
         subprocess.run([str(p.ROOT/'.venv/bin/python'),str(p.ROOT/'tools/emu/lcd_view.py'),str(work/f'{name}.lcd'),'--png',str(work/f'{name}.png')],check=True,stdout=subprocess.DEVNULL)
@@ -143,11 +167,11 @@ def lifecycle(work):
     # check the degree representation as well as its quality representation.
     cp.run=run
     cp.edit_lifecycle(work)
-    original=(work/'save-degrees.bin').read_bytes()
+    original=degree_positions((work/'save-degrees.bin').read_bytes())
     for name,start,want in [('clear-track',0,b'\xff'*64),('undo-track',0,original[:64]),
                             ('copy-pattern',512,original[:512]),('clear-pattern',0,b'\xff'*512),
-                            ('undo-pattern',0,original[:512]),('copy-bank',9*SIZE,original[:512])]:
-        actual=(work/f'{name}-degrees.bin').read_bytes()
+                            ('undo-pattern',0,original[:512]),('copy-bank',9*8192,original[:512])]:
+        actual=degree_positions((work/f'{name}-degrees.bin').read_bytes())
         assert actual[start:start+len(want)]==want,name
     # Track 2 is OFF: a paste resolves the copied degrees to absolute notes.
     bank=(work/'copy-track-bank.bin').read_bytes()
@@ -166,14 +190,14 @@ def parts(work):
     prefix=call(edit,0,0,0,39)+call(0x4004a908,0)
     run(work,'part-save-reload','1800 quit\n',work/'save-card.img',
         prefix+call(edit,0,0,0,40)+call(0x4004aab4,0))
-    d=(work/'part-save-reload-degrees.bin').read_bytes()
-    assert d[16384]==d[16384+4*8]==39
+    b=(work/'part-save-reload-bank.bin').read_bytes()
+    assert b[0x8ed80+0x4e2+19]==b[0x9504a+0x4e2+19]==39
     # These are the actual native Part functions, called on the firmware's
     # main task, with their real CS1 copies and engine refreshes intact.
     run(work,'part-clear','1800 quit\n',work/'save-card.img',prefix+call(0x4004a9d0,0))
     d=(work/'part-clear-degrees.bin').read_bytes();b=(work/'part-clear-bank.bin').read_bytes()
     note=b[0x8ed80+0x3e2]
-    assert note==48 and d[16384]==d[16384+4*8]==35,(note,d[16384],d[16416])
+    assert note==48 and b[0x8ed80+0x4e2+19]==b[0x9504a+0x4e2+19]==35
     print('[ok] native Part Save, Reload and Clear preserve/reset degree defaults and retained copies',flush=True)
     return {'save_reload':True,'clear':True}
 
@@ -184,7 +208,7 @@ def projects(work):
     for name,index in [('project-reload',2),('bank-reload',10)]:
         run(work,name,cp.project_menu(index)+cp.key(6500,0x31)+'30000 quit\n',
             work/'save-card.img',('--no-post','--cs1-in',work/'degree-edit-cs1.bin'))
-        assert (work/f'{name}-degrees.bin').read_bytes()==original,name
+        assert degree_positions((work/f'{name}-degrees.bin').read_bytes())==degree_positions(original),name
         assert (work/f'{name}-locks.bin').read_bytes()==quality,name
     run(work,'save-as',cp.project_menu(4)+'6000 enc 6 -1\n'+cp.key(6500,0x31)+'45000 quit\n',work/'save-card.img')
     files=p.emu_card.extract_image((work/'save-as-card.img').read_bytes())
@@ -201,15 +225,14 @@ def projects(work):
     card,_=p.emu_card.stage_project(project,'OCTABAM','BASS',tree=work/'save-as-tree')
     (work/'save-as-load.img').write_bytes(card)
     run(work,'save-as-load','1800 quit\n',work/'save-as-load.img')
-    assert (work/'save-as-load-degrees.bin').read_bytes()==original
+    assert degree_positions((work/'save-as-load-degrees.bin').read_bytes())==degree_positions(original)
     assert (work/'save-as-load-locks.bin').read_bytes()==quality
     cp.run=run;cp.new_project(work)
     data=(work/'project-new-degrees.bin').read_bytes()
     for bank in range(16):
         block=data[bank*SIZE:(bank+1)*SIZE]
-        assert block[:16512]==b'\xff'*16512
-        assert block[16512:16520]==bytes(8)
-        assert block[16520:]==b'\x01'*8
+        assert block==(b'\xff'*128+b'\0\0\xff')*128
+        assert degree_positions(block)==b'\xff'*8192
     print('[ok] project/bank Reload, Save To New, fresh load and New Project degree lifecycle',flush=True)
     return {'project_reload':True,'bank_reload':True,'save_as':True,'new_project':True}
 
