@@ -431,27 +431,32 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=Path)
     ap.add_argument('--resume-record',action='store_true',help='reuse this gate\'s prior record/save artifact for focused debugging')
+    ap.add_argument('--load-lifecycle-only',action='store_true',help='record/save, fresh load, resume, reload, Save As, invalid companions and new project')
     args=ap.parse_args();OUT.mkdir(parents=True,exist_ok=True)
     p.freeze_candidate(OUT);SYMBOLS=p.harmony.symbols()
     if args.resume_record:work=OUT/'record-save';results={}
     else:work,results=record_save(args.project)
-    results.update(playing_layout(args.project))
-    results.update(octave_layout(args.project))
-    results.update(edit_and_resume(work))
-    results.update(edit_lifecycle(work))
-    results.update(delete_replace_trig(work))
-    results.update(same_step(work))
-    results.update(explicit_arp(args.project))
-    results.update(invalid_files(work))
-    results.update(unlocked_isolation(work))
-    results.update(rejected_resume_save(work))
-    results.update(project_lifecycle(work))
-    results.update(new_project(work))
-    results.update(root_chord_play(args.project))
-    results['root_recordings']={}
-    for mode in (2,3):
-        _,recorded=record_save(args.project,mode)
-        results['root_recordings'][mode]=recorded
+    if args.load_lifecycle_only:
+        for check in (edit_and_resume,project_lifecycle,invalid_files,new_project):
+            results.update(check(work))
+    else:
+        results.update(playing_layout(args.project))
+        results.update(octave_layout(args.project))
+        results.update(edit_and_resume(work))
+        results.update(edit_lifecycle(work))
+        results.update(delete_replace_trig(work))
+        results.update(same_step(work))
+        results.update(explicit_arp(args.project))
+        results.update(invalid_files(work))
+        results.update(unlocked_isolation(work))
+        results.update(rejected_resume_save(work))
+        results.update(project_lifecycle(work))
+        results.update(new_project(work))
+        results.update(root_chord_play(args.project))
+        results['root_recordings']={}
+        for mode in (2,3):
+            _,recorded=record_save(args.project,mode)
+            results['root_recordings'][mode]=recorded
     results.update(image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False)
     (OUT/'receipt.json').write_text(json.dumps(results,indent=2)+'\n')
 
