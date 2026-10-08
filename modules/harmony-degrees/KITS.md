@@ -54,8 +54,9 @@ implementation coordination section on 8 October 2026:
   load-return fix and keep KITS source unchanged.
 - Publish commit IDs and exact checks. A combined pass requires the actual
   composed image, tested both without KITS and with KITS. No migration or
-  KITS dependency is introduced. The pending HARM-to-OFF musical decision
-  remains pending; acceptance of this split does not resolve it.
+  KITS dependency is introduced. The user subsequently resolved the
+  HARM-to-OFF decision: preserve the outgoing resolved root (C3 in the
+  example below).
 
 The shared Part-settings investigation is in
 [the KITS task](codex://threads/01a11d18-e86b-7842-ba90-4a7ee55004db).
@@ -131,15 +132,22 @@ has been set aside. It does not match Part-owned HARM.
 
 - NOTE <-> CHORD preserves DEG.
 - HARM -> HARM preserves degree locks; incoming KEY changes resolved pitches.
+- HARM -> OFF converts explicit degree locks using the outgoing applicable
+  scale, preserving their resolved root pitches before incoming settings
+  replace that context. This applies to native Part changes and Kit recalls.
 - OFF -> HARM converts native roots using the incoming applicable KEY.
 - OFF -> OFF retains stock pitch processing.
 - Unlocked steps always use the incoming Kit's own default in its own mode.
 
-**Pending user decision:** for an explicit `1:3` lock, Kit A is HARM CHORD,
-C minor (C3), and Kit B is HARM OFF, D minor. The proposed rule is to preserve
-the outgoing C3 when leaving HARM; the alternative writes D3 using the incoming
-key. This question is pending, not an approved assumption. It affects pattern
-root conversion, not replacement of the incoming Kit's defaults.
+**Accepted user decision:** for an explicit `1:3` lock, Kit A is HARM CHORD,
+C minor (C3), and Kit B is HARM OFF, D minor. Conversion commits **C3** to the
+pattern's native NOTE using the outgoing context. Kit B's KEY does not change
+that conversion to D3. Unlocked steps use Kit B's own NOTE default.
+
+Capture the outgoing effective scale before a Part slot is overwritten or
+reused. Preserve the resolved root, without baking in TRAN, voicing, spread
+or ROOT output treatments. Previously emitted notes keep their original
+release ownership. The incoming Part/Kit's own defaults remain its defaults.
 
 ### Storage probes completed here
 
@@ -186,6 +194,10 @@ by removing the guard, or borrow a native control's value.
   triggers; held notes; arps; Follow TRIG/LIVE; UI selection differing from
   playback; source and receiver tracks switching Parts at different times.
   An ordinary edit/recall must preserve unrelated patterns, Parts and saved Kits.
+- Explicit boundary regression, both without and with KITS: outgoing C-minor
+  HARM `1:3`, incoming D-minor OFF -> native locked NOTE C3 (MIDI 48).
+  Verify incoming default NOTE inheritance separately, including reuse of the
+  same physical Part slot and queued events across the transition.
 - Project Save/Reload/Save As/New, cold load, unsaved retained-memory resume,
   corrupt/mismatched payloads and failed writes. No partial publication or
   overwritten stored backup on a rejected save.
