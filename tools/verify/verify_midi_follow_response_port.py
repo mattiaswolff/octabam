@@ -29,8 +29,8 @@ def main():
                     data[base+0x4e2+17]=1 if harmony else 0
                     data[base+0x4e2+36+17]=1 if harmony else 0
                     if arp:
-                        data[base+0x3e2+36+14]=1
-                        data[base+0x3e2+36+15]=3
+                        data[base+0x3e2+32+14]=1
+                        data[base+0x3e2+32+15]=3
             otp._bank_write(project,int(bank.stem[4:]),mutate,guard=False)
         card,_=emu_card.stage_project(project,'OCTABAM','BASS',tree=work/'tree');(work/'card.img').write_bytes(card)
         script=work/'panel.txt'
@@ -47,7 +47,8 @@ def main():
         else:
             f_index=next(i for i,e in enumerate(events) if e[:3]==('on',1,65))
             next_bass=next(e[2] for e in events[f_index+1:] if e[:2]==('on',2))
-            assert next_bass==(41 if mode else 36),(name,next_bass,events)
+            assert len(bass)>6,(name,bass)
+            assert next_bass==(41 if mode or not harmony else 36),(name,next_bass,events)
         held=set()
         for kind,ch,n,_ in events:
             if kind=='on':assert (ch,n) not in held,(mode,events);held.add((ch,n))
@@ -55,5 +56,42 @@ def main():
         assert not held
         subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/'screen.lcd'),'--png',str(work/'screen.png')],check=True,stdout=subprocess.DEVNULL)
         results[name]=bass;print('[ok]',name,':',bass,'balanced MIDI',flush=True)
+    if a.harmony:
+        import verify_chord_play_port as chord
+        for mode in (0,1):
+            name=f'live-source-{mode}'
+            work=out/name;work.mkdir(exist_ok=True)
+            project=work/'project';fixture(a.project,project)
+            for p in project.glob('project.*'):
+                raw=re.sub(rb'^#MIDI_HARMONY[^\r\n]*\r?\n',b'',p.read_bytes(),flags=re.M)
+                p.write_bytes(raw+b'\r\n#MIDI_HARMONY_TYPE_V1_T1=2\r\n#MIDI_HARMONY_TYPE_V1_T2=1\r\n')
+            for bank in project.glob('bank*.work'):
+                def mutate_live(data):
+                    for part in range(8):
+                        base=otp.PART_BASE+part*otp.PART_STRIDE+9
+                        for t in (0,1):data[base+0x4e2+36*t+17]=1
+                    for pat in range(16):
+                        for t in range(8):
+                            at=0x492e+pat*0x8eec+t*0x8b9
+                            data[at+9:at+33]=bytes(24)
+                            if pat==0 and t==1:
+                                data[at+9:at+17]=(1).to_bytes(8,'big')
+                                data[at+0x39:at+0x39+3]=bytes((48,91,127))
+                otp._bank_write(project,int(bank.stem[4:]),mutate_live,guard=False)
+            card,_=emu_card.stage_project(project,'OCTABAM','BASS',tree=work/'tree');(work/'card.img').write_bytes(card)
+            script=work/'panel.txt'
+            script.write_text(chord.PANEL+'1600 key 0 down\n1750 key 0 up\n1900 key 0x28 down\n1950 key 0x28 up\n2600 key 3 down\n2750 key 3 up\n3300 key 4 down\n3450 key 4 up\n4200 key 0x27 down\n4250 key 0x27 up\n4500 quit\n')
+            cmd=[str(ROOT/'out/emu/ot_emu'),'--image',str(image),'--card',str(work/'card.img'),'--set','OCTABAM','--project','BASS','--load-ms','90000','--mkii','--rtc','1800000000','--internal-clock','--live-script',str(script),'--midi-out',str(work/'notes.midi'),'--step',f'-:poke:{sym["bf_sources"]+1:#x}=1','--step',f'-:poke:{sym["bf_response_modes"]+1:#x}={mode}']
+            with (work/'run.log').open('w') as log:r=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
+            assert r.returncode==0,work
+            events=notes((work/'notes.midi').read_bytes());(work/'notes.json').write_text(json.dumps(events,indent=2)+'\n')
+            bass=[e[2] for e in events if e[:2]==('on',2)]
+            assert bass==([36,41,43] if mode else [36]),(name,bass,events)
+            held=set()
+            for kind,ch,n,_ in events:
+                if kind=='on':assert (ch,n) not in held;held.add((ch,n))
+                else:assert (ch,n) in held;held.remove((ch,n))
+            assert not held
+            results[name]=bass;print('[ok]',name,':',bass,'live Chord Play over sustained bass, balanced MIDI',flush=True)
     (out/'receipt.json').write_text(json.dumps({'sha256':hashlib.sha256(image.read_bytes()).hexdigest(),'cases':results},indent=2)+'\n')
 if __name__=='__main__':main()
