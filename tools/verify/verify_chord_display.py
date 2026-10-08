@@ -88,7 +88,6 @@ def machine():
                 assert lit and all(78<=x<=118 and 9<=y<=14 for x,y in lit),(actual,lit)
     print('[ok] all 60 V/S/R summaries fit below the chord name without touching the octave box',flush=True)
     # The UI seam must return the queued event unchanged to native dispatch.
-    u.mem_map(0x460d0000,0x10000)
     u.mem_write(0x460d16f0,(6).to_bytes(4,'big'));u.mem_write(0x80000012,(1).to_bytes(4,'big'))
     for setter in ('mh_voic_set','mh_sprd_set','mh_root_set'):m.call(setter,0,0)
     m.call('ch_display_poll',stop=s['ch_play_guide'])

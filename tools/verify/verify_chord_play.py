@@ -143,7 +143,6 @@ def release_and_default_gate():
     """Execute panel dispatch; intercept only the keyboard and paint boundaries."""
     from unicorn.m68k_const import UC_M68K_REG_A7,UC_M68K_REG_SR,UC_M68K_REG_A4,UC_M68K_REG_A6,UC_M68K_REG_D0,UC_M68K_REG_D5
     m=h.Machine();u=m.uc;s=m.sym
-    u.mem_map(0x460b0000,0x40000)
     u.mem_write(0x460d16f0,(6).to_bytes(4,'big'))
     u.mem_write(0x80000012,(1).to_bytes(4,'big'))
     u.mem_write(0x400beba2,(4).to_bytes(4,'big'))

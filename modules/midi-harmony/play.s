@@ -88,7 +88,7 @@ ch_play_key:
     cmpi.l #7,%d1
     bls.s .key_quality_store
     move.l %d4,%d0
-    jsr ch_base_play
+    jsr ch_base_get
     move.l %d0,%d1
 .key_quality_store:
     lea ch_live,%a0
@@ -158,7 +158,7 @@ ch_play_key:
     cmpi.l #7,%d0
     bls.s .modifier_apply
     move.l %d4,%d0
-    jsr ch_base_play
+    jsr ch_base_get
 .modifier_apply:
     lea ch_live,%a0
     cmp.b (%a0,%d4.l),%d0
@@ -518,7 +518,7 @@ ch_release_track:
     subq.l #1,%d0
     bne.s .release_modifier
     move.l %d4,%d0
-    jsr ch_base_play
+    jsr ch_base_get
     lea ch_live,%a0
     move.b %d0,(%a0,%d4.l)
 .release_done:

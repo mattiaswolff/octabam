@@ -15,7 +15,6 @@ def symbols():
 class DegreeMachine(Machine):
     def __init__(self):
         super().__init__(symbols)
-        self.uc.mem_map(0x46000000,0x200000)
         self.call('mp_activate',stop=0x4000f938)
     def instruction_limit(self,name):
         return 30000000

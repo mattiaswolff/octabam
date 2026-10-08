@@ -25,7 +25,7 @@ class Machine:
     def __init__(self, symbol_loader=symbols):
         self.sym=symbol_loader(); self.uc=Uc(UC_ARCH_M68K,UC_MODE_BIG_ENDIAN)
         u=self.uc; u.ctl_set_cpu_model(UC_CPU_M68K_CFV4E)
-        for a,n in [(0x40000000,0x1000000),(0x47000000,0x10000),(0x46c70000,0x20000),(0x10000000,0x200000),(0x80000000,0x10000)]:u.mem_map(a,n)
+        for a,n in [(0x40000000,0x1000000),(0x46000000,0x200000),(0x47000000,0x10000),(0x46c70000,0x20000),(0x10000000,0x200000),(0x80000000,0x10000)]:u.mem_map(a,n)
         u.mem_write(0x40000400,(ROOT/'out/mainos_bus.bin').read_bytes())
         self.base=json.loads((ROOT/'out/platform/layout.json').read_text())['base']
         u.mem_write(self.base,(ROOT/'out/platform/runtime/runtime.bin').read_bytes())

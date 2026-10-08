@@ -13,7 +13,6 @@ def main():
     check()
     h.symbols=c.symbols
     m=h.Machine();u=m.uc;s=m.sym;table=s['ch_lock_table']
-    u.mem_map(0x460b0000,0x40000)
     u.mem_write(0x46c82456,struct.pack('>I',0x400e21e0))
     m.call('ch_lock_init')
     assert bytes(u.mem_read(table,131072))==b'\xff'*131072

@@ -143,7 +143,37 @@ def main():
     m.call('native_part_init')
     assert all(u.mem_read(fresh+0x4e2+track*36+18, 1)[0] == 0 for track in range(8))
     assert int.from_bytes(u.mem_read(0x400d43a6, 4), 'big') == 8
+    # Plain chromatic/grid roots inherit the selected Part, even when the
+    # engine plays another Part and CHORD PLAY left an older live variation.
+    # The real queued recorder freezes that quality before subsequent edits.
+    ui(2, 1)
+    physical_cases = 0
+    for mode in (0, 1, 6):
+        put(0x460d16f0, mode, 4)
+        for track in range(8):
+            quality = (track+1) % 8
+            latched = (quality+3) % 8
+            put(at(2, 1, track), quality)
+            put(at(2, 1, track)-13, 2)  # native HARM CHORD
+            put(at(5, 2, track), (quality+5) % 8)
+            put(0x8000182a+track, 5)
+            put(0x80001832+track, 2)
+            put(m.sym['ch_live']+track, latched)
+            expected = latched if mode == 6 else quality
+            assert m.call('ch_live_get', track) == expected
+            m.call('ch_live_context', track)
+            assert u.mem_read(m.sym['ch_current']+track, 1)[0] == expected
+            assert u.mem_read(m.sym['ch_live']+track, 1)[0] == expected
+            u.mem_write(0x46c77bea, bytes((70, 8, 48, 100))+b'\0'*8)
+            m.call('ch_record_post', stop=0x40000c3c, regs={UC_M68K_REG_D5: track})
+            message = int.from_bytes(u.mem_read(m.stack+36, 4), 'big')
+            assert m.sym['ch_messages'] <= message < m.sym['ch_messages']+4096
+            put(at(2, 1, track), (quality+1) % 8)
+            assert bytes(u.mem_read(message+12, 2)) == bytes((expected, track))
+            assert bytes(u.mem_read(message, 12)) == bytes((70, 8, 48, 100))+b'\0'*8
+            physical_cases += 1
     print(json.dumps({'part_default_writes': writes, 'distinct_contexts': 4, 'pending_context_paths': 4,
+                      'physical_key_and_queued_quality_cases': physical_cases,
                       'inheritance_explicit_locks_invalid_values_abi': 'passed',
                       'evidence': 'linked ColdFire', 'hardware_tested': False}))
 

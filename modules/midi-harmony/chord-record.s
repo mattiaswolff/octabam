@@ -37,8 +37,8 @@ ch_record_post:
     move.l 4(%a0),4(%a1)
     move.l 8(%a0),8(%a1)
     move.b %d5,13(%a1)
-    lea ch_live,%a2
-    move.b (%a2,%d5.l),%d0
+    move.l %d5,%d0
+    jsr ch_live_get
     move.b %d0,12(%a1)
     .ifdef HAVE_DEGREES
     moveq #0,%d0

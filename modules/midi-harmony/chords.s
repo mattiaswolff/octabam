@@ -110,16 +110,42 @@ ch_names: .long .tri,.seventh,.add9,.sus2,.sus4,.major,.minor,.dom7
 .minor: .asciz "MIN"
 .dom7: .asciz "DOM7"
     .balign 4
-    .global ch_current,ch_live,ch_sequence_quality,ch_live_context,ch_sequence_context
+    .global ch_current,ch_live,ch_sequence_quality,ch_live_get,ch_live_context,ch_sequence_context
 ch_current: .space 8,0
 ch_live: .space 8,0
 ch_sequence_quality: .space 8,0
 
+/* Physical keyboard input uses the selected Part. Only CHORD PLAY has a
+ * latched variation; chromatic/grid input inherits the current Part default.
+ * d0=track -> quality, all other registers preserved. */
+ch_live_get:
+    cmpi.l #7,%d0
+    bhi.s .live_default
+    move.l %d1,-(%sp)
+    move.l 0x460d16f0,%d1
+    cmpi.l #6,%d1
+    movem.l (%sp),%d1
+    lea 4(%sp),%sp
+    bne.s .live_default
+    move.l %a0,-(%sp)
+    lea ch_live,%a0
+    move.b (%a0,%d0.l),%d0
+    andi.l #255,%d0
+    move.l (%sp)+,%a0
+    rts
+.live_default:
+    jmp ch_base_get
+
 ch_live_context: /* d0=track; preserve registers */
     lea -16(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
+    move.l %d0,%d1
+    bsr.s ch_live_get
     lea ch_live,%a0
-    bra.s .context_copy
+    move.b %d0,(%a0,%d1.l)
+    lea ch_current,%a0
+    move.b %d0,(%a0,%d1.l)
+    bra.s .context_done
 ch_sequence_context:
     lea -16(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
@@ -128,6 +154,7 @@ ch_sequence_context:
     lea ch_current,%a1
     move.b (%a0,%d0.l),%d1
     move.b %d1,(%a1,%d0.l)
+.context_done:
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
     rts

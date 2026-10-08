@@ -33,6 +33,7 @@ class Machine(LinkedMidiMachine):
         self.call('mh_set_native' if 'hd_set' in self.sym else 'mh_set',t,min(kind,2))
         for name in ('ch_current','ch_live','ch_sequence_quality'):
             self.uc.mem_write(self.sym[name]+t, bytes((1 if kind==3 else 0,)))
+        self.call('ch_base_set',t,int(kind==3))
         self.set_key(t,raw_scale(key,scale))
     def chord(self,t,n,offset=0,direct=False):
         self.uc.mem_write(self.scratch,bytes((n,11,12,13)))
