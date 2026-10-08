@@ -45,18 +45,35 @@ bf_page_encoder:
     lea -12(%sp),%sp
     movem.l %d2-%d4,(%sp)
     move.l 16(%sp),%d4
-    cmpi.l #2,%d4
+    cmpi.l #3,%d4
     bhi.s .encoder_done
     move.l %d4,%d0
     move.l 20(%sp),%d1
     jsr bf_ui_delta
     move.l %d0,%d2
     move.l bf_page_track,%d0
+    cmpi.l #3,%d4
+    beq.s .encoder_response
     tst.l %d4
     beq.s .encoder_source
     move.l %d4,%d1
     subq.l #1,%d1
     jsr bf_reg_change
+    bra.s .encoder_draw
+.encoder_response:
+    move.l %d0,%d3
+    jsr bf_response_get
+    add.l %d2,%d0
+    bpl.s .response_high
+    moveq #0,%d0
+.response_high:
+    cmpi.l #1,%d0
+    ble.s .response_store
+    moveq #1,%d0
+.response_store:
+    move.l %d0,%d1
+    move.l %d3,%d0
+    jsr bf_response_set
     bra.s .encoder_draw
 .encoder_source:
     move.l %d2,%d1
@@ -104,7 +121,18 @@ bf_page_draw:
     lea bf_format,%a0
     lea 0x400467a4,%a1 /* stock numeric/text field, like NOTE SETUP RFOL */
     bsr.w .page_selector
+    move.l bf_page_track,%d0
+    jsr bf_response_get
+    move.l %d0,%d1
+    moveq #10,%d0
+    lea bf_response_format,%a0
+    lea 0x400467a4,%a1
+    bsr.w .page_selector_bottom
     bsr.w .page_grid
+    moveq #12,%d0
+    moveq #29,%d1
+    lea .response_label,%a0
+    bsr.w .page_text
     moveq #51,%d0
     moveq #52,%d1
     lea .mode_label,%a0
@@ -162,6 +190,13 @@ bf_page_draw:
     jsr (%a1)
     lea 28(%sp),%sp
     rts
+bf_response_format:
+    move.l 4(%sp),%a0
+    lea .next,%a1
+    tst.l 8(%sp)
+    beq.s .mode_copy
+    lea .change,%a1
+    bra.s .mode_copy
 bf_mode_format:
     move.l 4(%sp),%a0
     lea .fixed,%a1
@@ -202,6 +237,9 @@ bf_mode_format:
     jsr 0x40012bd8
     lea 24(%sp),%sp
     rts
+.response_label: .asciz "RESP"
+.next: .asciz "NEXT"
+.change: .asciz "CHANGE"
 .source_label: .asciz "RFOL"
 .mode_label: .asciz "MODE"
 .oct_label: .asciz "OCT"
