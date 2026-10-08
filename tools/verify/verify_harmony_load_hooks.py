@@ -54,9 +54,15 @@ def check():
             assert u.reg_read(UC_M68K_REG_D0) == result, entry
             assert u.reg_read(UC_M68K_REG_D2) == 0x23456789, entry
             assert u.reg_read(UC_M68K_REG_D3) == 0x3456789a, entry
-            # TST.L must restore N/Z and clear V/C for stock's next branch.
-            expected = 4 if result == 0 else (8 if result & 0x80000000 else 0)
-            assert u.reg_read(UC_M68K_REG_SR) & 15 == expected, entry
+            # Execute stock's real conditional branch: Unicorn exposes lazy
+            # condition flags through execution, not reliably via SR reads.
+            if entry in ('ch_loaded_all', 'ch_loaded_project'):
+                success, failure = continuation + 8, continuation + 2
+            else:
+                success, failure = continuation + 2, continuation + 4
+            m.stops = {success, failure}; m.arrival = None
+            u.emu_start(continuation, 0, count=10)
+            assert m.arrival == (failure if result & 0x80000000 else success), entry
             cases += 1
     print(f'[ok] {cases} native load caller/continuation cases, including error results', flush=True)
     return cases
