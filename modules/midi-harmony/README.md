@@ -16,7 +16,7 @@ Knob **D: ROOT** selects **KEEP** (default), **OMIT**, **-1 OCT** or **-2 OCT**.
 The controls use the stock PLAYBACK selector graphics: three positions for
 HARM, five for VOIC, three for SPRD and four for ROOT, with the value printed underneath.
 HARM, VOIC and SPRD occupy the top row of a six-cell grid, matching the
-physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; F selects the temporary WIDTH comparison; E is inactive;
+physical encoder positions without letter prefixes. ROOT occupies the lower-left cell; F selects the WIDTH control; E is inactive;
 the footer identifies HARMONY and the MIDI track, beside NO:BACK.
 NO, YES or another F press closes it. Track/page buttons
 also close it; press again to select another track/page. The footer identifies
@@ -559,7 +559,7 @@ voices can still invert around it. KEY snapping and TRAN happen before this
 anchor, and ROOT OMIT/-1 OCT/-2 OCT still apply afterward. A root need not be
 the lowest voice. The bounded search and MIDI limits remain unchanged.
 
-Harmony window **F: WIDTH** is a temporary per-track audition control:
+Harmony window **F: WIDTH** is a per-track Part setting:
 **FULL** (default) retains existing OPEN/WIDE. **SOFT** makes OPEN lower the
 third sorted voice by one octave, and makes WIDE use the former OPEN shape.
 For a C4 major triad with VOIC ROOT and ROOT KEEP:
@@ -573,9 +573,9 @@ SOFT OPEN on a seventh is a drop-2 voicing; on a triad it lowers the fifth.
 This keeps the root's register while reducing the upper register's weight;
 it can put another chord tone below the root. CLOSE is identical in both.
 At MIDI boundaries a spread that cannot fit falls back to the unspread chord.
-WIDTH clears AUTO history when edited. It is intentionally volatile: it is
-not saved into project comments or battery RAM and starts FULL at firmware
-boot. Hardware playing feel remains to be evaluated.
+WIDTH clears AUTO history when edited. It follows native Part save, recall,
+copy and retained-memory resume, and is carried by KITS when present. Fresh
+Parts start FULL. Hardware playing feel remains to be evaluated.
 
 `tools/verify/verify_harmony_playability.py` exercises anchored AUTO through
 repeated scale/fifths progressions, octave changes, all available keys/scales,

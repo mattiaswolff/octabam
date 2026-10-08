@@ -31,7 +31,7 @@ def main():
     for t in range(8):play(t,1,2)
     if 'mh_set' in m.sym:
         for t in range(8):
-            for prefix,maximum in [('mh',2),('mh_voic',4),('mh_sprd',2),('mh_root',3)]:
+            for prefix,maximum in [('mh',2),('mh_voic',4),('mh_sprd',2),('mh_root',3),('mh_width',1)]:
                 for value in range(maximum+1):
                     assert m.call(prefix+'_set',t,value)==1
                     assert m.call(prefix+'_get',t)==value
@@ -58,6 +58,7 @@ def main():
         print('  [ok] Harmony Part fields/ranges, UI vs playback, captured getter, native KEY and generated pitches')
     if 'bf_select' in m.sym:
         ui(0,0)
+        if 'mh_width_set' in m.sym:m.call('mh_width_set',1,1)
         m.call('bf_select',1,1)
         assert m.call('bf_source_get',1)==1
         assert m.call('bf_source_play',1)==0
@@ -71,6 +72,10 @@ def main():
         m.call('bf_reg_change',1,0,regs={UC_M68K_REG_D2:-1 & 0xffffffff})
         assert m.call('bf_oct_get',1)==5 and m.call('bf_response_get',1)==1
         assert m.call('bf_response_play',1)==0
+        if 'mh_width_get' in m.sym:
+            assert m.call('mh_width_get',1)==1, 'Follow edit erased WIDTH'
+            m.call('mh_width_set',1,0)
+            assert m.call('bf_response_get',1)==1 and m.call('bf_mode_get',1)==0
         # Receiver T2 reads its playing Part; T1 supplies its own context.
         byte(at(1,2,1,3),1);byte(at(1,2,1,13),4)
         u.mem_write(m.sym['bf_roots'],bytes((38,255,255,255,255,255,255,255)))

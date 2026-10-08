@@ -80,11 +80,13 @@ mh_voice_at: /* d0 track,d1 captured context,a0 pool; all regs preserved */
     jsr mh_sprd_get_at
     /* SOFT OPEN drops the third sorted voice; SOFT WIDE uses the
      * former OPEN shape. FULL retains the original spacing exactly. */
-    move.l %d0,%d1
-    lea mh_width,%a0
-    move.l %d1,%d0
-    tst.b (%a0,%d7.l)
-    beq.s .voice_width_ready
+    move.l %d0,76(%sp)
+    move.l %d7,%d0
+    move.l 88(%sp),%d1
+    jsr mh_width_get_at
+    tst.l %d0
+    beq.s .voice_full_width
+    move.l 76(%sp),%d0
     tst.l %d0
     beq.s .voice_width_ready
     cmpi.l #2,%d0
@@ -93,6 +95,9 @@ mh_voice_at: /* d0 track,d1 captured context,a0 pool; all regs preserved */
     bra.s .voice_width_ready
 .voice_width_open:
     moveq #1,%d0
+    bra.s .voice_width_ready
+.voice_full_width:
+    move.l 76(%sp),%d0
 .voice_width_ready:
     move.l %d0,76(%sp)
     move.l %d7,%d0
@@ -614,34 +619,6 @@ mh_sort_chord:
     lea 20(%sp),%sp
     rts
 
-
-/* Volatile per-track audition setting: 0 FULL (existing), 1 SOFT.
- * Deliberately absent from project/battery formats. */
-    .balign 4
-    .global mh_width,mh_width_get,mh_width_set
-mh_width: .space 8,0
-mh_width_get:
-    cmpi.l #7,%d0
-    bhi.s .width_invalid
-    lea mh_width,%a0
-    move.b (%a0,%d0.l),%d0
-    andi.l #1,%d0
-    rts
-.width_invalid:
-    moveq #0,%d0
-    rts
-mh_width_set:
-    cmpi.l #7,%d0
-    bhi.s .width_done
-    cmpi.l #1,%d1
-    bhi.s .width_done
-    lea mh_width,%a0
-    move.b %d1,(%a0,%d0.l)
-    lea mh_voice_history,%a0
-    lsl.l #3,%d0
-    clr.l 4(%a0,%d0.l)
-.width_done:
-    rts
 
     .balign 4
 mh_voice_epoch: .space 32,0xff

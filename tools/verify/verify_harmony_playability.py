@@ -26,10 +26,10 @@ def machine():
     for track in range(8):
         m.call('mh_width_set',track,track%2)
     assert [m.call('mh_width_get',t) for t in range(8)]==[t%2 for t in range(8)]
-    before=bytes(u.mem_read(m.sym['mh_width'],8))
+    before=bytes(m.call('mh_width_get',t) for t in range(8))
     for track,value in ((8,1),(0xffffffff,1),(0,2),(0,0xffffffff)):
         m.call('mh_width_set',track,value)
-        assert bytes(u.mem_read(m.sym['mh_width'],8))==before
+        assert bytes(m.call('mh_width_get',t) for t in range(8))==before
     count=0
     qualities=range(8) if 'ch_current' in m.sym else range(2)
     walks=([60,62,64,65,67,69,71,72,71,69,67,65,64,62,60]*2+

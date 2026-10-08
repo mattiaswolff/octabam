@@ -42,3 +42,8 @@ The linked-code gates exercise explicit contexts, bounded writes, native
 copy/initialization byte and ABI equivalence, and interruption while settings
 are partially replaced. They do not establish full project/Kit lifecycle or
 hardware acceptance; those integration checks remain pending.
+
+SETUP offset 12 is a shared flags byte: bit 0 Follow MODE, bit 1 Follow
+TRIG/LIVE response, bit 2 Harmony WIDTH. This module owns its native range
+(0..7) and byte claim so either consumer works alone. Each writer preserves
+the other flags. Fresh Parts initialize all three flags to zero.
