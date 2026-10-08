@@ -148,6 +148,11 @@ CHRD. Live playing does not take over a running leader pattern.
 
 ## CHRD storage and migration
 
+Bank-load companion handling runs after the native load calls return. Their
+original callsites and return addresses remain intact so caller-sensitive
+modules such as KITS can distinguish project load, bank reload and resume.
+This does not put CHRD locks or Harmony settings inside Kits.
+
 CHRD uses one byte per bank/pattern/MIDI-track/step: 8192 bytes per bank,
 131072 total. 0xff is unlocked; values 0–7 match the table above. Native bank
 formats, NOTE, NOT2–4 and CC lanes remain unchanged. Keep the companions with
