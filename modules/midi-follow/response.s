@@ -7,6 +7,7 @@
  */
     .text
     .include "remix.inc"
+    .global bf_response_seen,bf_response_pool
     .global bf_response_modes,bf_response_set,bf_response_get
     .global bf_response_tick,bf_response_observe,bf_response_anchor,bf_response_adjust
 

@@ -4,7 +4,7 @@ from remix.schema import Proof, Remix
 REMIX = Remix(
     name="midi-follow", family="mods", proof=Proof.PORT,
     proof_note="verify_midi_follow: stock/patched MIDI capture; not flashed",
-    doc="Per-track RFOL source selection on MIDI NOTE SETUP; RAM-only bass following.",
+    doc="Per-track RFOL source selection on MIDI NOTE SETUP; project-saved root following.",
     modules=("MIDI FOLLOW", "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER",
              "CHORUS", "SPATIALIZER", "COMB FILTER", "COMPRESSOR", "LO-FI",
              "DELAY", "PLATE REV", "SPRING REV", "DARK REV"),

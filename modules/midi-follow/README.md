@@ -31,9 +31,9 @@ Source register refers to the harmonic root before inversion, spread and root
 omission/placement, not whichever generated or arpeggiated note is lowest.
 Source sequence TRAN/scale and live key root selection still happen before capture.
 
-The new settings share RFOL's existing lifetime: per-track module RAM, reset on
-reboot; not saved in Parts/projects or parameter locked. Existing stock controls
-and the source selector remain in place. NO/YES/D or a track/page key closes the
+RFOL, MODE and both OCT values are saved per MIDI track in the project and
+restored on restart. They are not Part settings or parameter locked. Existing
+stock controls and the source selector remain in place. NO/YES/D or a track/page key closes the
 window; transport and chromatic playing continue through it.
 
 ## On the Octatrack
@@ -55,7 +55,8 @@ its output CHAN. Several followers can select the same source. The selector
 skips the track itself and choices that would create a circular dependency.
 Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 
-- **OFF** plays the track's original notes. Every track starts OFF at boot.
+- **OFF** plays the track's original notes. New projects and projects without
+  saved Follow settings start OFF.
 - Root means the source's first NOTE, with its stock transpose/scale processing;
   it does not infer the root from a chord inversion. C–E–G arp notes leave the
   bass on C. A new F–A–C chord moves it to F.
@@ -75,9 +76,9 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 - Ordinary same-tick source trigs are captured before any track emits, so
   **T2 following T8** sees the new root on that tick. Earlier microtimed bass
   trigs still use the previous root.
-- Roots latch through rests and transport stops. Configuration and roots are
-  **RAM-only**: they survive pattern/Part/project changes in the running session
-  and reset on reboot. They are not saved or copied with a Part/project.
+- Roots latch through rests and transport stops. Configuration survives
+  pattern/Part changes; changing projects restores that project's settings.
+  Remembered roots clear on project load and restart; they are not saved.
 - Disabled, muted and zero-velocity ordinary source triggers leave the previous
   root in place. The controlled machine-code gate covers these gates; unusual
   mute/plays-free modes still need broader on-device testing.
@@ -86,6 +87,36 @@ On its own, MIDI Follow supplies bass-root following. MIDI Harmony optionally
 adds live keyboard chords and follower chords/arp, as described below. Audio
 following, live performance transposition of a running pattern and shared output
 MIDI channels remain outside the tested use. This image has **not been flashed**.
+
+## Saving Follow settings
+
+RFOL, MODE, FIXED OCT and SOURCE OCT are **per MIDI track, per project**.
+Use the normal project SAVE/RELOAD commands. Both octave values are retained
+when switching modes. Defaults are RFOL OFF, MODE FIXED, FIXED OCT 3 and
+SOURCE OCT 0. Parts and patterns do not select separate Follow setups.
+
+A normal restart resumes the current configuration from battery RAM. A project
+load replaces it with the saved configuration; old projects without Follow
+entries use the defaults. Remembered roots and response history are cleared
+at these boundaries. The temporary RESP audition setting remains volatile.
+
+The project serializer writes eight `#MIDI_FOLLOW_V1_Tn=value` comments,
+understood by this module and ignored by stock firmware. Each decimal value
+packs source in bits 0–3, MODE in bit 4, FIXED OCT in bits 5–8, and SOURCE OCT
+plus 2 in bits 9–11. Invalid fields, self-following and circular routes are
+rejected. Parse-only loads do not change the current configuration. Saving
+with firmware that lacks Follow may discard these comments.
+
+The 24-byte checked resume record occupies `0x100f85e8..0x100f8600`, after
+KITS and before CHRD/PLOCKS P2, and is declared in the resource ledger. It
+stores configuration only. A corrupt or unrecognized record resets Follow
+to defaults. Stock project and bank formats remain unchanged.
+
+Verification: `tools/verify/verify_midi_follow_settings.py` executes linked
+machine code. `tools/verify/verify_midi_follow_settings_port.py --project DIR`
+uses copied projects and virtual cards for physical encoder edits, native
+SAVE, disk load, simulated restart and project changes. Hardware battery
+retention and interrupted physical-card writes remain unverified.
 
 ## Implementation
 
@@ -113,7 +144,7 @@ pitch or 0xff (unknown). `bf_pitches[8]` retains full MIDI root pitches.
 choices. Harmony calls `bf_register` before applying the receiver's TRAN; its
 matching adapter also publishes live keyboard root octaves into `bf_pitches`.
 These initialized bytes belong to the linked runtime;
-there is no persistence format or save/load hook. The generic MIDI sender is
+project comments and a checked battery-RAM record store the configuration. The generic MIDI sender is
 not hooked. The existing DRAM platform reserves about 10 MB of sample RAM;
 this small module shares that reserve when composed with other DRAM modules.
 

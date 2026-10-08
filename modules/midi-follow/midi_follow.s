@@ -330,6 +330,7 @@ bf_select:
     subq.l #1,%d3
     bne.s .next_choice
 .select_return:
+    jsr bf_persist
     movem.l (%sp),%d2-%d5
     lea 16(%sp),%sp
     rts

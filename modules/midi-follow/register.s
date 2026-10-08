@@ -1,4 +1,4 @@
-/* Receiver register policy. Volatile per-track settings, like RFOL.
+/* Receiver register policy. Project-scoped per-track settings, like RFOL.
  * Keep absolute source pitches independently of the historical bass latch.
  * Register selection precedes receiver TRAN and Harmony root snapping.
  */
@@ -145,6 +145,7 @@ bf_reg_change:
     move.l %d5,%d0
 .change_store:
     move.b %d0,(%a0,%d3.l)
+    jsr bf_persist
 .change_done:
     movem.l (%sp),%d0-%d5/%a0
     lea 28(%sp),%sp
