@@ -31,6 +31,12 @@ ch_display_snapshot: /* d0 track, preserves all registers */
     bne.s .snapshot_next_key
     andi.l #127,%d0
     move.l %d0,%d3
+    move.l %a0,%d1
+    subi.l #ch_pressed+4,%d1
+    lsr.l #2,%d1
+    lea ch_pressed_quality,%a1
+    move.b (%a1,%d1.l),%d1
+    move.b %d1,ch_display_quality
     cmp.l %d4,%d0
     beq.s .snapshot_live
 .snapshot_next_key:
@@ -55,9 +61,6 @@ ch_display_snapshot: /* d0 track, preserves all registers */
     move.l %d5,%d1
     jsr mh_quant
     move.b %d0,ch_display_root
-    lea ch_live,%a0
-    move.b (%a0,%d5.l),%d0
-    move.b %d0,ch_display_quality
     bra.s .snapshot_validate
 .snapshot_sequence:
     move.l %d5,%d0

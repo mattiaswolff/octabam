@@ -49,6 +49,17 @@ def main():
             assert notes and set(notes)<={55,58,59,62,65},notes
         results[work.name]=notes
         print(f'[ok] {work.name}: MAJ release gap, DOM7, both release orders, next-root reset and balanced MIDI',flush=True)
+    # Leave G SUS4 sounding after a newer F TRI is released. The guide
+    # must read G's captured quality, not the current base used for F.
+    work=p.fixture(args.project,'overlap-guide',{0:2},key_raw=2)
+    script=work/'overlap.txt'
+    script.write_text(c.PANEL+'1600 key 4 down\n2000 key 12 down\n2400 key 12 up\n2800 key 3 down\n3300 key 3 up\n3800 quit\n')
+    p.run(work,'overlap',['--live-script',script,'--lcd',work/'overlap.lcd',
+          '--mem-dump',f'{sym["ch_display_root"]:#x},2={work}/identity.bin'])
+    assert (work/'identity.bin').read_bytes()==bytes((55,4))
+    subprocess.run([p.sys.executable,str(p.ROOT/'tools/emu/lcd_view.py'),str(work/'overlap.lcd'),'--png',str(work/'overlap.png')],check=True,stdout=subprocess.DEVNULL)
+    results['overlap-guide']={'root':55,'quality':4,'intentionally_held_at_capture':True}
+    print('[ok] overlapping roots: G SUS4 guide retains its captured quality after F TRI releases',flush=True)
     # Open the real Harmony window and turn physical F, then play while AUTO
     # remembers earlier roots. Width is never injected directly into memory.
     for width in (0,1):
