@@ -114,17 +114,17 @@ stock NOTE descriptor, drawer and encoder dispatch. No DSP code is added.
   Chained resolution has a defensive eight-hop bound.
 - NOTE SETUP's unused D slot is labelled RFOL and enabled. Its encoder callback
   at `0x400bc64e` points to the module; its formatter prints OFF/T1–T8.
-  The drawer detour at `0x40036674` reads module RAM for that slot. The original
-  staged Part value is never replaced or sent through the stock setter.
+  The drawer detour at `0x40036674` reads RFOL from the selected native Part.
 
-`bf_sources[8]` holds OFF=0 or source=1…8. `bf_roots[8]` holds the source's bass
-pitch or 0xff (unknown). `bf_pitches[8]` retains full MIDI root pitches.
-`bf_reg_modes`, `bf_reg_fixed` and `bf_reg_offsets` hold the receiver's register
-choices. Harmony calls `bf_register` before applying the receiver's TRAN; its
-matching adapter also publishes live keyboard root octaves into `bf_pitches`.
-These initialized bytes belong to the linked runtime;
-there is no persistence format or save/load hook. The generic MIDI sender is
-not hooked. The existing DRAM platform reserves about 10 MB of sample RAM;
+Native MIDI SETUP stores RFOL at offset 3, MODE/response flags at 12, fixed
+octave at 13 and relative octave at 15. UI reads use the selected Part;
+playback uses each MIDI track's playing Part through MIDI PART STATE.
+`bf_roots[8]` holds the source's bass pitch or 0xff (unknown), and
+`bf_pitches[8]` retains full MIDI root pitches. These histories are runtime-only.
+Harmony calls `bf_register` before applying the receiver's TRAN; its adapter
+also publishes live keyboard root octaves into `bf_pitches`.
+Native Part operations own persistence, with or without KITS. The generic
+MIDI sender is not hooked. The existing DRAM platform reserves about 10 MB of sample RAM;
 this small module shares that reserve when composed with other DRAM modules.
 
 ## Reproduce

@@ -138,7 +138,7 @@ def run_transition(image, card, name, label, enabled=True):
     dump = (f'0x800065b8,8={work}/transport.bin;0x80000002,4={work}/selection.bin;'
             f'0x100f8378,32={work}/project-name.bin;0x46c76dc0,544={work}/midi-setup.bin')
     if enabled:
-        dump += f';{sym["bf_sources"]:#x},16={work}/module-state.bin'
+        dump += f';0x100a4ece,25288={work}/parts.bin;0x100b14cf,1={work}/ui-part.bin'
     cmd = [EMU, '--image', image, '--card', card, '--set', 'OCTABAM', '--project', 'BASS',
            '--sequencer', '--internal-clock', '--frames', str(frames), '--load-ms', '90000',
            '--midi-out', work/'out.midi', '--card-out', work/'card.img', '--mem-dump', dump]
@@ -159,7 +159,11 @@ def run_transition(image, card, name, label, enabled=True):
     else:
         assert int.from_bytes((work/'transport.bin').read_bytes()[:4], 'big') == 2
     if enabled:
-        assert (work/'module-state.bin').read_bytes()[:8] == bytes((0,1,0,0,0,0,0,0))
+        part=(work/'ui-part.bin').read_bytes()[0]
+        raw=(work/'parts.bin').read_bytes()
+        sources=bytes(raw[part*0x18b2+0x4e2+36*t+3] for t in range(8))
+        expected=bytes(8) if name in ('part','project') else bytes((0,1,0,0,0,0,0,0))
+        assert sources==expected, (name,part,sources,expected)
     if name == 'pattern':
         assert (work/'transport.bin').read_bytes()[6] == 1
         assert any(e[:3]==('on',1,62) for e in events), events
@@ -194,7 +198,7 @@ def transitions(source, image, cases):
         (OUT/'transitions/result.json').write_text(json.dumps(result,indent=2)+'\n')
 
 
-def soak_card(source, work):
+def soak_card(source, work, enabled):
     """Existing audio stress generator plus eight busy MIDI tracks."""
     import ab_fixture
     prepared = work/'source'
@@ -217,10 +221,18 @@ def soak_card(source, work):
                         '00 06 40 00 7f 00 00 40 00 00 00 00 00 00 00 00')
                     if t == 0:
                         data[at+3:at+5] = bytes((68,71))
-                    data[base+0x4e2+36*t:base+0x4e2+36*(t+1)] = bytes((t+1,))+bytes(35)
+                    setup=base+0x4e2+36*t
+                    data[setup:setup+36] = bytes((t+1,))+bytes(35)
+                    # The initial Part is configured through the encoder below;
+                    # later Parts carry their own routing during the soak.
+                    data[setup+3]=int(enabled and t>0 and part%4!=0)
+                    data[setup+13]=3
+                    data[setup+15]=2
             for p in range(16):
                 tail = ot_bank.PTRN_BASE+(p+1)*ot_bank.PTRN_STRIDE
-                data[tail-9:tail-7] = bytes((16,2))
+                # A 16-step normal cycle bounds queued panel switches to 2 s.
+                # Do not inherit the template's 128-step advanced timing.
+                data[tail-11:tail-6] = bytes((16,2,16,2,0))
                 for t in range(8):
                     at = 0x492e+p*ot_bank.PTRN_STRIDE+t*0x8b9
                     assert data[at:at+4] == b'MTRA'
@@ -251,13 +263,14 @@ def soak(image, seconds, enabled, source):
     import time
     import wave
     sys.path.insert(0,str(ROOT/'tools/panel'))
-    from panel_server import PortProc
+    from panel_server import PortProc, popup_geometry, CLOCK_GEOMETRY
+    from types import SimpleNamespace
     label='follow' if enabled else 'off'
     work=OUT/f'soak-{label}-{seconds:g}s';work.mkdir(parents=True,exist_ok=True)
     (work/'result.json').unlink(missing_ok=True)
     (work/'diagnostics.json').unlink(missing_ok=True)
     (work/'out.midi').unlink(missing_ok=True)
-    card=soak_card(source,work)
+    card=soak_card(source,work,enabled)
     local_card=work/'card.img';shutil.copy2(card,local_card)
     sym=bf.symbols()
     cmd=[EMU,'--image',image,'--card',local_card,'--card-rw','--set','OCTABAM','--project','STRESS',
@@ -284,16 +297,30 @@ def soak(image, seconds, enabled, source):
     try:
         port.wait_ready(900)
         (work/'boot.log').write_text('\n'.join(port.log)+'\n')
+        # Match the panel server: dismiss only the actual boot clock dialog.
+        # Otherwise later pattern keys can target that modal window.
+        memory=SimpleNamespace(mem_read=peek)
+        for _ in range(60):
+            if popup_geometry(memory)==CLOCK_GEOMETRY:
+                command('key 0x26 2');run(60)
+                command('key 0x26 0');run(300)
+                assert popup_geometry(memory)!=CLOCK_GEOMETRY
+                break
+            run(100)
         layout=json.loads((ROOT/'out/platform/layout.json').read_text())
         code_before=peek(layout['base'],layout['runtime_end']-layout['base'])
         def stable_code(raw):
             raw=bytearray(raw)
             # The runtime contains several modules' state; only Root Follow's
             # instructions (up to its state arrays) are immutable here.
-            lo=sym['bf_pre_capture']-layout['base'];hi=sym['bf_sources']-layout['base']
+            lo=sym['bf_pre_capture']-layout['base'];hi=sym['bf_roots']-layout['base']
             return bytes(raw[lo:hi])
         expected=bytes((0,1,1,1,1,1,1,1)) if enabled else bytes(8)
-        assert peek(sym['bf_sources'],8)==expected
+        def sources():
+            part=peek(0x100b14cf,1)[0]
+            raw=peek(0x100a4ece+part*0x18b2+0x4e2,288)
+            return bytes(raw[t*36+3] for t in range(8))
+        assert sources()==expected
         assert int.from_bytes(peek(0x800065b8,4),'big')==1
         before=command('cfstatus','cfstatus')
         rt_before=command('rtstatus','rtstatus')
@@ -315,7 +342,7 @@ def soak(image, seconds, enabled, source):
                 pcm=bytes.fromhex(reply[2]);wav.writeframes(pcm)
                 values=struct.unpack('<'+'h'*(len(pcm)//2),pcm)
                 peaks.append(max(map(abs,values),default=0))
-                assert peek(sym['bf_sources'],8)==expected
+                assert sources()==expected
                 assert all(36 <= n <= 47 for n in peek(sym['bf_roots'],8))
                 elapsed=(k+1)/2
                 if seconds >= 20 and elapsed in (seconds/4,seconds/2,3*seconds/4):
