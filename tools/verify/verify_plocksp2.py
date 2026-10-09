@@ -148,7 +148,7 @@ def main():
         return int.from_bytes(img[o:o + 4], "big") if 0 <= o < len(img) - 4 else 0
 
     def page2_ok(fx_id):
-        if fx_id == 0:
+        if fx_id == 0:  # NONE has a descriptor but no editable effect.
             return False
         p = rd32(DESC2 + 4 * fx_id)
         return p and rd32(p + 0x9a + 4 * 6) >= 2
@@ -161,6 +161,7 @@ def main():
     for f in pdir.iterdir():
         if f.is_file() and f.suffix.lower() == ".work":
             shutil.copy2(f, copy / f.name)
+    card = OUT / "card.img"
     # Install the fallback in the copied bank files, including saved Parts.
     # Poking only RAM/live IDs after load leaves the UI's SRAM Part as NONE;
     # it then records no lock even though the descriptor probe looks valid.
@@ -179,7 +180,6 @@ def main():
                         data[at] = fallback
         ot_project._bank_write(copy, int(bankfile.stem[4:]), usable_fx, guard=False)
 
-    card = OUT / "card.img"
     r = subprocess.run([str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(copy), a.set_name, a.name,
                         "--tree", str(OUT / "tree"), "--out", str(card)], cwd=ROOT, capture_output=True, text=True)
     if r.returncode:

@@ -4,7 +4,8 @@ crossfader, and a page-2 knob turned with a scene held writes the pool.
 
     python3 tools/verify/verify_scenesp2.py REMIX --project DIR
 
-Stages the project's card, boots the remix's image in `ot_emu`, and:
+Stages a copy of the project with T1 set to THRU and a first-step trig
+(no sample dependency), boots the remix's image in `ot_emu`, and:
 
   frame   pokes a pool into every bank's part-0 window (scene 0: T1 FX2
           MODE = 1 and TIME = 100; scene 1: TIME = 20), selects scenes 0/1,

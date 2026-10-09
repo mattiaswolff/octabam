@@ -74,17 +74,6 @@ measured on the port or the unit.
 
 - `tools/verify/verify_plocksp2.py`.
 
-## Held-trig release regression
-
-The page-2 editor now mirrors stock's gesture state: mark the edit and
-clear its five pending trig-tap masks plus the extra edit word. Previously,
-releasing a trig after turning a SETUP knob could run the ordinary tap
-handler and erase the new lock. The port gate checks the lock after release,
-copy/paste, clear and undo, and a subsequent bare trig tap still clears it.
-The gate installs a usable FX2 in its temporary project when needed; NONE's
-descriptor alone is not evidence of an editable effect. No source project
-is changed. Hardware acceptance remains outstanding.
-
 ## What stock does
 
 `docs/firmware/STEP_LOCKS.md`. A step record is 32 lock bytes, page 1 of
@@ -104,7 +93,10 @@ trig. Nothing carries page 2, and every byte of the pattern data is used.
   sends a knob turn to the page-1 lock editor `0x400508e4`, which locks
   the page-1 slot behind the window. `plk_edit` takes the turn instead:
   the slot's encoder hook and clamp from its descriptor, stock's edited
-  marks (`DB + 0x9b332`, `0x100f8598`, `0x40027e00`), the slot's redraw.
+  marks (`DB + 0x9b332`, `0x100f8598`, `0x40027e00`), the slot's redraw. The
+  edited flag and pending trig-tap masks also follow stock's editor, so
+  releasing the trig preserves the lock. The port gate checks this and
+  confirms that a subsequent ordinary trig tap still clears the lock.
 - **Playback**, beside stock's stages: the record builder `0x4009d1e8`'s
   two fill paths (staging or pending slot n), the two staging → pending
   copies, the pending reset, the frame ISR's pending → trig record copy

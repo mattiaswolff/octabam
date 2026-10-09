@@ -241,7 +241,8 @@ pe_c1:  addl    %a0@(0x9a),%d1
 pe_c2:  moveb   %d0,%a1@
         bra.w   pe_loop
 pe_commit:
-        | Mirror stock's edited flag and pending trig-tap masks. Otherwise
+        | Stock's editor tail (0x40050ec2..0x40050eea): edited flag and
+        | pending trig-tap masks. Without these stores,
         | key-up handles a bare trig tap and clears the newly written lock.
         moveq   #1,%d0
         movel   %d0,0x460d173a
