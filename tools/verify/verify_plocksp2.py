@@ -41,7 +41,7 @@ SKIPs without a project, without the port, or for a remix without PLOCKS
 P2. What it cannot see: the dial draw (the LCD is not decoded), the
 hardware, a slide trig (page 2 does not slide).
 """
-import argparse, os, pathlib, shutil, subprocess, sys
+import argparse, os, pathlib, shutil, struct, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
@@ -159,6 +159,13 @@ def main():
     for f in pdir.iterdir():
         if f.is_file() and f.suffix.lower() == ".work":
             shutil.copy2(f, copy / f.name)
+    # Synthetic P2LK v1 files in the exact pre-compression project format.
+    # Tail of pattern 16 stays out of the panel scenarios (patterns 1/2).
+    legacy_table = bytearray(b"\xff" * (16 * 8 * TRACK_B))
+    legacy_table[-1024:] = bytes(i & 127 for i in range(1024))
+    for b in range(16):
+        (copy / f"p2lk{b + 1:02d}.work").write_bytes(
+            struct.pack(">4sIII", b"P2LK", 1, b, len(legacy_table)) + legacy_table)
     card = OUT / "card.img"
     r = subprocess.run([str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(copy), a.set_name, a.name,
                         "--tree", str(OUT / "tree"), "--out", str(card)], cwd=ROOT, capture_output=True, text=True)
@@ -177,9 +184,13 @@ def main():
     pr.mkdir(exist_ok=True)
     run(base + ["--sequencer", "--internal-clock", "--frames", "1",
                 "--step", f"-:dump:{DBPTR:#x},4={pr / 'db.bin'};{UI_TRACK:#x},1={pr / 'trk.bin'};"
-                          f"{UI_PART:#x},1={pr / 'part.bin'}"], OUT / "probe.txt")
+                          f"{UI_PART:#x},1={pr / 'part.bin'};"
+                          f"{STORE:#x},{16 * len(legacy_table)}={pr / 'legacy.bin'}"], OUT / "probe.txt")
     db = int.from_bytes((pr / "db.bin").read_bytes(), "big")
     trk, part = (pr / "trk.bin").read_bytes()[0], (pr / "part.bin").read_bytes()[0]
+    loaded = (pr / "legacy.bin").read_bytes()
+    check("load: old P2LK v1 project files restore every byte of all 16 banks",
+          loaded == bytes(legacy_table) * 16)
     bank = (db - BLOB) // BANK_STRIDE
     pwin = db + part * PART_STRIDE
     run(base + ["--sequencer", "--internal-clock", "--frames", "1",
@@ -297,6 +308,9 @@ def main():
         d = files.get(k, b"")
         got = d[16 + (trk * 64) * REC + 6] if len(d) == 16 + 16 * 8 * TRACK_B else None
         check(f"save: {nn}.{ext} holds the lock ({got})", got == v)
+        check(f"save: {nn}.{ext} keeps the v1 header and older pattern-16 locks",
+              d[:16] == struct.pack(">4sIII", b"P2LK", 1, bank, len(legacy_table)) and
+              d[-1024:] == legacy_table[-1024:])
     if saved.is_file():
         reload_dump = OUT / "reload.bin"
         s = Script(); s.tap("no", 400)
@@ -309,8 +323,19 @@ def main():
 
     # ---- power cycles -----------------------------------------------------------
     cs1s, cs1u = OUT / "cs1_saved.bin", OUT / "cs1_unsaved.bin"
+    legacy_v = None
     if cs1s.is_file():
         d = bytearray(cs1s.read_bytes())
+        check("save: the port publishes the compressed P2R1 retained format",
+              d[NV - CS1:NV - CS1 + 4] == b"P2R1")
+        # Upgrade from a legacy snapshot with the same saved lock and tail.
+        legacy_v = (v + 29) & 127  # distinct from the saved file: fallback cannot pass
+        table = bytearray(legacy_table); table[trk * TRACK_B + 6] = legacy_v
+        entries = [(i << 7) | value for i, value in enumerate(table) if value != 255]
+        old = struct.pack(">4sIII", b"P2NV", bank, len(entries), sum(entries) & 0xffffffff)
+        old += b"".join(e.to_bytes(3, "big") for e in entries)
+        d[NV - CS1:NV - CS1 + len(old)] = old
+        (OUT / "cs1_legacy.bin").write_bytes(d)
         d[NV - CS1:NV - CS1 + 4] = bytes(4)            # no CS1 copy: the file
         (OUT / "cs1_nocopy.bin").write_bytes(d)
     s = Script(); s.tap("no", 400)
@@ -324,13 +349,15 @@ def main():
              "--project", a.name, "--load-ms", "90000", "--live-script", OUT / "power.script",
              "--mem-dump", f"{block(0, trk) + 6:#x},1={dump}"], OUT / f"power_{tag}.txt")
         return tag, dump.read_bytes()[0] if dump.is_file() else None
-    jobs = [("saved", saved, cs1s), ("unsaved", unsaved, cs1u), ("nocopy", saved, OUT / "cs1_nocopy.bin")]
+    jobs = [("saved", saved, cs1s), ("unsaved", unsaved, cs1u), ("nocopy", saved, OUT / "cs1_nocopy.bin"),
+            ("legacy", saved, OUT / "cs1_legacy.bin")]
     with ThreadPoolExecutor(3) as ex:
         got = dict(ex.map(lambda j: power(*j), jobs))
     check(f"power cycle, saved: the lock is in STORE ({got['saved']})", got["saved"] == v)
     check(f"power cycle, never saved: the lock is in STORE from CS1 ({got['unsaved']})", got["unsaved"] == v)
     check(f"power cycle, no CS1 copy: the lock is in STORE from p2lk{bank + 1:02d}.work ({got['nocopy']})",
           got["nocopy"] == v)
+    check("power cycle, upgrade: legacy P2NV snapshot restored", got["legacy"] == legacy_v and legacy_v is not None)
     print(f"verify_plocksp2: {'FAIL' if fails else 'ok'} ({fails} failure(s))")
     return 1 if fails else 0
 

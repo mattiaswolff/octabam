@@ -1,7 +1,7 @@
 # `plocks-p2` — PLOCKS P2
 
-Parameter locks on page 2 of FX1 and FX2. `Kind.CF_PATCH`: one DRAM
-unit, 52 detours, nothing on the DSP. Requires SCENES P2.
+Parameter locks on page 2 of FX1 and FX2. `Kind.CF_PATCH`: two DRAM
+units, 52 detours, nothing on the DSP. Requires SCENES P2.
 
 ## Use
 
@@ -32,13 +32,24 @@ stations, SCENES P2 KITS), project OCTABAM89_setgate:
   and a saved lock with the CS1 copy cleared (read from `p2lk03.work`)
   are each in the table after the power-up.
 
+ColdFire compression gate, 9 Oct 2026:
+
+- 34 round trips from the original upstream P2NV writer and through the
+  compressed codec, including the exact 15,464-byte worst case.
+- All 16 banks; all 128 values; 88 malformed/truncated cases; 36 interrupted
+  writes; 50 injected same/different-bank preemptions, including density
+  changes and overflow. Registers, stack and interrupt mask checked.
+- The ledger accepts reuse of all 15,256 released bytes and rejects a
+  one-byte overlap. After full legacy migration, overwriting the released
+  tail leaves subsequent restore/save intact.
+
 ## On the unit
 
 Not flashed.
 
 ## Open
 
-- The CS1 copy holds 10,229 locks; a current bank with more has no copy
+- The CS1 copy holds 10,234 locks; a current bank with more has no copy
   and a power cut loses its page-2 locks back to the last save.
 - That CS1 keeps its contents over a power-off on the unit is read from
   stock's use of it (the power-up check and restore), not measured here.
@@ -51,28 +62,69 @@ Not flashed.
   makes a lock trig from a page-1 lock; not mirrored).
 - On the unit.
 
-## CS1 writer ordering
+## Retained snapshot compression and compatibility
 
-`nv_save` is called from the UI task (priority 3) and the engine task
-(priority 1, `plk_loadall`, `plk_loadmask`, `plk_tocs1`); the UI task
-preempts the engine task at any instruction. Each call takes a ticket
-(`NVGEN` incremented and `NVBANK` stored under SR `0x2700`). The entry loop
-compares its ticket with `NVGEN` every four bytes, and the commit (count,
-sum, magic) runs under `0x2700` after the same compare. A call that finds a
-newer ticket starts over from `NVBANK`. The mask covers a few instructions;
-the scan of up to 98,304 bytes runs unmasked, because a mask held for the
-scan would delay the frame ISR (about 24,600 long compares on an empty bank:
-inferred from the instruction count, not measured). A spin on a flag was
-not used: the engine task spinning on the UI task's flag cannot make
-progress if the UI task is the one preempting it. The ordering is by reading
-the code; the port is lock-step and cannot interleave tasks, so it is not
-measured on the port or the unit.
+Only the current-bank snapshot in battery SRAM changes. Existing
+`p2lkNN.work` / `p2lkNN.strd` files remain **P2LK version 1**, byte for
+byte in the same format. Older projects load directly; no conversion or
+resave is required. New saves can also be read by the previous module.
 
-`read_bank` rejects a `p2lkNN` header whose version is not 1 as no locks.
+The reader accepts both the original **P2NV** retained snapshots and the
+new **P2R1** representation. P2R1 stores ascending slot gaps using Rice
+coding with k=3 (unary quotient, 3 remainder bits), followed by each
+7-bit value, MSB first with zero padding. Both formats have the original
+16-byte big-endian header: magic, bank, count, sum of decoded entries.
+The writer chooses P2NV when its three bytes per lock are no larger.
+It validates all input before publishing magic, and the reader validates
+bounds, ordering, padding and checksum before changing the runtime table.
+Invalid or interrupted snapshots use the existing project-file fallback.
+
+The old source's capacity is **10,234**, not the previously documented
+10,229: `(30,720 - 16) // 3`. That capacity is unchanged. For n locks
+among 98,304 slots, Rice uses at most
+`11*n + floor((98,304-n)/8)` bits. At n=10,234 that is **15,464 bytes
+including the header**, versus 30,718 bytes for P2NV. The gate constructs
+locations that attain this bound; it does not assume sparse music.
+Overflow still invalidates the entire retained snapshot, as before.
+
+The SRAM reservation is now **15,464 bytes**,
+`0x100f8600..0x100fc268` (end exclusive). New writes stay within it;
+`0x100fc268..0x100ffe00` (**15,256 bytes**) is available to other modules.
+The legacy P2NV reader may inspect the former 30,720-byte window during
+upgrade, then rewrites the accepted snapshot compactly before returning.
+A sharing bridge must restore PLOCKS P2 before writing that tail
+if it promises migration of unsaved legacy state. It must also coordinate
+the existing shared hooks; compression alone does not make Harmony
+composable. This ordering is not required for saved projects: both old
+and new firmware read the unchanged P2LK v1 files. Downgrading firmware
+cannot restore P2R1 unsaved state; saved project files remain compatible.
+
+### Writer ordering
+
+UI and engine tasks can preempt one another. `nv_save` records the latest
+bank and increments `NVGEN` under SR `0x2700`. One outer writer owns the
+payload; a nested request invalidates magic and returns immediately.
+The outer writer retries the latest bank if the generation changed, and
+publishes magic only under the short final masked check. Neither task
+spins waiting for a preempted task; scanning and encoding remain unmasked.
+Writes stay bounded even when a nested edit changes density between the
+size scan and encoding. Busy/generation state is transient, not retained.
+
+`retention.c` is authoritative; run
+`python3 modules/plocks-p2/generate_retention.py` to regenerate its linked
+ColdFire assembly, following the existing Euclid workflow. The gate checks
+that generated assembly matches before executing it.
+
+`read_bank` still rejects a `p2lkNN` header whose version is not 1.
 
 ## Gates
 
-- `tools/verify/verify_plocksp2.py`.
+- `tools/verify/verify_plocksp2.py`: panel/playback/save/reload, legacy
+  P2LK v1 files across all 16 banks, compressed power-up and P2NV upgrade.
+- `tools/verify/verify_plocksp2_retention.py`: actual ColdFire codec and
+  pre-change writer, full-capacity migration, exact worst case, all banks,
+  invalid/truncated input, interrupted publication, register/stack/mask
+  preservation and injected UI/engine preemption. No stock image needed.
 
 ## What stock does
 
@@ -112,12 +164,11 @@ trig. Nothing carries page 2, and every byte of the pattern data is used.
   CS1 (`0x10000000`): `0x4000faf0` copies a bank there, edits write
   through, and at power-up `0x40025770` checks it, `0x4000fbb4` restores
   the bank and the firmware's load reads only the other banks from the
-  card. The page-2 locks of that bank follow, sparse, in CS1's unused top
-  (`0x100f8600..0x100ffe00`): 16 bytes of header (`P2NV` written last,
-  bank, count, sum) and 3 bytes a lock (step index << 7 | value). The copy
-  is rewritten when stock copies a bank into CS1 and after every change
-  to that bank; at power-up it is applied after stock's restore, or, with
-  no valid copy, that bank's `p2lkNN.work` is read at the first bank load.
+  card. The page-2 locks follow in CS1's unused top
+  (`0x100f8600..0x100ffe00`), using the compatible retained formats above.
+  The snapshot is rewritten when stock copies a bank into CS1 and after
+  every change to that bank; at power-up it is applied after stock's
+  restore, or the bank's `p2lkNN.work` is read at the first bank load.
   Before 2 Oct 2026 nothing read the current bank at power-up, so its
   page-2 locks came back empty even when saved (measured under the port).
 - **Files**: `p2lkNN.work` / `p2lkNN.strd` beside `bankNN.*` in the

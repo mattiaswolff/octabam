@@ -27,7 +27,8 @@ MODULE = Module(
     category=Category.MACHINES, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.PORT, proof_note="",
     doc="Parameter locks on FX1/FX2 page 2 (hold trigs, turn a knob on the SETUP page).",
-    linked=(Linked("p2locks", "modules/plocks-p2/p2locks.s", dram=True),),
+    linked=(Linked("p2locks", "modules/plocks-p2/p2locks.s", dram=True),
+            Linked("p2retention", "modules/plocks-p2/retention.s", dram=True)),
     detours=(
         Detour(0x400508E4, H("4fefffb048d77cfc"), "p2locks", "plk_edit",
                "page-1 lock editor entry: on an FX SETUP page the turn locks page 2",
@@ -148,8 +149,10 @@ MODULE = Module(
                "power-up: the bank back from CS1, its page 2 with it", kind="jsr"),
     ),
     requires=("SCENES P2",),
-    # NV copy of the current bank's page 2 in CS1 (battery SRAM), nv_save in
-    # p2locks.s: 0x100f8600..0x100ffe00, unused by stock beyond its whole-CS1 init.
-    claims=Claims(sram=((0x100f8600, 0x100ffe00 - 0x100f8600, "P2NV bank copy in CS1"),)),
-    gates=(Gate('tools/verify/verify_plocksp2.py'),),
+    # Persistent ownership is only the compact snapshot. P2NV upgrade reads
+    # may inspect the old 30720-byte window before its tail is repurposed;
+    # any sharing bridge must order that restore before its own tail writes.
+    claims=Claims(sram=((0x100f8600, 15464, "P2NV/P2R1 compact bank copy in CS1"),)),
+    gates=(Gate('tools/verify/verify_plocksp2.py'),
+           Gate('tools/verify/verify_plocksp2_retention.py', remix_arg=False, venv=True)),
 )

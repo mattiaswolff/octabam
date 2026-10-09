@@ -74,8 +74,6 @@
         .set    IOB_LEN,    0x1000
         .set    NV,         0x100f8600      | CS1: the current bank's page 2, sparse (see nv_save)
         .set    NV_END,     0x100ffe00
-        .set    NV_MAX,     (NV_END-NV-16)/3
-        .set    NV_MAGIC,   0x50324e56      | 'P2NV'
         .set    CUR_BANK,   0x80000002
 
         .text
@@ -1261,167 +1259,76 @@ MODE_W: .asciz  "w"
 | through, and at power-up 0x40025770 checks it and 0x4000fbb4(bank) puts
 | it back; the firmware's own load then reads every OTHER bank from the
 | card (mask 0xfffb at 0x40084d60). The page-2 locks of that bank go the
-| same way, sparse, in CS1's unused top (0x100f8600..0x100ffe00, no stock
-| reference and no module's; written only by stock's whole-CS1 init):
-|   +0 'P2NV' (written last), +4 bank, +8 count, +12 sum of the entries,
-|   +16 entries of 3 bytes: step index (bank-relative, 17 bits) << 7 | value.
-| More locks than fit (NV_MAX), or an interrupted write, leave no magic:
-| the power-up then reads that bank's p2lkNN.work instead.
+| same way, compressed, in CS1's unused top. retention.c owns the codec:
+| P2NV (legacy) and P2R1 (Rice gaps), 16-byte header, magic published last.
+| Project files and runtime tables are unchanged. Old P2NV snapshots are
+| accepted at their original full capacity; new writes occupy <=15464 B.
 
-| nv_save: d0 = bank -> CS1 holds its page 2. Keeps every register.
-| Two tasks call it: the UI task (prio 3) and the engine task (prio 1), and
-| the UI task preempts the engine task at any instruction, so a save can
-| start and finish inside another's. Each start takes a ticket (NVGEN, with
-| NVBANK, under SR 0x2700); the entry loop compares its ticket with NVGEN
-| every four bytes, and the commit (count, sum, magic) runs under 0x2700
-| after the same compare. A save that finds a newer ticket starts over from
-| NVBANK, the newest request's bank, so the last writer to start is the one
-| whose entries stand and the magic is never set over a mixture. The mask
-| covers a few instructions; the scan of up to BANK_B bytes runs unmasked.
+| nv_save: d0 = bank. Keep registers and caller's interrupt mask.
+| Only the outermost writer touches the payload. A preempting UI/engine
+| request invalidates magic, records the latest bank/ticket and returns;
+| the outer writer retries that bank before publishing. Never mask the
+| 98 KB scan: only ownership and the final generation check/store.
 nv_save:
-        lea     %sp@(-40),%sp
-        movem.l %d0-%d5/%a0-%a1,%sp@
+        lea     %sp@(-24),%sp
+        movem.l %d0-%d2/%a0-%a1,%sp@
         move.w  %sr,%d1
-        move.w  %d1,%sp@(36)           | the caller's SR
+        move.w  %d1,%sp@(20)
         move.w  #0x2700,%sr
         movel   %d0,NVBANK
         addql   #1,NVGEN
-        movel   NVGEN,%d1
-        movel   %d1,%sp@(32)           | this save's ticket
-        move.w  %sp@(36),%d1
-        move.w  %d1,%sr
+        clrl    NV
+        tstl    NVBUSY
+        bne.s   ns_out
+        moveq   #1,%d1
+        movel   %d1,NVBUSY
 ns_again:
+        movel   NVGEN,%d2
         movel   NVBANK,%d0
-        lea     NV,%a1
-        clrl    %a1@                   | no magic while it is written
-        movel   %d0,%a1@(4)
-        bsr.w   bank_at                | a0 = the bank's page 2
-        lea     %a1@(16),%a1
-        moveq   #0,%d2                 | count
-        moveq   #0,%d3                 | sum
-        moveq   #0,%d4                 | index
-ns_loop:
-        movel   %sp@(32),%d1
-        cmpl    NVGEN,%d1
-        bne.w   ns_again               | a newer save started meanwhile
-        cmpil   #BANK_B,%d4
-        bcc.s   ns_done
-        movel   %a0@(0,%d4:l),%d0      | four at a time past the empty ones
-        moveq   #-1,%d1
-        cmpl    %d1,%d0
-        bne.s   ns_byte
-        addql   #4,%d4
-        bra.s   ns_loop
-ns_byte:
-        moveq   #3,%d5
-ns_b4:  moveq   #0,%d0
-        moveb   %a0@(0,%d4:l),%d0
-        cmpil   #0xff,%d0
-        beq.s   ns_next
-        cmpil   #0x7f,%d0
-        bhi.s   ns_fail                | not a knob value: no copy
-        cmpil   #NV_MAX,%d2
-        bcc.s   ns_fail                | does not fit: no copy
-        movel   %d4,%d1
-        lsll    #7,%d1
-        orl     %d0,%d1                | the entry
-        addl    %d1,%d3
-        moveb   %d1,%a1@(2)
-        lsrl    #8,%d1
-        moveb   %d1,%a1@(1)
-        lsrl    #8,%d1
-        moveb   %d1,%a1@
-        addql   #3,%a1
-        addql   #1,%d2
-ns_next:
-        addql   #1,%d4
-        subql   #1,%d5
-        bpl.s   ns_b4
-        bra.s   ns_loop
-ns_fail:
-        moveq   #-1,%d2                | commit nothing, magic stays clear
-ns_done:
-        move.w  #0x2700,%sr
-        movel   %sp@(32),%d1
-        cmpl    NVGEN,%d1
-        beq.s   ns_commit
-        move.w  %sp@(36),%d1           | a newer save started: unmask, start over
+        move.w  %sp@(20),%d1
         move.w  %d1,%sr
-        bra.w   ns_again
-ns_commit:
-        tstl    %d2
-        bmi.s   ns_end
-        lea     NV,%a1
-        movel   %d2,%a1@(8)
-        movel   %d3,%a1@(12)
-        movel   #NV_MAGIC,%d0
-        movel   %d0,%a1@
-ns_end: move.w  %sp@(36),%d1
-        move.w  %d1,%sr
-        movem.l %sp@,%d0-%d5/%a0-%a1
-        lea     %sp@(40),%sp
-        rts
-
-| nv_apply: d0 = bank -> 1 in d0 when CS1 held that bank's page 2 and it
-| is in STORE now; 0 otherwise (STORE untouched).
-nv_apply:
-        lea     %sp@(-28),%sp
-        movem.l %d1-%d5/%a0-%a1,%sp@
-        movel   %d0,%d5
-        lea     NV,%a1
-        movel   %a1@,%d0
-        cmpil   #NV_MAGIC,%d0
-        bne.s   na_no
-        cmpl    %a1@(4),%d5
-        bne.s   na_no
-        movel   %a1@(8),%d2
-        cmpil   #NV_MAX,%d2
-        bhi.s   na_no
-        lea     %a1@(16),%a0           | the sum first
-        moveq   #0,%d3
-        movel   %d2,%d4
-na_sum: subql   #1,%d4
-        bmi.s   na_chk
-        bsr.s   nv_entry
-        addl    %d1,%d3
-        bra.s   na_sum
-na_chk: cmpl    %a1@(12),%d3
-        bne.s   na_no
-        movel   %d5,%d0
-        bsr.w   blank
-        movel   %d5,%d0
+        movel   %d0,%sp@-             | encode arg 3: bank
         bsr.w   bank_at
-        moveal  %a0,%a1                | a1 = the bank's page 2
-        lea     NV+16,%a0
-na_put: subql   #1,%d2
-        bmi.s   na_yes
-        bsr.s   nv_entry
-        movel   %d1,%d0
-        lsrl    #7,%d0                 | index
-        andil   #0x7f,%d1              | value
-        cmpil   #BANK_B,%d0
-        bcc.s   na_put
-        moveb   %d1,%a1@(0,%d0:l)
-        bra.s   na_put
-na_yes: movel   %d5,NVBANK
-        moveq   #1,%d0
-        bra.s   na_out
-na_no:  moveq   #0,%d0
-na_out: movem.l %sp@,%d1-%d5/%a0-%a1
-        lea     %sp@(28),%sp
+        movel   %a0,%sp@-             | arg 2: table
+        movel   #NV,%sp@-             | arg 1: retained bytes
+        jsr     plk_nv_encode         | format magic, or 0 on invalid/overflow
+        lea     %sp@(12),%sp
+        move.w  #0x2700,%sr
+        cmpl    NVGEN,%d2
+        bne.s   ns_again              | latest request owns the final snapshot
+        movel   %d0,NV                | sole publication; failed encode leaves 0
+        clrl    NVBUSY
+ns_out: move.w  %sp@(20),%d1
+        move.w  %d1,%sr
+        movem.l %sp@,%d0-%d2/%a0-%a1
+        lea     %sp@(24),%sp
         rts
 
-| nv_entry: a0 = an entry -> d1 = its 24 bits, a0 past it. Clobbers d0.
-nv_entry:
-        moveq   #0,%d1
-        moveb   %a0@+,%d1
-        lsll    #8,%d1
-        moveq   #0,%d0
-        moveb   %a0@+,%d0
-        orl     %d0,%d1
-        lsll    #8,%d1
-        moveb   %a0@+,%d0
-        orl     %d0,%d1
+| nv_apply: d0 = bank -> 1 if restored; 0 with STORE untouched otherwise.
+| The C ABI preserves d2-d7/a2-a6. Preserve the other original registers.
+nv_apply:
+        lea     %sp@(-16),%sp
+        movem.l %d0-%d1/%a0-%a1,%sp@
+        bsr.w   bank_at
+        movel   #NV_END-NV,%sp@-
+        movel   %sp@(4),%sp@-         | original bank, before bank_at
+        movel   #NV,%sp@-
+        movel   %a0,%sp@-
+        jsr     plk_nv_decode
+        lea     %sp@(16),%sp
+        tstl    %d0
+        beq.s   na_out
+        movel   %sp@,%d0
+        movel   %d0,NVBANK
+        | Finish migration before a sharing bridge can reuse the old tail.
+        | P2R1 is already compact; P2NV may still occupy the full old range.
+        movel   NV,%d1
+        cmpil   #0x50324e56,%d1
+        bne.s   na_yes
+        bsr.w   nv_save
+na_yes: moveq   #1,%d0
+na_out: movem.l %sp@(4),%d1/%a0-%a1
+        lea     %sp@(16),%sp
         rts
 
 | nv_touch: d0 = a bank whose page 2 changed -> CS1 again when it is the
@@ -1566,7 +1473,8 @@ in_out: movem.l %sp@,%d0-%d1/%a0
 INITED: .long   0
 NVBANK: .long   -1                      | the bank whose page 2 CS1 holds
 NEEDFILE: .long 0                       | bank + 1: read it from its file at the next bank load
-NVGEN:  .long   0                       | counts nv_save starts (see nv_save)
+NVGEN:  .long   0                       | counts nv_save requests (see nv_save)
+NVBUSY: .long   0                       | one payload writer; nested requests retry
 EDITED: .long   0                       | set by a page-2 lock edit (the file pass reads it)
 P2STAGE: .fill  8*REC,1,0xff            | the staging record, by track
 P2PEND: .fill   24*REC,1,0xff           | pending slots n = 0..2, index n*8 + track
