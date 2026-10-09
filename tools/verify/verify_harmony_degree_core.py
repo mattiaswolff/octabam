@@ -52,6 +52,7 @@ mp_part_epochs: .space 256
                              ('part', ROOT/'modules/midi-part-state/part.s'),
                              ('events', ROOT/'modules/midi-harmony/degrees/events.s'),
                              ('scenes', ROOT/'modules/midi-harmony/degrees/scenes.s'),
+                             ('ui', ROOT/'modules/midi-harmony/degrees/ui.s'),
                              ('scene_access', ROOT/'modules/midi-harmony/degrees/scene-access.s'),
                              ('recording', ROOT/'modules/midi-harmony/degrees/recording.s'),
                              ('storage', ROOT/'modules/midi-harmony/degrees/storage.s'),
