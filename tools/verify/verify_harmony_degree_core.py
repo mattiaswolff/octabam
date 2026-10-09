@@ -29,7 +29,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='harmony-degree-core-') as tmp:
         out = pathlib.Path(tmp)
         scales = '--without-scales' not in sys.argv
-        (out/'remix.inc').write_text(f'.set MP_DEFINE,1\n.set HD_FOLLOW,1\n.set HD_SCALES,{int(scales)}\n')
+        (out/'remix.inc').write_text(f'.set MP_DEFINE,1\n.set HD_FOLLOW,1\n.set HD_SCENES,0\n.set HD_SCALES,{int(scales)}\n')
         (out/'stub.s').write_text("""
 .data
 .global ch_lock_table,ch_nv_bank,ch_lock_status
@@ -51,6 +51,8 @@ mp_part_epochs: .space 256
                              ('access', ROOT/'modules/harmony-degrees/part-access.s'),
                              ('part', ROOT/'modules/midi-harmony/part.s'),
                              ('events', ROOT/'modules/harmony-degrees/events.s'),
+                             ('scenes', ROOT/'modules/harmony-degrees/scenes.s'),
+                             ('scene_access', ROOT/'modules/harmony-degrees/scene-access.s'),
                              ('recording', ROOT/'modules/harmony-degrees/recording.s'),
                              ('storage', ROOT/'modules/harmony-degrees/storage.s'),
                              ('stub', out/'stub.s')]:
