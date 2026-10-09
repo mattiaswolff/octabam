@@ -82,7 +82,7 @@ def main():
     u.mem_write(s['ch_lock_table']+3,b'\x04')
     assert m.call('ch_file_write',0)==1
     path='/SET/PROJECT/hdeg01.work';original=m.files[path]
-    assert len(original)==24992 and original[:8]==b'HDP2'+(2).to_bytes(4,'big')
+    assert len(original)==10400 and original[:8]==b'HDP3'+(3).to_bytes(4,'big')
     assert int.from_bytes(original[16:20],'big')==fnv(original[32:])
     # The validation helper may tail-call and rewrite its argument; the hash
     # wrapper must still hash the COMPLETE payload from its original pointer.
@@ -97,6 +97,12 @@ def main():
     invalid=[('short',original[:-1],2),('long',original+b'\0',2),
              ('checksum',original[:100]+bytes((original[100]^1,))+original[101:],2),
              ('identity',original[:20]+bytes((original[20]^1,))+original[21:],3)]
+    invalid.append(('old_format',b'HDP2'+(2).to_bytes(4,'big')+original[8:],2))
+    # A valid checksum never admits a reserved metadata value or token.
+    for name,offset,value in (('metadata',32,252),('token',33,255)):
+        broken=bytearray(original);broken[offset]=value
+        broken[16:20]=fnv(broken[32:]).to_bytes(4,'big')
+        invalid.append((name,bytes(broken),2))
     for name,data,status in invalid:
         m.files[path]=data;m.call('ch_file_read',0)
         assert bytes(u.mem_read(s['ch_lock_status'],1))==bytes((status,)),name

@@ -168,15 +168,15 @@ def main():
             for tonic in range(12):
                 scale = mode*64+tonic*4
                 reset()
-                sync(scale_notes, 2, scale, 63)
+                mirrored, _ = sync(scale_notes, 2, scale, 63)
                 expected_degrees = bytes(encode(n, scale) for n in scale_notes)
                 assert read(root, 64) == expected_degrees
                 outgoing_scale = mode*64+((tonic+7) % 12)*4
                 call('hd_roots_detach_c', root, 63, outgoing_scale)
-                result, changed = sync(scale_notes, 0, (mode*64+((tonic+2) % 12)*4), 1)
+                result, changed = sync(mirrored, 0, (mode*64+((tonic+2) % 12)*4), 1)
                 expected = bytes(NONE if d == NONE else decode(d, outgoing_scale) for d in expected_degrees)
                 assert result == expected, (mode, tonic, result, expected)
-                assert changed == sum(a != b for a, b in zip(scale_notes, expected))
+                assert changed == sum(a != b for a, b in zip(mirrored, expected))
                 scale_cases += 1
         # Explicit degrees can lie outside MIDI even when their native edit
         # snapshot is a valid pitch. Every degree must clamp only at OFF;
@@ -192,11 +192,27 @@ def main():
                     snapshots = bytes([48]*count+[NONE]*(64-count))
                     state = encoded+snapshots+bytes([2, mode*12+tonic, 0])
                     u.mem_write(root, state)
-                    sync(snapshots, 1, scale, 0)
+                    mirrored, _ = sync(snapshots, 1, scale, 0)
                     assert read(root, 64) == encoded
-                    result, _ = sync(snapshots, 0, 0, 1)
+                    result, _ = sync(mirrored, 0, 0, 1)
                     assert result == bytes([decode(code, scale) for code in codes]+[NONE]*(64-count))
                     explicit_cases += count
+        # Every physical NOTE under every KEY becomes a canonical mirror,
+        # while its musical degree and subsequent outgoing pitch are exact.
+        native_cases = 0
+        for mode in range(7):
+            for tonic in range(12):
+                scale = mode*64+tonic*4
+                for first in (0, 64):
+                    reset()
+                    notes_in = bytes(range(first,first+64))
+                    canonical, _ = sync(notes_in, 2, scale)
+                    degrees = bytes(encode(n,scale) for n in notes_in)
+                    assert read(root,64) == degrees
+                    assert canonical == bytes(decode(d,0) for d in degrees)
+                    assert read(root+64,64) == canonical
+                    assert sync(canonical,0,scale)[0] == bytes(decode(d,scale) for d in degrees)
+                    native_cases += 64
         # Corrupt companions and invalid inputs fail before any publication.
         reset()
         sync(notes, 2, cmin)
@@ -223,6 +239,7 @@ def main():
             assert read(root) == valid and read(output, 64) == b'\xa5'*64
             invalid_cases += 1
         print(json.dumps({'scale_cases': scale_cases, 'explicit_degree_boundaries': explicit_cases,
+                          'physical_note_key_combinations': native_cases,
                           'independent_pattern_tracks': lanes,
                           'roots_per_case': 64, 'invalid_publications_rejected': invalid_cases,
                           'same_slot_c3_boundary': 'passed', 'abi_registers_and_stack': 'passed',

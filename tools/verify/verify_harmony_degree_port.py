@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+from verify_harmony_degree_packed import oracle
 import shutil
 import subprocess
 from pathlib import Path
@@ -105,9 +106,8 @@ def record_save(source):
     files=p.emu_card.extract_image((work/'save-card.img').read_bytes())
     for suffix in ('work','strd'):
         data=files[f'OCTABAM/BASS/hdeg01.{suffix}']
-        assert len(data)==24992 and data[:8]==b'HDP2'+(2).to_bytes(4,'big')
-        assert data[32:8224]==locks[:8192]
-        assert data[8224:]==degrees[:SIZE]
+        assert len(data)==10400 and data[:8]==b'HDP3'+(3).to_bytes(4,'big')
+        assert data[32:]==oracle(degrees[:SIZE], locks[:8192])
     for bank in range(2,17):assert files[f'OCTABAM/BASS/hdeg{bank:02d}.strd']==b'HDP0'+bytes(28)
     print('[ok] real REC+PLAY captures degree and quality; project SAVE stores the complete companion',flush=True)
     script='100 key 0x31 down\n200 key 0x31 up\n500 key 0x28 down\n600 key 0x28 up\n9000 key 0x27 down\n9100 key 0x27 up\n10000 quit\n'
@@ -223,8 +223,7 @@ def projects(work):
     project=work/'save-as-project';project.mkdir(exist_ok=True)
     for bank in range(16):
         data=files[prefix+f'hdeg{bank+1:02d}.work']
-        assert data[32:8224]==quality[bank*8192:(bank+1)*8192]
-        assert data[8224:]==original[bank*SIZE:(bank+1)*SIZE]
+        assert data[32:]==oracle(original[bank*SIZE:(bank+1)*SIZE], quality[bank*8192:(bank+1)*8192])
         assert (prefix+f'bank{bank+1:02d}.strd' in files)==(prefix+f'hdeg{bank+1:02d}.strd' in files)
     for path,data in files.items():
         if path.startswith(prefix) and '/' not in path[len(prefix):]:

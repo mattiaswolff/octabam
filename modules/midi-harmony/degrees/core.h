@@ -6,13 +6,13 @@
 enum { HD_BANKS = 16, HD_PATTERNS = 16, HD_TRACKS = 8, HD_STEPS = 64,
        HD_LOCKS = 8192, HD_LANES = 128, HD_NONE = 255, HD_CODES = 84 };
 
-/* Exact byte layout is the durable payload. Both architectures have no
- * padding because every member is a byte. Native-note snapshots detect edits
+/* Unpacked runtime layout. Both architectures have no padding because
+ * every member is a byte. Native-note snapshots detect edits
  * that arrive through a native path; they are not a second playable sequence. */
 typedef struct {
     HdRoots roots[HD_LANES];
 } HdBank;
-_Static_assert(sizeof(HdBank) == 16768, "Part-owned degree companion ABI");
+_Static_assert(sizeof(HdBank) == 16768, "Part-owned degree runtime ABI");
 
 extern HdBank hd_banks[HD_BANKS];
 extern volatile uint8_t hd_busy[HD_TRACKS];
@@ -78,10 +78,12 @@ void hd_events_mode_c(unsigned track, unsigned mode);
 int hd_prepare_c(int native_note, unsigned track);
 int hd_payload_valid_c(const uint8_t *payload);
 uint32_t hd_payload_hash_c(const uint8_t *payload);
-void hd_export_c(unsigned bank, uint8_t *payload);
+int hd_export_c(unsigned bank, uint8_t *payload);
 void hd_import_c(unsigned bank, const uint8_t *payload);
 uint32_t hd_native_hash_c(unsigned bank, uint32_t hash);
 void hd_nv_save_c(unsigned bank);
+void hd_nv_dirty_c(unsigned bank);
+void hd_nv_poll_c(void);
 int hd_nv_restore_c(unsigned bank);
 int hd_ui_advance_c(int code, int delta);
 int hd_ui_value_c(int step);

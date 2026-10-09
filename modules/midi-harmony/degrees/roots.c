@@ -20,6 +20,12 @@ static unsigned absolute(unsigned degree, unsigned scale) {
      * Leaving HARM clamps at MIDI bounds without dropping explicit locks. */
     return note >= 0 ? (unsigned)note : degree < 7 ? 0u : 127u;
 }
+unsigned hd_mirror_c(unsigned degree) {
+    static const uint8_t major[7] = {0,2,4,5,7,9,11};
+    if (degree >= HD_ROOT_CODES) return HD_ROOT_NONE;
+    int note = ((int)(degree/7)-1)*12 + major[degree%7];
+    return note < 0 ? 0u : note > 127 ? 127u : (unsigned)note;
+}
 
 void hd_roots_reset_c(HdRoots *r) {
     for (unsigned s = 0; s < HD_ROOT_STEPS; ++s)
@@ -56,6 +62,7 @@ int hd_roots_sync_c(HdRoots *r, const uint8_t *notes, uint8_t *result,
             degree = (unsigned)hd_encode_c((int)note, (int)(harm ? scale : outgoing));
         if (!harm && r->state == HD_ROOT_HARM && degree < HD_ROOT_CODES)
             next = absolute(degree, outgoing);
+        if (harm) next = hd_mirror_c(degree);
         if (next != note) ++changed;
         result[s] = (uint8_t)next;
         r->note[s] = (uint8_t)next;

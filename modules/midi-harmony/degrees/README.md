@@ -55,7 +55,7 @@ physical slot. Inactive patterns retain their last scale until next used.
 
 Native Part Save/Reload/copy/clear carries defaults directly. The companion
 contains only 128 pattern/track root records: 64 degrees, 64 native edit
-snapshots, representation, outgoing scale and context. Reusable slot context
+snapshots, representation, outgoing scale and context in runtime memory. Reusable slot context
 is detached on load and before replacement. Part assignment and defaults are
 excluded from the native pattern fingerprint. Dirty flags and retained mirrors
 follow native bank ownership.
@@ -80,3 +80,55 @@ KITS uses the same native Part fields and requires no special adapter.
 The optional MIDI SCENES adapter requires upstream PR #647 (MIDISC2.1).
 Its [compatibility boundaries and validation](SCENES.md) are documented
 separately. See [native Part storage and KITS boundaries](KITS.md).
+
+## Compact HDP3 / HDN3 storage
+
+The hard retained-memory limit is 15,256 bytes, leaving 15,464 for a future
+PLOCKS P2 encoding without reducing its 10,234-lock capacity. Harmony reserves
+**10,400 bytes at `0x100fd560..0x100ffe00`** (end exclusive), immediately below
+KITS. Together the proposed P2 and Harmony allocations use 25,864 of the
+30,720-byte window, leaving 4,856 bytes. This is a memory budget, not hook
+compatibility: unchanged PLOCKS P2 still conflicts and remains excluded.
+
+Each of 128 lanes stores one byte (`state*84 + outgoingScale`) and 64 ten-bit
+values (`degreeIndex*9 + qualityIndex`, MSB first). Degree index 84 and quality
+index 8 mean unlocked. Thus the payload is 128 × 81 = 10,368 bytes, plus its
+32-byte bank/version/checksum header. Every step can have both locks; there
+is no sparse limit, lossy truncation, variable worst case or overflow journal.
+HDP3 files and HDN3 retention use version 3. HDP0 remains the empty marker.
+
+**Snapshot reconstruction is an invariant, not a guess.** Every HARM root
+publication writes native NOTE and its runtime edit snapshot as the degree's
+C-major reference pitch, clamped to MIDI bounds (unlocked remains 255).
+Playback always resolves DEG through the applicable KEY. HARM-to-OFF writes
+the outgoing KEY's real pitch before native playback resumes. OFF NOTE and
+NOT2–4 remain native. Recording still captures the physical input's degree
+at the original KEY, and never records generated chord tones.
+
+This stable native mirror is independent of later KEY changes. Storage can
+reconstruct its exact snapshot from DEG; a later native NOTE edit, including
+an edit reverted to the old value, remains detectable. Arbitrary historical
+snapshots and a one-bit match flag are unnecessary. Non-HARM snapshots are
+unused by the conversion policy and load as unlocked. Slot context is
+transient and detaches on load, as before. Packing rejects a HARM record
+whose snapshot violates the invariant instead of discarding information.
+
+Native/degree publication stays under the existing short interrupt masks.
+Before a Harmony native write the old retained checkpoint is invalidated,
+so an interrupted publication cannot reinterpret a new reference pitch as
+an absolute edit against an old degree. Explicit save paths and the UI-task
+poll commit the refreshed snapshot with magic last. A preempting saver only
+requests a retry: one outer writer owns the retained bytes. Bulk copying is
+interruptible. As with previous retention, power loss during an invalidated
+or incomplete checkpoint falls back to validated companions; this does not
+claim atomic unsaved-edit recovery at every power-loss instruction.
+
+No earlier Harmony format is migrated. Use a disposable project copy for
+first testing; remove its old `hdeg*.work` / `hdeg*.strd` companions to start
+fresh. Existing incompatible companions are rejected and protected from
+being overwritten by a save. Preserve the originals with the older firmware.
+
+`verify_harmony_degree_packed.py` checks independent bitstream oracles, dense
+banks, malformed payload rejection before publication, post-checkpoint native
+edits and edit reversions, reservation guards and a preempting saver. The
+musical, publication and full-firmware suites validate the surrounding paths.

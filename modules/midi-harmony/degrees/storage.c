@@ -1,16 +1,18 @@
 /* One validated payload for roots and chord quality. The native bank is
  * still native. Its companion has an independent identity and no legacy
  * migration. The retained copy commits its magic last, under a short mask. */
-#include "core.h"
+#include "packed.h"
 
-enum { QUALITY_BYTES = 8192, PAYLOAD_BYTES = QUALITY_BYTES + sizeof(HdBank) };
+enum { QUALITY_BYTES = HD_LOCKS, PAYLOAD_BYTES = HD_PAYLOAD_BYTES };
 extern uint8_t ch_lock_table[16 * QUALITY_BYTES];
 extern uint8_t ch_lock_status[16];
 extern volatile uint32_t ch_nv_bank;
-static volatile uint32_t generation;
-#define NV ((volatile uint32_t *)(uintptr_t)0x100f8600)
-#define NV_PAYLOAD ((volatile uint8_t *)(uintptr_t)0x100f8620)
-#define MAGIC 0x48444e32u
+/* Initialized data: the loader's BSS may still contain staging bytes. */
+static volatile uint32_t generation = 1, available = 1;
+static volatile uint32_t pending = 1;
+#define NV ((volatile uint32_t *)(uintptr_t)0x100fd560)
+#define NV_PAYLOAD ((volatile uint8_t *)(uintptr_t)0x100fd580)
+#define MAGIC 0x48444e33u
 
 static uint16_t mask(void) {
     uint16_t sr;
@@ -24,28 +26,38 @@ static uint32_t hash(const volatile uint8_t *p, unsigned n, uint32_t h) {
     while (n--) h = (h ^ *p++) * 0x01000193u;
     return h;
 }
+/* Called inside a root publication mask, before native NOTE changes.
+ * The old checkpoint must never mistake a new canonical mirror for a
+ * physical NOTE edit. Bulk copying is deferred to the UI task. */
+void hd_nv_dirty_c(unsigned bank) {
+    if (bank >= HD_BANKS || ch_nv_bank != bank) return;
+    NV[0] = 0;
+    ++generation;
+    pending = 1;
+}
+void hd_nv_poll_c(void) {
+    if (pending && ch_nv_bank < HD_BANKS) hd_nv_save_c(ch_nv_bank);
+}
 int hd_payload_valid_c(const uint8_t *p) {
-    for (unsigned i = 0; i < QUALITY_BYTES; ++i)
-        if (p[i] > 7 && p[i] != 255) return 0;
-    return hd_validate_c((const HdBank *)(p + QUALITY_BYTES));
+    return hd_packed_valid_c(p);
 }
 uint32_t hd_payload_hash_c(const uint8_t *p) {
     return hash(p, PAYLOAD_BYTES, 0x811c9dc5u);
 }
-void hd_export_c(unsigned bank, uint8_t *p) {
-    if (bank >= 16) return;
+int hd_export_c(unsigned bank, uint8_t *p) {
+    if (bank >= 16) return 0;
     hd_checkpoint_c(bank);
-    const uint8_t *src = (const uint8_t *)&hd_banks[bank];
-    uint32_t ticket;
+    uint32_t ticket, roots_ticket;
+    int valid;
     do {
-        ticket = hd_revision_c(bank);
-        for (unsigned i = 0; i < sizeof(HdBank); ++i) p[i] = src[i];
-    } while (ticket != hd_revision_c(bank));
+        ticket = generation;
+        roots_ticket = hd_revision_c(bank);
+        valid = hd_pack_c(&hd_banks[bank], ch_lock_table + bank*QUALITY_BYTES, p);
+    } while (ticket != generation || roots_ticket != hd_revision_c(bank));
+    return valid;
 }
 void hd_import_c(unsigned bank, const uint8_t *p) {
-    if (bank >= 16 || !hd_validate_c((const HdBank *)p)) return;
-    uint8_t *dst = (uint8_t *)&hd_banks[bank];
-    for (unsigned i = 0; i < sizeof(HdBank); ++i) dst[i] = p[i];
+    if (bank >= 16 || !hd_unpack_c(&hd_banks[bank], ch_lock_table + bank*QUALITY_BYTES, p)) return;
     hd_bank_loaded_c(bank);
 }
 uint32_t hd_native_hash_c(unsigned bank, uint32_t h) {
@@ -60,25 +72,22 @@ void hd_nv_save_c(unsigned bank) {
     uint16_t sr = mask();
     ch_nv_bank = bank;
     ++generation;
+    /* Only the outer writer owns SRAM. A preempting save requests a retry
+     * instead of committing a snapshot the interrupted writer could damage. */
+    if (!available) { unmask(sr); return; }
+    available = 0;
+    NV[0] = 0;
     unmask(sr);
     for (;;) {
         uint32_t ticket = generation;
         bank = ch_nv_bank;
         uint32_t roots_ticket = hd_revision_c(bank);
-        NV[0] = 0;
-        const volatile uint8_t *q = ch_lock_table + bank*QUALITY_BYTES;
-        const volatile uint8_t *d = (const uint8_t *)&hd_banks[bank];
-        uint32_t sum = 0x811c9dc5u;
-        unsigned i;
-        for (i = 0; i < PAYLOAD_BYTES; ++i) {
-            if (ticket != generation) break;
-            uint8_t v = i < QUALITY_BYTES ? q[i] : d[i-QUALITY_BYTES];
-            NV_PAYLOAD[i] = v;
-            sum = (sum ^ v) * 0x01000193u;
-        }
+        int valid = hd_pack_c(&hd_banks[bank], ch_lock_table + bank*QUALITY_BYTES, NV_PAYLOAD);
+        uint32_t sum = valid ? hash(NV_PAYLOAD, PAYLOAD_BYTES, 0x811c9dc5u) : 0;
         sr = mask();
-        if (i == PAYLOAD_BYTES && ticket == generation && roots_ticket == hd_revision_c(bank)) {
-            NV[1] = 2;
+        if (ticket == generation && roots_ticket == hd_revision_c(bank)) {
+            if (!valid) { available = 1; unmask(sr); return; }
+            NV[1] = HD_STORAGE_VERSION;
             NV[2] = bank;
             NV[3] = PAYLOAD_BYTES;
             NV[4] = sum;
@@ -86,6 +95,8 @@ void hd_nv_save_c(unsigned bank) {
             NV[6] = ch_lock_status[bank];
             NV[7] = ~NV[6];
             NV[0] = MAGIC;
+            pending = 0;
+            available = 1;
             unmask(sr);
             return;
         }
@@ -93,16 +104,12 @@ void hd_nv_save_c(unsigned bank) {
     }
 }
 int hd_nv_restore_c(unsigned bank) {
-    if (bank >= 16 || NV[0] != MAGIC || NV[1] != 2 || NV[2] != bank ||
+    if (bank >= 16 || NV[0] != MAGIC || NV[1] != HD_STORAGE_VERSION || NV[2] != bank ||
         NV[3] != PAYLOAD_BYTES || NV[6] > 4 || NV[7] != ~NV[6] ||
         NV[4] != hash(NV_PAYLOAD, PAYLOAD_BYTES, 0x811c9dc5u) ||
-        !hd_payload_valid_c((const uint8_t *)NV_PAYLOAD)) return 0;
+        !hd_unpack_c(&hd_banks[bank], ch_lock_table + bank*QUALITY_BYTES, NV_PAYLOAD)) return 0;
     /* Restore runs on the serialized bank-load path; no live publication
      * occurs until every byte and both representations have been checked. */
-    for (unsigned i = 0; i < QUALITY_BYTES; ++i)
-        ch_lock_table[bank*QUALITY_BYTES+i] = NV_PAYLOAD[i];
-    uint8_t *d = (uint8_t *)&hd_banks[bank];
-    for (unsigned i = 0; i < sizeof(HdBank); ++i) d[i] = NV_PAYLOAD[QUALITY_BYTES+i];
     ch_lock_status[bank] = (uint8_t)NV[6];
     ch_nv_bank = bank;
     hd_bank_loaded_c(bank);

@@ -106,8 +106,8 @@ def main():
     assert m.call('hd_capture',50,0)==36
     # Combined current-bank retention uses a separate identity.
     m.call('ch_nv_save',0)
-    assert get(0x100f8600,4)==0x48444e32
-    assert get(0x100f860c,4)==24960
+    assert get(0x100fd560,4)==0x48444e33
+    assert get(0x100fd56c,4)==10368
     assert m.call('ch_nv_restore',0)==1
     # Copy a degree while the native NOTE snapshot is stale, then paste into
     # another Part/key and an OFF track. Exercise actual native memcpy too.
@@ -123,7 +123,8 @@ def main():
     m.c('hd_memcpy',clip,source,0x8b0)
     m.c('hd_memcpy',dest,clip,0x8b0)
     assert m.c('hd_degree_c',0,1,0,0)==35
-    assert get(dest+0x30)==50
+    assert get(dest+0x30)==48  # canonical mirror; resolved D3 remains 50
+    assert m.c('hd_resolve_c',0,1,0,0)==50
     m.c('hd_memcpy',bank+0x48d0+0x8b0,clip,0x8b0) # HARM -> OFF track
     assert get(bank+0x4900+0x8b0)==50
     # Stock often separately copies into CS1 from the same clipboard. It

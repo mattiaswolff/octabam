@@ -37,6 +37,7 @@ static HdRoots *roots(unsigned bank, unsigned pattern, unsigned track) {
     return &hd_banks[bank].roots[pattern*8+track];
 }
 static void changed(unsigned bank, unsigned pattern, unsigned track) {
+    hd_nv_dirty_c(bank);
     ++revision[bank][pattern*8+track];
     ++bank_revision[bank];
 }
@@ -111,6 +112,10 @@ int hd_context_replacing_c(unsigned context, unsigned track) {
     return 0;
 }
 static void write_native(unsigned bank, volatile uint8_t *p, unsigned value) {
+    /* A canonical mirror cannot be interpreted against an older degree
+     * checkpoint after a torn publication. Invalidate before the first
+     * native store; the UI-task boundary commits the new snapshot. */
+    hd_nv_dirty_c(bank);
     *p = (uint8_t)value;
     if (WORD(0x46c82456) != (uintptr_t)native(bank)) return;
     unsigned offset = (unsigned)(p-native(bank));
@@ -228,7 +233,8 @@ int hd_lock_c(unsigned bank, unsigned pattern, unsigned track, unsigned step) {
     if (note != r->note[step]) {
         int context = hd_pattern_context_c(bank,pattern);
         r->degree[step] = (uint8_t)hd_encode_c((int)note,hd_scale_c(bank,(unsigned)context%4,track));
-        r->note[step] = (uint8_t)note;
+        r->note[step] = (uint8_t)hd_mirror_c(r->degree[step]);
+        write_native(bank,step_note(bank,pattern,track,step),r->note[step]);
         changed(bank,pattern,track);
         dirty(bank);
     }
@@ -278,6 +284,7 @@ void hd_part_before_c(uintptr_t destination) {
         unsigned scale = (unsigned)hd_scale_c(context/4,context%4,track);
         uint16_t sr = mask();
         if (r->context == context) {
+            hd_nv_dirty_c(bank);
             r->scale = (uint8_t)scale_id(scale);
             r->context = HD_NONE;
             ++revision[bank][i];
@@ -341,8 +348,7 @@ void hd_edit_base_c(unsigned bank, unsigned part, unsigned track, int degree) {
 }
 void hd_edit_step_c(unsigned bank, unsigned pattern, unsigned track, unsigned step, int degree) {
     if (step >= 64 || (degree != HD_NONE && (unsigned)degree >= HD_CODES) || hd_sync_c(bank,pattern,track) != 1) return;
-    int context = hd_pattern_context_c(bank,pattern);
-    unsigned note = degree == HD_NONE ? HD_NONE : absolute((unsigned)degree,hd_scale_c(bank,(unsigned)context%4,track));
+    unsigned note = hd_mirror_c((unsigned)degree);
     HdRoots *r = roots(bank,pattern,track);
     uint16_t sr = mask();
     write_native(bank,step_note(bank,pattern,track,step),note);
@@ -384,7 +390,8 @@ void hd_record_publish_c(unsigned bank, unsigned pattern, unsigned track, unsign
     }
     if ((unsigned)degree >= HD_CODES || r->state != HD_ROOT_HARM) return;
     r->degree[step] = (uint8_t)degree;
-    r->note[step] = *step_note(bank,pattern,track,step);
+    r->note[step] = (uint8_t)hd_mirror_c((unsigned)degree);
+    write_native(bank,step_note(bank,pattern,track,step),r->note[step]);
     changed(bank,pattern,track);
     dirty(bank);
 }

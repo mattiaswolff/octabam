@@ -55,6 +55,7 @@ mp_part_epochs: .space 256
                              ('ui', ROOT/'modules/midi-harmony/degrees/ui.s'),
                              ('scene_access', ROOT/'modules/midi-harmony/degrees/scene-access.s'),
                              ('recording', ROOT/'modules/midi-harmony/degrees/recording.s'),
+                             ('packed', ROOT/'modules/midi-harmony/degrees/packed.s'),
                              ('storage', ROOT/'modules/midi-harmony/degrees/storage.s'),
                              ('stub', out/'stub.s')]:
             obj = out/f'{name}.o'
@@ -291,13 +292,13 @@ mp_part_epochs: .space 256
         put(field(0,0,0,19),55); put(base(0,0,0),99); put(BASE+0x8e57,3)
         assert call('hd_native_hash_c',0,0x12345678)==0x12345678
         # Dense retention: all qualities and pattern lanes, no Part defaults.
-        payload_len=8192+HDSIZE
-        chord=sym['ch_lock_table']; nv=0x100f8600
+        payload_len=10368
+        chord=sym['ch_lock_table']; nv=0x100fd560
         u.mem_write(chord,bytes(i%8 for i in range(8192)))
         call('hd_nv_save_c',0)
         saved=bytes(u.mem_read(nv,32+payload_len))
-        assert saved[:4]==b'HDN2' and int.from_bytes(saved[4:8],'big')==2
-        assert int.from_bytes(saved[12:16],'big')==24960
+        assert saved[:4]==b'HDN3' and int.from_bytes(saved[4:8],'big')==3
+        assert int.from_bytes(saved[12:16],'big')==10368
         h_before=bytearray(u.mem_read(sym['hd_banks'],HDSIZE))
         for lane in range(128): h_before[lane*LANE+130]=255
         q_before=bytes(u.mem_read(chord,8192))

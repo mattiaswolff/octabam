@@ -80,7 +80,7 @@ def recall(source,outgoing,incoming,target,sym,scenes=False):
     for field,value in ((5,incoming),(17,6),(18,1),(19,39)):
         assert bank[setup+field]==value,(name,field,bank[setup+field])
     assert bank[setup-0x100]==65
-    assert bank[0x4900+2*32]==48
+    assert bank[0x4900+2*32]==(47 if incoming and not outgoing else 48)  # canonical HARM mirror
     assert bank[0x4900+4*32]==bank[0x4900+8*32]==255
     degrees=(w/'degrees.bin').read_bytes()
     assert degrees[2]==((35 if outgoing else 34) if incoming else 255)

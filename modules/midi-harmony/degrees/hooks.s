@@ -58,17 +58,17 @@ hd_nv_restore:
     lea 12(%sp),%sp
     rts
 
-/* d0=bank, a0=degree payload (after CHRD). */
+/* d0=bank, a0=complete packed payload; export returns d0=valid. */
     .global hd_export,hd_import,hd_payload_hash,hd_native_hash
 hd_export:
-    lea -16(%sp),%sp
-    movem.l %d0-%d1/%a0-%a1,(%sp)
+    lea -12(%sp),%sp
+    movem.l %d1/%a0-%a1,(%sp)
     move.l %a0,-(%sp)
     move.l %d0,-(%sp)
     jsr hd_export_c
     addq.l #8,%sp
-    movem.l (%sp),%d0-%d1/%a0-%a1
-    lea 16(%sp),%sp
+    movem.l (%sp),%d1/%a0-%a1
+    lea 12(%sp),%sp
     rts
 hd_import:
     lea -16(%sp),%sp

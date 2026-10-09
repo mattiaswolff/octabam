@@ -26,7 +26,7 @@ def main():
         nonlocal pending
         if not watch:return
         if any(address<=a<address+size for a in (note,degree,snapshot)):pending=True
-        if check_nv and address<0x100f8620+24960 and address+size>0x100f8620:
+        if check_nv and address<0x100fd580+10368 and address+size>0x100fd580:
             assert mask_trace.ipl==0,'bulk retention ran with interrupts masked'
     def inspect(u,pc,size,data):
         nonlocal pending,max_masked,masked,observations
@@ -81,7 +81,7 @@ def main():
         UC_M68K_REG_D6:0,UC_M68K_REG_D5:0,UC_M68K_REG_A3:0,
         UC_M68K_REG_A4:50,UC_M68K_REG_A6:m.scratch})
     watch=False
-    assert get(note)==get(snapshot)==50 and get(degree)==35
+    assert get(note)==get(snapshot)==48 and get(degree)==35
     assert u.reg_read(UC_M68K_REG_SR)&0x700==0
     assert observations>=9,'the observer never reached an interruptible publication'
     assert max_masked<300,('root update masked too much work',max_masked)
@@ -96,7 +96,7 @@ def main():
         UC_M68K_REG_D6:0,UC_M68K_REG_D5:0,UC_M68K_REG_A3:0,
         UC_M68K_REG_A4:50,UC_M68K_REG_A6:m.scratch})
     watch=False
-    assert get(note)==get(snapshot)==50 and get(degree)==35
+    assert get(note)==get(snapshot)==48 and get(degree)==35
     assert max_masked<3000,('first recording masked whole-lane conversion',max_masked)
     result={'interrupt_visible_roots':'old_or_new_only','edit_cases':12,
             'clear_cannot_resurrect':True,'off_clear_native_unchanged':True,

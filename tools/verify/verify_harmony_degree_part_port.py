@@ -59,7 +59,7 @@ def transition(source, outgoing, incoming, symbols):
     # A recall never converts incoming defaults or changes another Part.
     assert before[0x8ed80:0x95048]==after[0x8ed80:0x95048],name
     assert after[0x8e57]==1
-    assert after[0x4900+2*32]==(48 if outgoing else 49)
+    assert after[0x4900+2*32]==(47 if incoming and not outgoing else 48 if outgoing else 49)  # canonical HARM mirror
     assert after[0x4900+4*32]==after[0x4900+8*32]==255
     roots=(work/'roots.bin').read_bytes()
     assert roots[2]==((35 if outgoing else 34) if incoming else 255)

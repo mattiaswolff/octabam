@@ -184,6 +184,7 @@ ch_display_tick:
     lea -60(%sp),%sp
     movem.l %d0-%d7/%a0-%a6,(%sp)
     jsr hd_ui_observe_c
+    jsr hd_nv_poll_c
     bsr.w ch_display_poll
     movem.l (%sp),%d0-%d7/%a0-%a6
     lea 60(%sp),%sp

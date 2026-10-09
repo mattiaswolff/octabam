@@ -9,7 +9,8 @@ enum { HD_ROOT_STEPS = 64, HD_ROOT_NONE = 255, HD_ROOT_CODES = 84,
  * NOTE snapshots detect native edits; they are never another playable lane.
  * context is bank*4+working Part, or NONE after that Part is overwritten.
  * scale stores mode*12+tonic, retaining the outgoing scale after detachment.
- * Byte-only layout is shared by the ColdFire companion and host validators. */
+ * HARM publications canonicalize NOTE to hd_mirror_c(degree); storage rebuilds
+ * that exact snapshot. The byte layout here is runtime-only. */
 typedef struct {
     uint8_t degree[HD_ROOT_STEPS];
     uint8_t note[HD_ROOT_STEPS];
@@ -18,6 +19,8 @@ typedef struct {
 _Static_assert(sizeof(HdRoots) == 131, "pattern root representation ABI");
 
 void hd_roots_reset_c(HdRoots *roots);
+/* Stable native NOTE mirror for an explicit DEG, independent of KEY. */
+unsigned hd_mirror_c(unsigned degree);
 int hd_roots_valid_c(const HdRoots *roots);
 /* Apply an explicit incoming context. Return native roots changed, or -1
  * without mutation for invalid input. Caller publishes returned notes and

@@ -14,8 +14,8 @@
         .set    IOB_LEN,    0x1000
 
     .set BANK_B,8192
-    .set FILE_B,24960
-    .set FILE_MAGIC,0x48445032 /* HDP2: pattern degrees, Part-owned defaults */
+    .set FILE_B,10368
+    .set FILE_MAGIC,0x48445033 /* HDP3: packed quality, degree and exact NOTE snapshot */
     .set FILE_NONE,0x48445030  /* HDP0: explicit empty companion */
     .text
     .global ch_saveb,ch_loadall,ch_loadmask,ch_tocs1,ch_fromcs1
@@ -88,7 +88,7 @@ bl_loop:
 | hdr: d0 = bank -> HDR filled.
 hdr:    lea     HDR,%a0
         movel   #FILE_MAGIC,%a0@
-        moveq   #2,%d1
+        moveq   #3,%d1
         movel   %d1,%a0@(4)
         movel   %d0,%a0@(8)
         movel   #FILE_B,%d1
@@ -193,28 +193,6 @@ ch_native_hash:
 /* a0 payload -> d0 checksum, d1=1 valid byte range / 0 invalid. */
 .payload_hash:
     jmp hd_payload_hash
-    lea -16(%sp),%sp
-    movem.l %d2-%d4/%a0,(%sp)
-    move.l #0x811c9dc5,%d0
-    move.l #0x01000193,%d3
-    move.l #8192,%d2
-    moveq #1,%d1
-.ph_loop:
-    moveq #0,%d4
-    move.b (%a0)+,%d4
-    cmpi.l #7,%d4
-    bls.s .ph_valid
-    cmpi.l #255,%d4
-    beq.s .ph_valid
-    moveq #0,%d1
-.ph_valid:
-    eor.l %d4,%d0
-    mulu.l %d3,%d0
-    subq.l #1,%d2
-    bne.s .ph_loop
-    movem.l (%sp),%d2-%d4/%a0
-    lea 16(%sp),%sp
-    rts
 /* d0 bank -> 1 complete, negative error. Header is 32 bytes BE:
  * magic, version, bank, length, FNV payload, FNV native identity, 0, 0.
  */
@@ -237,16 +215,10 @@ ch_file_write:
     clr.l HDR+24
     clr.l HDR+28
     move.l %d2,%d0
-    bsr.w bank_at
-    lea PAYLOAD,%a1
-    move.l #2048,%d0
-.wr_snapshot:
-    move.l (%a0)+,(%a1)+
-    subq.l #1,%d0
-    bne.s .wr_snapshot
-    move.l %d2,%d0
-    lea PAYLOAD+8192,%a0
+    lea PAYLOAD,%a0
     jsr hd_export
+    tst.l %d0
+    beq.w .wr_fail
     lea PAYLOAD,%a0
     bsr.w .payload_hash
     move.l %d0,HDR+16
@@ -324,7 +296,7 @@ ch_file_read:
     cmpi.l #FILE_MAGIC,%d0
     bne.w .rd_bad
     move.l HDR+4,%d0
-    cmpi.l #2,%d0
+    cmpi.l #3,%d0
     bne.w .rd_bad
     cmp.l HDR+8,%d2
     bne.w .rd_bad
@@ -358,15 +330,7 @@ ch_file_read:
     bne.s .rd_bad
     bsr.w fclose
     move.l %d2,%d0
-    bsr.w bank_at
-    lea PAYLOAD,%a1
-    move.l #2048,%d0
-.rd_publish:
-    move.l (%a1)+,(%a0)+
-    subq.l #1,%d0
-    bne.s .rd_publish
-    move.l %d2,%d0
-    lea PAYLOAD+8192,%a0
+    lea PAYLOAD,%a0
     jsr hd_import
     moveq #1,%d3
     bra.s .rd_status
@@ -560,7 +524,7 @@ ch_newproj2:
     clr.l 4(%a0)
     clr.l 8(%a0)
     clr.l 12(%a0)
-    clr.l 0x100f8600
+    clr.l 0x100fd560
     jsr hd_reset
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp

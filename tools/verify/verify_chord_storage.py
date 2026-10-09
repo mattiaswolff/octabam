@@ -32,8 +32,8 @@ def main():
     dense=bytes(i%8 for i in range(8192));u.mem_write(table+3*8192,dense)
     u.mem_write(s['ch_lock_status']+3,b'\x03')
     m.call('ch_nv_save',3)
-    retained_size=32+int.from_bytes(u.mem_read(0x100f860c,4),'big')
-    snapshot=bytes(u.mem_read(0x100f8600,retained_size))
+    retained_size=32+int.from_bytes(u.mem_read(0x100fd56c,4),'big')
+    snapshot=bytes(u.mem_read(0x100fd560,retained_size))
     u.mem_write(table+3*8192,b'\xff'*8192)
     u.mem_write(s['ch_lock_status']+3,b'\x00')
     assert m.call('ch_nv_restore',3)==1
@@ -41,16 +41,18 @@ def main():
     assert bytes(u.mem_read(table+3*8192,8192))==dense
     for pos in (0,4,8,12,16,24,28,32,8223):
         corrupt=bytearray(snapshot);corrupt[pos]^=0x80
-        u.mem_write(0x100f8600,bytes(corrupt));u.mem_write(table+3*8192,b'\x05'*8192)
+        u.mem_write(0x100fd560,bytes(corrupt));u.mem_write(table+3*8192,b'\x05'*8192)
         assert m.call('ch_nv_restore',3)==0,pos
         assert bytes(u.mem_read(table+3*8192,8192))==b'\x05'*8192
-    u.mem_write(0x100f8600,snapshot)
+    u.mem_write(0x100fd560,snapshot)
     assert m.call('ch_nv_restore',4)==0
     # Current-bank edits update the retained snapshot, distant banks do not.
     setq(3,15,7,63,6)
-    assert u.mem_read(0x100f8600+32+8191,1)==b'\x06'
-    snapshot=bytes(u.mem_read(0x100f8600,retained_size));setq(1,0,0,0,2)
-    assert bytes(u.mem_read(0x100f8600,retained_size))==snapshot
+    u.mem_write(table+3*8192+8191,b'\xff')
+    assert m.call('ch_nv_restore',3)==1
+    assert u.mem_read(table+3*8192+8191,1)==b'\x06'
+    snapshot=bytes(u.mem_read(0x100fd560,retained_size));setq(1,0,0,0,2)
+    assert bytes(u.mem_read(0x100fd560,retained_size))==snapshot
     # Failed native saves must not copy corrupt work over the stored backup.
     for bank in range(16):
         for status in range(5):

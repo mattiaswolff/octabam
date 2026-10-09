@@ -233,9 +233,9 @@ Part/Kit recall supplies incoming defaults; explicit DEG/CHRD locks stay with
 patterns. Runtime roots, note ownership and AUTO history are not persisted.
 
 Keep `hdeg01.work`–`hdeg16.work` and their `.strd` companions with the project.
-They store pattern DEG/CHRD locks in HDP2 format, compatible with the DS
-candidate. There is no migration from earlier experimental CHD2-only or
-project-comment settings. See [degree storage](degrees/README.md) for the
+They store pattern DEG/CHRD locks in compact HDP3 format. There is no migration
+from earlier Harmony formats or project-comment settings. Start with a project
+copy without older `hdeg` companions; incompatible files block overwriting saves. See [degree storage](degrees/README.md) for the
 layout, failure handling and native boundary rules, [KITS](degrees/KITS.md)
 and [MIDI Scenes](degrees/SCENES.md) for composition details. PLOCKS P2 conflicts
 with the retained-memory reservation and editing hooks; the ledger rejects it.

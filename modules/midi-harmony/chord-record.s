@@ -121,6 +121,9 @@ ch_record_commit:
     move.l %d0,-(%sp)
     move.w #0x2700,%sr
     /* NOTE + velocity in the native bank and its current-bank mirror. */
+    move.l %d6,-(%sp)
+    jsr hd_nv_dirty_c
+    addq.l #4,%sp
     move.l %d6,%d0
     move.l #0x9b340,%d1
     mulu.l %d1,%d0
