@@ -48,7 +48,19 @@ def main():
     assert m.call('ch_base_at', 0, 31) == 7
     assert m.call('ch_base_pattern', 7, 4, regs={UC_M68K_REG_D2: 0}) == 7
     assert m.call('ch_pattern_context', 7, 4) == 31
+    # Boot RAM is not guaranteed zero: compressed staging may overlap BSS.
+    # First init frees every message; repeated init must retain queued owners.
+    u.mem_write(m.sym['ch_messages'], b'\xa5'*4096)
+    put(m.sym['ch_record_overflow'], 123, 4)
     m.call('ch_lock_init')
+    assert bytes(u.mem_read(m.sym['ch_messages'], 4096)) == b'\0'*4096
+    assert bytes(u.mem_read(m.sym['ch_record_overflow'], 4)) == b'\0'*4
+    put(m.sym['ch_messages']+14, 1)
+    m.call('ch_lock_init')
+    assert u.mem_read(m.sym['ch_messages']+14, 1)[0] == 1
+    m.call('ch_record_free', stop=0x40045614,
+           regs={UC_M68K_REG_A2: m.sym['ch_messages']})
+    assert u.mem_read(m.sym['ch_messages']+14, 1)[0] == 0
     assert lock(7, 4, 0, 6) == 7
     index = ((7*16+4)*8)*64+6
     put(m.sym['ch_lock_table']+index, 3)
@@ -174,6 +186,7 @@ def main():
             assert bytes(u.mem_read(message, 12)) == bytes((70, 8, 48, 100))+b'\0'*8
             physical_cases += 1
     print(json.dumps({'part_default_writes': writes, 'distinct_contexts': 4, 'pending_context_paths': 4,
+                      'dirty_ram_message_pool_and_idempotent_init': 'passed',
                       'physical_key_and_queued_quality_cases': physical_cases,
                       'inheritance_explicit_locks_invalid_values_abi': 'passed',
                       'evidence': 'linked ColdFire', 'hardware_tested': False}))

@@ -26,6 +26,16 @@ ch_lock_init:
     move.l %d0,(%a0)+
     subq.l #1,%d1
     bne.s .init_fill
+    /* Runtime BSS can contain the compressed loader's staging bytes.
+     * Initialize message ownership once, before any producer can post. */
+    lea ch_messages,%a0
+    move.l #4096/4,%d1
+    moveq #0,%d0
+.init_messages:
+    move.l %d0,(%a0)+
+    subq.l #1,%d1
+    bne.s .init_messages
+    move.l %d0,ch_record_overflow
     move.l #0x43485244,%d0
     move.l %d0,ch_initialized
 .ifdef HAVE_DEGREES
