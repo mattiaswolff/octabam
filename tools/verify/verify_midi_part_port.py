@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 import verify_midi_harmony_port as p
 
@@ -24,9 +25,16 @@ def main():
     w=p.fixture(a.project,'native',{})
     follow='bf_source_get' in sym
     harmony='mh_get' in sym
+    runtime=subprocess.check_output(['m68k-elf-nm',str(p.ROOT/'out/platform/runtime/runtime.elf')],text=True)
+    scenes=any(line.split()[-1:] == ['msc21_ram'] for line in runtime.splitlines())
     for path in (w/'project').glob('bank*.work'):
         def seed(data):
             for part in range(8):
+                if scenes:
+                    # Start with a valid empty sparse Scene header. Otherwise
+                    # native paste normalizes two absent magic bytes to MS.
+                    at=p.otp.PART_BASE+part*p.otp.PART_STRIDE+9+0x17a2
+                    data[at:at+3]=b'MS\0'
                 for t in range(8):
                     at=p.otp.PART_BASE+part*p.otp.PART_STRIDE+9+0x4e2+36*t
                     values={3:int(follow and t!=0),5:(part+t)%3 if harmony else 0,
