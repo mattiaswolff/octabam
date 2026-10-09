@@ -73,14 +73,19 @@ fatal_hits = sum(1 for l in hits if f"at 0x{fatal:x}" in l)
 ok = handoff and entry_hits == 1 and fatal_hits == 0
 print(f"  [{'PASS' if ok else 'FAIL'}] verify_dram_boot: {remix.name} boots to the handoff; "
       f"loader ran {entry_hits}x, its fatal hang {fatal_hits}x")
-# MIDI SCENES initializes named data after the loader and before handoff.
-# Check exact transitions without widening the code-drift budget.
+# Native Part initialization can run after the loader and before handoff.
+# Only these named transient data arrays may differ because of that work;
+# never bless a containing function/section or widen the code-drift budget.
+part_state_ranges = []
 midisc_state = []
-if any(m.key == 'MIDI SCENES' for m in mods):
+if any(m.key in ('MIDI PART STATE', 'MIDI SCENES') for m in mods):
     runtime_nm = subprocess.check_output([
         'm68k-elf-nm', str(ROOT / 'out/platform/runtime/runtime.elf')], text=True)
     runtime_symbols = {f[2]: int(f[0], 16) for f in
                        (line.split() for line in runtime_nm.splitlines()) if len(f) == 3}
+    if any(m.key == 'MIDI PART STATE' for m in mods):
+        part_state_ranges = [(runtime_symbols[name], size) for name, size in
+                             (('mp_snapshot', 4*8*36), ('mp_part_epochs', 64*4))]
     if 'msc21_ram' in runtime_symbols:
         # PR #647 MIDISC2.1 initialization, measured against its unchanged
         # release21 bytes. Check exact data transitions, not a whole unit or
@@ -101,16 +106,19 @@ if any(m.key == 'MIDI SCENES' for m in mods):
 for (a, n, p), (label, raw) in zip(dumps, expects):
     got = p.read_bytes() if p.exists() else b""
     diff = [i for i in range(min(len(got), len(raw))) if got[i] != raw[i]]
+    transient = [i for i in diff if any(start <= a+i < start+size
+                                       for start, size in part_state_ranges)]
     scene_state_ok = all(raw[start-a:start-a+len(before)] == before and
                          got[start-a:start-a+len(after)] == after
                          for start, before, after in midisc_state)
     scene_transient = [i for i in diff if any(start <= a+i < start+len(before)
                                              for start, before, _ in midisc_state)]
-    remaining = len(diff)-len(scene_transient)
+    remaining = len(diff)-len(transient)-len(scene_transient)
     fine = len(got) == len(raw) and remaining <= 16 and scene_state_ok
     ok &= fine
     print(f"  [{'PASS' if fine else 'FAIL'}] verify_dram_boot: {label} at 0x{a:08x} == linked "
-          f"runtime ({n:,} B) except {len(scene_transient)} exact MIDISC2.1 initialization byte(s) and "
+          f"runtime ({n:,} B) except {len(transient)} named Part-state byte(s), "
+          f"{len(scene_transient)} exact MIDISC2.1 initialization byte(s) and "
           f"{remaining} other byte(s) the runtime wrote itself"
           + (f" at +{diff[0]:#x}.." if diff else ""))
     if not scene_state_ok:
