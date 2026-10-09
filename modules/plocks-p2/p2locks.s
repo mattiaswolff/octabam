@@ -1305,6 +1305,7 @@ ns_out: move.w  %sp@(20),%d1
         rts
 
 | nv_apply: d0 = bank -> 1 if restored; 0 with STORE untouched otherwise.
+| Boot restore only: retained bytes must stay stable across both decode passes.
 | The C ABI preserves d2-d7/a2-a6. Preserve the other original registers.
 nv_apply:
         lea     %sp@(-16),%sp

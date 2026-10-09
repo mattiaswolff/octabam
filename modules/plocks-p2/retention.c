@@ -53,6 +53,12 @@ u32 plk_nv_encode(volatile u8 *nv, const volatile u8 *table, u32 bank)
     magic(nv, 0);
     if (bank >= 16) return 0;
     for (i = 0; i < SLOTS; ++i) {
+        /* STORE banks are long-aligned. Retain the old writer's fast path
+         * across empty words; most step/parameter slots have no lock. */
+        if (!(i & 3) && *(const volatile u32 *)(table + i) == 0xffffffffu) {
+            i += 3;
+            continue;
+        }
         u32 v = table[i];
         if (v == 255) continue;
         if (v > 127 || ++n > MAX_LOCKS) return 0;
@@ -65,9 +71,14 @@ u32 plk_nv_encode(volatile u8 *nv, const volatile u8 *table, u32 bank)
     if (format == RAW) bytes = 3 * n;
     if (bytes > PACKED_BYTES - 16) return 0;
     write32(nv + 4, bank); write32(nv + 8, n); write32(nv + 12, sum);
+    if (!n) return format;
     if (format == RAW) {
         volatile u8 *p = nv + 16;
         for (i = 0; i < SLOTS; ++i) {
+            if (!(i & 3) && *(const volatile u32 *)(table + i) == 0xffffffffu) {
+                i += 3;
+                continue;
+            }
             u32 v = table[i], entry;
             if (v == 255) continue;
             if (v > 127 || p + 3 > nv + PACKED_BYTES) return 0;
@@ -78,6 +89,10 @@ u32 plk_nv_encode(volatile u8 *nv, const volatile u8 *table, u32 bank)
         struct writer w = {nv + 16, nv + PACKED_BYTES, 0, 0, 0};
         prev = 0;
         for (i = 0; i < SLOTS; ++i) {
+            if (!(i & 3) && *(const volatile u32 *)(table + i) == 0xffffffffu) {
+                i += 3;
+                continue;
+            }
             u32 v = table[i], gap, q, j, tail;
             if (v == 255) continue;
             if (v > 127) return 0;

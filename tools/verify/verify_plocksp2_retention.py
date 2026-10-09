@@ -4,6 +4,7 @@
 No stock image or project needed. Test old/new snapshots, the proven capacity
 bound, invalid input, interruption, SRAM write bounds, and the wrapper ABI.
 """
+import argparse
 import pathlib
 import random
 import struct
@@ -16,7 +17,7 @@ for path in ('tools', 'tools/emu'):
     sys.path.insert(0, str(ROOT / path))
 import toolpath  # noqa: E402,F401
 import emu_bringup  # noqa: E402,F401 (select the repository's Unicorn)
-from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_MEM_WRITE, UC_HOOK_CODE  # noqa: E402
+from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ, UC_HOOK_CODE  # noqa: E402
 from unicorn import m68k_const as K  # noqa: E402
 
 SLOTS, OLD_BYTES, SIZE = 98304, 30720, 15464
@@ -42,7 +43,7 @@ def build(td, legacy=False):
 
 
 class Machine:
-    def __init__(self, image, symbols):
+    def __init__(self, image, symbols, write_size=SIZE):
         self.s = symbols
         self.uc = u = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
         u.ctl_set_cpu_model(K.UC_CPU_M68K_CFV4E)
@@ -53,12 +54,20 @@ class Machine:
         u.reg_write(K.UC_M68K_REG_SR, 0x2700)
         self.writes = []
         self.cut = None
-        u.hook_add(UC_HOOK_MEM_WRITE, self.write, begin=NV, end=NV + OLD_BYTES - 1)
+        self.write_end = NV + write_size
+        self.read_end = None
+        u.hook_add(UC_HOOK_MEM_WRITE, self.write, begin=0x10000000, end=0x100fffff)
+        u.hook_add(UC_HOOK_MEM_READ, self.read, begin=0x10000000, end=0x100fffff)
 
     def write(self, u, access, address, size, value, data):
+        assert NV <= address and address + size <= self.write_end, f'SRAM write outside reservation: {address:#x}+{size}'
         self.writes.append((address, size, value))
         if self.cut == len(self.writes):
             u.emu_stop()
+
+    def read(self, u, access, address, size, value, data):
+        if self.read_end is not None:
+            assert NV <= address and address + size <= self.read_end, f'SRAM read outside input: {address:#x}+{size}'
 
     def call(self, name, bank=3, args=(), interrupted=False, stack=STACK):
         u = self.uc
@@ -112,14 +121,40 @@ def rice(records, bank=3):
                            int(bits[i:i + 8], 2) for i in range(0, len(bits), 8))
 
 
+def benchmark(current, legacy):
+    """Instruction counts, not cycle estimates or a hardware latency claim."""
+    print('  ColdFire instructions per nv_save (not hardware cycles):')
+    for n in (0, 1024, MAX):
+        counts = []
+        table = bytearray(b'\xff' * SLOTS)
+        for i in range(n):
+            table[i * SLOTS // n] = i & 127
+        for built, limit in ((legacy, OLD_BYTES), (current, SIZE)):
+            machine = Machine(*built, write_size=limit)
+            machine.table(table)
+            instructions = 0
+            def count(u, pc, size, data):
+                nonlocal instructions
+                instructions += 1
+            machine.uc.hook_add(UC_HOOK_CODE, count)
+            machine.call('nv_save')
+            counts.append(instructions)
+        print(f'    {n:5d} evenly spaced locks: legacy {counts[0]:,}, compact {counts[1]:,} '
+              f'({counts[1] / counts[0]:.2f}x)')
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--benchmark', action='store_true',
+                        help='also compare writer instruction counts with the frozen legacy writer')
+    args = parser.parse_args()
     subprocess.run([sys.executable, str(ROOT / 'modules/plocks-p2/generate_retention.py'), '--check'], check=True)
     from remix import registry, ledger
     from remix.schema import Claims, Kind, Module
     from dataclasses import replace
     modules = registry.modules()
     claim = modules['PLOCKS P2'].claims.sram
-    assert claim == ((NV, SIZE, 'P2NV/P2R1 compact bank copy in CS1'),)
+    assert [(start, length) for start, length, _ in claim] == [(NV, SIZE)]
     tail = Module(name='retention-tail-test', key='RETENTION TAIL TEST', kind=Kind.CF_PATCH,
                   doc='Synthetic owner of the released SRAM tail.',
                   claims=Claims(sram=((NV + SIZE, OLD_BYTES - SIZE, 'tail'),)))
@@ -133,7 +168,8 @@ def main():
         td = pathlib.Path(tmp)
         built = build(td)
         m = Machine(*built)
-        old = Machine(*build(td, legacy=True))
+        legacy_built = build(td, legacy=True)
+        old = Machine(*legacy_built, write_size=OLD_BYTES)
         cases = 0
         datasets = []
         for n in (0, 1, 2, 10, 100, 1000, MAX - 1, MAX):
@@ -196,18 +232,24 @@ def main():
         print('  [ok] released SRAM tail can be reused after migration')
 
         # Every bank including first/last: wrapper bank calculation and isolation.
+        sentinel = b'\x42' * SLOTS
         for bank in range(16):
+            m.uc.mem_write(m.s['STORE'], sentinel * 16)
             table = bytearray(b'\xff' * SLOTS); table[-1] = bank
             m.table(table, bank); m.call('nv_save', bank)
             m.table(b'\x42' * SLOTS, bank)
             assert m.call('nv_apply', bank) == 1 and m.read_table(bank) == table
-        print('  [ok] all 16 bank wrappers')
+            assert all(m.read_table(other) == sentinel for other in range(16) if other != bank)
+        print('  [ok] all 16 bank wrappers and isolation')
 
-        sentinel = b'\x42' * SLOTS
         def reject(blob, available=OLD_BYTES, bank=3):
             m.uc.mem_write(NV, bytes(blob) + b'\xa5' * (OLD_BYTES - len(blob)))
             m.table(sentinel)
-            result = m.call('plk_nv_decode', args=(m.s['STORE'] + 3 * SLOTS, NV, bank, available))
+            m.read_end = NV + available
+            try:
+                result = m.call('plk_nv_decode', args=(m.s['STORE'] + 3 * SLOTS, NV, bank, available))
+            finally:
+                m.read_end = None
             assert result == 0, f'accepted bad snapshot {blob[:16].hex()}, available={available}'
             assert m.read_table() == sentinel
 
@@ -307,6 +349,8 @@ def main():
                 assert m.uc.mem_read(m.s['NVBUSY'], 4) == bytes(4)
                 nested_cases += 1
         print(f'  [ok] {nested_cases} UI/engine preemptions: latest same/different bank, density change and overflow')
+        if args.benchmark:
+            benchmark(built, legacy_built)
     print('verify_plocksp2_retention: ok')
     return 0
 

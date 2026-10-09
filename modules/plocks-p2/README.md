@@ -32,17 +32,6 @@ stations, SCENES P2 KITS), project OCTABAM89_setgate:
   and a saved lock with the CS1 copy cleared (read from `p2lk03.work`)
   are each in the table after the power-up.
 
-ColdFire compression gate, 9 Oct 2026:
-
-- 34 round trips from the original upstream P2NV writer and through the
-  compressed codec, including the exact 15,464-byte worst case.
-- All 16 banks; all 128 values; 88 malformed/truncated cases; 36 interrupted
-  writes; 50 injected same/different-bank preemptions, including density
-  changes and overflow. Registers, stack and interrupt mask checked.
-- The ledger accepts reuse of all 15,256 released bytes and rejects a
-  one-byte overlap. After full legacy migration, overwriting the released
-  tail leaves subsequent restore/save intact.
-
 ## On the unit
 
 Not flashed.
@@ -53,6 +42,8 @@ Not flashed.
   and a power cut loses its page-2 locks back to the last save.
 - That CS1 keeps its contents over a power-off on the unit is read from
   stock's use of it (the power-up check and restore), not measured here.
+- Compression uses more CPU for non-empty banks; editing latency during
+  playback has not been measured on hardware (see `--benchmark` below).
 - Bank reload and project reload (the `.strd` → `.work` copies) are
   hooked and not exercised by the gate.
 - The dial draw with trigs held (SCENES P2's dial hooks call `plk_dial`;
@@ -79,8 +70,7 @@ It validates all input before publishing magic, and the reader validates
 bounds, ordering, padding and checksum before changing the runtime table.
 Invalid or interrupted snapshots use the existing project-file fallback.
 
-The old source's capacity is **10,234**, not the previously documented
-10,229: `(30,720 - 16) // 3`. That capacity is unchanged. For n locks
+The retained capacity stays **10,234** locks: `(30,720 - 16) // 3`. For n locks
 among 98,304 slots, Rice uses at most
 `11*n + floor((98,304-n)/8)` bits. At n=10,234 that is **15,464 bytes
 including the header**, versus 30,718 bytes for P2NV. The gate constructs
@@ -92,10 +82,8 @@ The SRAM reservation is now **15,464 bytes**,
 `0x100fc268..0x100ffe00` (**15,256 bytes**) is available to other modules.
 The legacy P2NV reader may inspect the former 30,720-byte window during
 upgrade, then rewrites the accepted snapshot compactly before returning.
-A sharing bridge must restore PLOCKS P2 before writing that tail
-if it promises migration of unsaved legacy state. It must also coordinate
-the existing shared hooks; compression alone does not make Harmony
-composable. This ordering is not required for saved projects: both old
+Any module reusing that tail must wait for PLOCKS P2 restoration
+before writing it to preserve unsaved legacy state. This ordering is not required for saved projects: both old
 and new firmware read the unchanged P2LK v1 files. Downgrading firmware
 cannot restore P2R1 unsaved state; saved project files remain compatible.
 
@@ -106,7 +94,8 @@ bank and increments `NVGEN` under SR `0x2700`. One outer writer owns the
 payload; a nested request invalidates magic and returns immediately.
 The outer writer retries the latest bank if the generation changed, and
 publishes magic only under the short final masked check. Neither task
-spins waiting for a preempted task; scanning and encoding remain unmasked.
+spins waiting for a preempted task. The caller's interrupt mask is restored
+while scanning and encoding.
 Writes stay bounded even when a nested edit changes density between the
 size scan and encoding. Busy/generation state is transient, not retained.
 
@@ -123,8 +112,13 @@ that generated assembly matches before executing it.
   P2LK v1 files across all 16 banks, compressed power-up and P2NV upgrade.
 - `tools/verify/verify_plocksp2_retention.py`: actual ColdFire codec and
   pre-change writer, full-capacity migration, exact worst case, all banks,
-  invalid/truncated input, interrupted publication, register/stack/mask
-  preservation and injected UI/engine preemption. No stock image needed.
+  invalid/truncated input with read/write bounds, interrupted publication,
+  register/stack/mask preservation and injected UI/engine preemption. It
+  runs once across carrying remixes and needs no stock image or project.
+  The frozen legacy writer is an upgrade oracle; do not regenerate it
+  from the current writer. Add `--benchmark` to compare writer instruction
+  counts for empty, sparse and full-capacity banks. These are not hardware
+  cycles or an audio-deadline guarantee.
 
 ## What stock does
 
@@ -165,7 +159,7 @@ trig. Nothing carries page 2, and every byte of the pattern data is used.
   through, and at power-up `0x40025770` checks it, `0x4000fbb4` restores
   the bank and the firmware's load reads only the other banks from the
   card. The page-2 locks follow in CS1's unused top
-  (`0x100f8600..0x100ffe00`), using the compatible retained formats above.
+  (`0x100f8600..0x100fc268`), using the compatible retained formats above.
   The snapshot is rewritten when stock copies a bank into CS1 and after
   every change to that bank; at power-up it is applied after stock's
   restore, or the bank's `p2lkNN.work` is read at the first bank load.

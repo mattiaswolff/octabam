@@ -1,4 +1,5 @@
 | Original P2NV writer from upstream 063a4262, unchanged instructions.
+| Frozen compatibility fixture: do not update with the current writer.
 | Standalone synthetic table; no Elektron bytes. Upgrade-compatibility oracle.
 .set NV, 0x100f8600
 .set NV_END, 0x100ffe00
