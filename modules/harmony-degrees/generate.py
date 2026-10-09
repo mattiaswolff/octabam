@@ -19,7 +19,7 @@ FLAGS = ['-mcpu=54455', '-O2', '-ffreestanding', '-fno-builtin', '-fno-common',
 def main():
     generated = {}
     with tempfile.TemporaryDirectory(prefix='harmony-degrees-generate-') as tmp:
-        for unit in ('core', 'storage', 'events', 'ui', 'operations', 'roots', 'recording'):
+        for unit in ('core', 'storage', 'events', 'ui', 'operations', 'roots', 'recording', 'scenes'):
             dest = pathlib.Path(tmp)/f'{unit}.s'
             subprocess.run(['m68k-elf-gcc', *FLAGS, '-S', '-o', str(dest), f'{unit}.c'],
                            check=True, cwd=HERE)

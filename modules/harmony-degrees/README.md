@@ -77,8 +77,9 @@ No legacy degree migration is required. The candidate uses its own companion
 identity so it cannot masquerade as the current module's CHRD format.
 
 KITS uses the same native Part fields and requires no special adapter. The
-combined selection is `mattias-bus-degrees-kits`; its acceptance is in progress. MIDI SCENES remains
-incompatible because native NOTE interpolation has no degree contract.
+combined KITS selection is `mattias-bus-degrees-kits`. The additional
+`mattias-bus-degrees-scenes` candidate adds DEG-aware MIDI Scenes; its
+[compatibility checks](SCENES.md) are in progress.
 See [the integration plan and ownership record](KITS.md).
 
 ## Implementation and evidence plan

@@ -85,7 +85,27 @@ ch_stage_copy_b:
     addq.l #8,%sp
     adda.l #0x46c78960,%a0
     jmp 0x4009c10e
+/* Publish before the native pending copy. MIDI SCENES owns that copy's
+ * 0x400a19da boundary; leave its hook and continuation untouched. */
+    .global ch_pending_entry
+ch_pending_entry:
+    move.l 136(%sp),%d6
+    move.l %d6,48(%sp)
+    subq.l #8,%sp
+    movem.l %a0-%a1,(%sp)
+    move.l %d0,%a0
+    move.l %d6,%a1
+    bsr.w ch_pending_publish
+    movem.l (%sp),%a0-%a1
+    addq.l #8,%sp
+    jmp 0x400a19d6
+/* Direct linked-test entry for the native copy ABI. */
 ch_pending_fire:
+    bsr.w ch_pending_publish
+    movem.l (%a0),%d1-%d4/%d6-%d7/%a4-%a5
+    movem.l %d1-%d4/%d6-%d7/%a4-%a5,(%a1)
+    jmp 0x400a19e2
+ch_pending_publish:
     lea -16(%sp),%sp
     movem.l %d0-%d1/%a0-%a1,(%sp)
     move.l %a0,%d0
@@ -113,9 +133,7 @@ ch_pending_fire:
 .fire_done:
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
-    movem.l (%a0),%d1-%d4/%d6-%d7/%a4-%a5
-    movem.l %d1-%d4/%d6-%d7/%a4-%a5,(%a1)
-    jmp 0x400a19e2
+    rts
     .balign 4
 ch_staged: .space 8,255
 ch_pending: .space 32,255

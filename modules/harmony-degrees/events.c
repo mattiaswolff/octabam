@@ -132,14 +132,16 @@ int hd_prepare_c(int note, unsigned track) {
         unsigned old = e->active;
         convert(e,track,mode);
         if (old != e->active) hd_rebuild[track] = 1;
-        int result = !mode ? (e->converted ? e->note : note) : hd_decode_c(
-            e->inherited ? hd_base_c(e->context/4,e->context%4,track) : e->degree,e->scale);
+        int result = !mode ? (e->converted ? hd_scene_value_c(e->context,track,0,e->note) : note) : hd_decode_c(
+            hd_scene_value_c(e->context,track,0,
+                e->inherited ? hd_base_c(e->context/4,e->context%4,track) : e->degree),e->scale);
         e->output = (int16_t)result;
         unmask(sr);
         return result;
     }
     /* No scheduled event yet: inherit the engine Part, never the selected UI. */
-    return !mode ? note : hd_decode_c(hd_base_c((unsigned)context/4,(unsigned)context%4,track),
+    return !mode ? note : hd_decode_c(hd_scene_value_c((unsigned)context,track,0,
+                                      hd_base_c((unsigned)context/4,(unsigned)context%4,track)),
                                       hd_scale_c((unsigned)context/4,(unsigned)context%4,track));
 }
 
@@ -161,12 +163,13 @@ void hd_event_tick_c(unsigned track) {
     unsigned mode = hd_part_type_c(e->context/4,e->context%4,track);
     unsigned old = e->active;
     convert(e,track,mode);
-    int output = !mode ? (e->converted ? e->note : e->output) : hd_decode_c(
-        e->inherited ? hd_base_c(e->context/4,e->context%4,track) : e->degree,e->scale);
+    int output = !mode ? (e->converted ? hd_scene_value_c(e->context,track,0,e->note) : e->output) : hd_decode_c(
+        hd_scene_value_c(e->context,track,0,
+            e->inherited ? hd_base_c(e->context/4,e->context%4,track) : e->degree),e->scale);
     if (old != e->active || e->output != output) {
         e->output = (int16_t)output;
         hd_rebuild[track] = 1;
     }
-    if (!mode && e->converted) BYTE(0x46c76fe0u + track*32) = e->note;
+    if (!mode && e->converted) BYTE(0x46c76fe0u + track*32) = (uint8_t)output;
     unmask(sr);
 }

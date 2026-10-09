@@ -45,7 +45,8 @@ that file periodically; do not edit sibling worktrees concurrently.
   candidate/package.
 - Shared Harmony changes are exchanged as bounded commits. No KITS symbols,
   library scans, private Kit storage or KITS-specific conversion adapter.
-  KITS source and format stay unchanged. MIDI SCENES remains incompatible.
+  KITS source and format stay unchanged. The subsequent [MIDI Scenes
+  compatibility work](SCENES.md) starts from this completed handoff.
 
 The linked [shared task](codex://threads/01a11d18-e86b-7842-ba90-4a7ee55004db)
 has no callable messaging API in this session. Coordination uses these files.

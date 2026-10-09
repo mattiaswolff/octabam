@@ -110,7 +110,7 @@ MODULE = Module(
         Detour(0x4009d180, bytes.fromhex('2203eb8941f51800'), 'chordsequence', 'ch_stage_fill', 'schedule exact MIDI step CHRD', pad_to=8),
         Detour(0x4009b91c, bytes.fromhex('d1fc46c78960'), 'chordsequence', 'ch_stage_copy_a', 'MIDI staged CHRD to pending'),
         Detour(0x4009c108, bytes.fromhex('d1fc46c78960'), 'chordsequence', 'ch_stage_copy_b', 'MIDI staged CHRD to pending on start'),
-        Detour(0x400a19da, bytes.fromhex('4cd030de48d130de'), 'chordsequence', 'ch_pending_fire', 'publish fired MIDI chord identity', pad_to=8),
+        Detour(0x400a19ce, bytes.fromhex('2c2f00882f460030'), 'chordsequence', 'ch_pending_entry', 'publish fired MIDI chord identity before native/scene pending copy', pad_to=8),
         Detour(0x4004e1f6, bytes.fromhex('2d40ffb02040'), 'chordui', 'ch_descriptor', 'CHRD descriptor for CHORD tracks'),
         Detour(0x4004e382, bytes.fromhex('226effcc20690030'), 'chordui', 'ch_draw_value', 'CHRD held-step or live value', pad_to=8),
         Detour(0x40055008, bytes.fromhex('4fefffd048d77cfc'), 'chordui', 'ch_encoder', 'live CHRD selection without native writes', pad_to=8),

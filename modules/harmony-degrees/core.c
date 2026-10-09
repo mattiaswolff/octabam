@@ -131,6 +131,14 @@ static void part_dirty(unsigned bank, unsigned part) {
     }
     dirty(bank);
 }
+void hd_scene_part_byte_c(unsigned context, unsigned offset, unsigned value) {
+    if (context>=64 || offset<0x17a2 || offset>=0x17a2+144 || value>255) return;
+    unsigned bank=context/4, part=context%4;
+    uint16_t sr=mask();
+    write_native(bank,native(bank)+part_offset(part)+offset,value);
+    part_dirty(bank,part);
+    unmask(sr);
+}
 static unsigned absolute(unsigned degree, int scale) {
     int note = hd_decode_c((int)degree,scale);
     return note >= 0 ? (unsigned)note : degree < 7 ? 0u : 127u;
@@ -301,6 +309,7 @@ void hd_mode_c(unsigned track, unsigned mode) {
     hd_busy_context[track] = (uint8_t)context;
     hd_target[track] = (uint8_t)mode;
     hd_busy[track] = 1;
+    hd_scene_mode_c((unsigned)context,track,old,mode,scale);
     /* Only an explicit HARM edit converts the Part default. Recall carries
      * the incoming Part's own defaults and never calls this setter. */
     if (!old && mode) {

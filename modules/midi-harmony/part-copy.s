@@ -150,6 +150,12 @@ mp_native_init:
     adda.l #0x18b2-288,%a0
     subq.l #1,%d3
     bne.s .snapshot_part
+    .ifdef HAVE_DEGREES
+    /* Scene readers share this publication; prepare their sparse endpoints
+     * while the native Part is intact and the snapshot is still invisible. */
+    move.l %d5,%d0
+    jsr hd_scenes_before
+    .endif
     move.l %d5,mp_snapshot_bank
     .ifdef HAVE_DEGREES
     /* DEG must not reattach affected provenance while this mask is active. */

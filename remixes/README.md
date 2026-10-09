@@ -14,6 +14,7 @@ A remix is a named selection of modules; `make image REMIX=<name> BUILD=<n>` bui
 | [`mattias-bus`](mattias-bus/README.md) | Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and Modulation on FX1; RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony with Chord Play. | `make check`: Combined development candidate; full checks and hardware acceptance pending |
 | [`mattias-bus-degrees`](mattias-bus-degrees/README.md) | Personal bus selection plus degree/register Harmony roots. | port-gated: D0 degree lifecycle, panel and playback port suites passed; hardware untested |
 | [`mattias-bus-degrees-kits`](mattias-bus-degrees-kits/README.md) | Personal bus rig with degree/register Harmony, Part settings and KITS. | port-gated: Nine degree firmware groups and 18 Kit recalls passed; hardware untested |
+| [`mattias-bus-degrees-scenes`](mattias-bus-degrees-scenes/README.md) | Personal bus rig with degree/register Harmony, KITS and MIDISC2.1. | `make check`: Degree / KITS / MIDISC2.1 compatibility validation in progress; not hardware tested |
 
 ## Effects
 

@@ -40,7 +40,10 @@ hd_ui_value_c:
 	move.l %d1,-(%sp)
 	move.l %d2,-(%sp)
 	jsr hd_base_c
-	lea (12,%sp),%sp
+	move.l %d0,-(%sp)
+	clr.l -(%sp)
+	jsr hd_scene_ui_c
+	lea (20,%sp),%sp
 	move.l (%sp)+,%d2
 	move.l (%sp)+,%d3
 	addq.l #4,%sp

@@ -13,7 +13,7 @@ B=0x400e21e0
 PS=0x18b2
 
 
-def recall(source,outgoing,incoming,target,sym):
+def recall(source,outgoing,incoming,target,sym,scenes=False):
     name=f'{outgoing}-to-{incoming}-kit{target+1}'
     w=p.fixture(source,name,{0:outgoing},key_raw=2,first_note=48)
     for path in (w/'project').glob('project.*'):
@@ -28,6 +28,13 @@ def recall(source,outgoing,incoming,target,sym):
                     for field,value in ((5,incoming),(17,6),(18,1),(19,39)):
                         data[base+0x4e2+field]=value
                     data[base+0x3e2]=65
+                if scenes:
+                    selected=bank==target//4+1 and part%4==target%4
+                    mode=incoming if selected else outgoing
+                    endpoints=(38,42) if selected and mode else (55,62) if selected else (35,39) if mode else (48,55)
+                    data[base+0x10:base+0x12]=bytes((0,1))
+                    blob=bytes((0x4d,0x53,2,0,0,0,endpoints[0],1,0,endpoints[1]))
+                    data[base+0x17a2:base+0x17a2+len(blob)]=blob
             at=0x492e+0x39
             data[at+2*32]=48
             for step in (4,8):data[at+step*32]=255
@@ -54,6 +61,7 @@ def recall(source,outgoing,incoming,target,sym):
            '--step',f'-:call:{sym["hd_sync_c"]:#x},0,0,0',
            '--step',f'-:poke:{lock+2:#x}=5']
     if outgoing:steps+=['--step',f'-:call:{sym["hd_edit_step_c"]:#x},0,0,0,2,35']
+    if scenes:steps+=['--step','-:poke:0x460d16c8=0;0x460d16c9=0;0x460d16ca=0;0x460d16cb=0']
     events=p.run(w,'recall',steps+['--step','-:dump:'+before,'--internal-clock',
                                   '--live-script',panel,'--mem-dump',after])
     p.balanced(events)
@@ -63,6 +71,7 @@ def recall(source,outgoing,incoming,target,sym):
     root=50 if outgoing else 48
     sequence=([48,65,65] if incoming==0 else [root,57,57] if incoming==1 else
               [root,root+4,root+7]+[57,60,64,67]*2)
+    if scenes:sequence=([62]*3 if incoming<2 else [62,66,69]+[62,65,69,72]*2)
     assert notes==held+live+sequence,(name,notes,held+live+sequence)
     assert (w/'assignment.bin').read_bytes()==bytes((target,)),name
     bank=(w/'after-bank.bin').read_bytes()
@@ -87,9 +96,10 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=Path)
     ap.add_argument('--frozen',action='store_true',help='reuse the image and symbols from the previous run')
+    ap.add_argument('--scenes',action='store_true',help='test incoming scene roots on every Kit mode pair')
     ap.add_argument('--case',action='append',choices=[f'{a}-{b}-{t}' for a in range(3) for b in range(3) for t in (2,6)])
     args=ap.parse_args()
-    p.OUT=p.ROOT/'out/degree-kits-port';p.OUT.mkdir(parents=True,exist_ok=True)
+    p.OUT=p.ROOT/('out/degree-scenes-kits-port' if args.scenes else 'out/degree-kits-port');p.OUT.mkdir(parents=True,exist_ok=True)
     if args.frozen:
         p.CANDIDATE_IMAGE=p.OUT/'candidate.bin'
         sym=json.loads((p.OUT/'candidate-all-symbols.json').read_text())
@@ -103,7 +113,7 @@ def main():
     selected=args.case or [f'{a}-{b}-{t}' for a in range(3) for b in range(3) for t in (2,6)]
     results={}
     for case in selected:
-        results[case]=recall(args.project,*map(int,case.split('-')),sym)
+        results[case]=recall(args.project,*map(int,case.split('-')),sym,scenes=args.scenes)
         (p.OUT/('receipt-'+ '-'.join(selected)+'.json')).write_text(json.dumps(dict(cases=results,
             image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 

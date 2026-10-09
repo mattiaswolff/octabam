@@ -8,6 +8,10 @@ hd_follow_c:
 hd_scales_c:
     moveq #HD_SCALES,%d0
     rts
+    .global hd_scenes_c
+hd_scenes_c:
+    moveq #HD_SCENES,%d0
+    rts
     .global hd_ui_context_c,hd_play_context_c,hd_part_read_c,hd_part_write_c,hd_part_key_c
 hd_ui_context_c:
     jmp mp_ui_context
@@ -45,6 +49,18 @@ hd_part_before:
     movem.l %d0-%d1/%a0-%a1,(%sp)
     move.l %d0,-(%sp)
     jsr hd_part_before_c
+    addq.l #4,%sp
+    movem.l (%sp),%d0-%d1/%a0-%a1
+    lea 16(%sp),%sp
+    rts
+
+/* d0 = native bank pointer, all registers preserved. */
+    .global hd_scenes_before
+hd_scenes_before:
+    lea -16(%sp),%sp
+    movem.l %d0-%d1/%a0-%a1,(%sp)
+    move.l %d0,-(%sp)
+    jsr hd_scenes_before_c
     addq.l #4,%sp
     movem.l (%sp),%d0-%d1/%a0-%a1
     lea 16(%sp),%sp
