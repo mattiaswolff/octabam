@@ -32,5 +32,8 @@ The audio-rig fixture supplies BusDelay/BusVerb hosts, sends and sample routing
 for the project and TEMPO BUS checks. These two targets are the shared and
 per-remix halves of `make check`, with the appropriate fixture for each.
 
-This candidate has not yet been packaged or tested on hardware. The delivered
-D0 degree package remains a separate, unchanged build.
+The DK firmware passes the degree lifecycle suite, all 18 Kit mode transitions
+and the selected module gates. The MIDI-only fixture initially lacked TEMPO
+BUS audio hosts; that check and the project gate pass on the original audio
+rig, with the original failure and rerun retained in the receipts. Hardware
+acceptance remains pending. The delivered D0 package is unchanged.

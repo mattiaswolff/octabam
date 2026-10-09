@@ -3,8 +3,8 @@
 Production implementation on `codex/features/harmony-degrees-kits`.
 The user confirmed this is greenfield: no backward compatibility, migration
 reader or duplicate settings store. D0 remains an unchanged separate package.
-The new combined candidate is `mattias-bus-degrees-kits`, build DK. Its final
-checks are running; it is not yet packaged or hardware accepted.
+The new combined candidate is `mattias-bus-degrees-kits`, build DK. Its firmware checks
+are complete; hardware acceptance remains separate.
 
 ## Musical contract
 
@@ -187,13 +187,19 @@ unit tests pass.
 Shared Follow safety fixture/native architecture cleanup `49c6e603` is now
 imported. Seven transition pairs and the 20-second Follow-on soak pass on the
 shared carrier. OFF soak and the shared KITS per-remix check also pass; the
-latter has 17 image gates and no skips. Its SPRD-only panel, 172,800 AUTO transitions, native Part lifecycle on Follow,
-Harmony and the KITS carrier, project persistence and stock-OFF UART pass.
+latter has 17 image gates and no skips. Its SPRD-only panel, 172,800 AUTO
+transitions, native Part lifecycle on Follow, Harmony and the KITS carrier,
+project persistence and stock-OFF UART pass.
 
-Before package: finish the combined image-stage gates and record the resolved
-TEMPO BUS fixture failure; all musical/lifecycle suites and shared followups
-are complete. Then
-freeze clean source/image provenance, build and independently decode BIN/SYX,
-and package the new candidate with receipts. Upstream was refreshed on
-9 October and is already contained (`063a4262`). No card copy, OS upgrade or
-hardware acceptance is authorized or claimed by these checks.
+All 24 combined image gates now have passing results. The original `make
+check` exits 2 because TEMPO BUS ran on the MIDI-only fixture; its only failed
+assertion is the missing audio hosts. The project/TEMPO BUS rerun passes on
+the same firmware using the original audio rig. Both results and the explicit
+resolution are retained in `out/package-audit/completed-checks.json`. No later
+gate was omitted: image gates are the last verification step in the Makefile.
+Both combined and no-KITS AUTO sweeps pass all 172,800 transitions.
+
+The DK package procedure freezes clean source/image provenance, builds and
+independently decodes BIN/SYX, and includes validation receipts and hardware
+acceptance steps. Upstream was refreshed on 9 October and is already contained
+(`063a4262`). No card copy, OS upgrade or hardware acceptance is claimed.
