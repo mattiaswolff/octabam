@@ -1,10 +1,8 @@
-# Degree compatibility with MIDI Scenes
+# MIDI Scenes integration
 
-Hardware-test candidate: `mattias-bus-degrees-scenes`, build DS. Based on the
-completed degree/Part/KITS handoff `9cf41ec9` and upstream PR #647
-`83a9d6c103e9f127c191769d9f51f01555419c89`. MIDI SCENES remains pinned to
-MIDISC2.1 submodule `52eaab0a7bff43b0316e522a03199106d1553e98`.
-KITS and MIDI SCENES source and linked bytes are not edited by this adapter.
+Adapter for upstream PR #647, MIDISC2.1 submodule
+`52eaab0a7bff43b0316e522a03199106d1553e98`. KITS and MIDI SCENES source
+and linked bytes remain unchanged. Revalidate against a different revision.
 
 ## Controls and storage
 
@@ -58,20 +56,7 @@ locks, physical scene editing, project SAVE, cold reload and retained resume.
 Eight-track physical-fader sweeps cover shared-channel chords and
 individual-channel arps, with balanced releases and empty ownership state.
 
-The larger composition exposed a Harmony recording queue that assumed zeroed
-BSS. Our first-use initializer now clears all 256 message slots. Its linked
-regression starts with dirty RAM and verifies repeated initialization preserves
-queued ownership; full-firmware recording/save checks pass in DS and DN.
-
-The original shared check's 15 KITS playback failures are retained in the
-package evidence. The stack adapter fixes those live pattern changes. The
-full KITS gate, 18 musical resident/nonresident Kit transitions and nine degree
-lifecycle/playback groups are required before packaging. DS also requires the
-scene suite; DN requires the scene-absent adapter checks. Packaging independently
-decodes BIN and SYX and compares the MAIN OS with the tested image.
-
-A fixture that zeroed unused sparse padding silenced arps even on stock;
-preserving untouched bytes, as the native packer does, fixes the fixture.
 These checks do not establish compatibility with every use of the upstream
-Part window, notably native LFO designer records. Hardware MIDI timing,
-battery retention and musical acceptance still require the instrument.
+Part window, notably native LFO designer records. Hardware MIDI timing and
+battery retention require instrument checks. Preserve unused sparse bytes in
+fixtures: zeroing padding can corrupt neighboring native LFO state.

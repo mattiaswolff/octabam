@@ -96,8 +96,19 @@ def machine():
         m.call(setter,0,1)
         m.call('ch_display_poll',stop=s['ch_play_guide'])
         m.call('ch_display_poll')
+    # REC/grid changes key dispatch, not the sounding-chord display. A new
+    # sequenced note must still invalidate the guide without touching a key.
+    u.mem_write(0x460d1736,(1).to_bytes(4,'big'))
+    u.mem_write(s['ch_sequence_root'],b'\x3e')
+    u.mem_write(s['ch_sequence_quality'],b'\x01')
+    for i,n in enumerate((62,65,69,72)):
+        u.mem_write(0x46c77a16+i*8,struct.pack('>ii',0x90,n))
+    m.call('ch_display_poll',stop=s['ch_play_guide'])
+    m.call('ch_display_poll')
+    assert text()=='Dm7'
+    u.mem_write(0x460d1736,bytes(4))
     u.mem_write(0x460d16f0,bytes(4))
-    print('[ok] settings changes including AUTO trigger one redraw; unchanged values do not',flush=True)
+    print('[ok] settings and grid playback trigger redraws; unchanged values do not',flush=True)
     u.mem_write(m.scratch,b'\x01')
     preserved={r:0x12340000+i for i,r in enumerate((UC_M68K_REG_D2,UC_M68K_REG_D3,UC_M68K_REG_D4,UC_M68K_REG_D5,UC_M68K_REG_D6,UC_M68K_REG_D7,UC_M68K_REG_A1,UC_M68K_REG_A2,UC_M68K_REG_A3,UC_M68K_REG_A4,UC_M68K_REG_A5,UC_M68K_REG_A6))}
     m.call('ch_display_tick',m.scratch,0x1357,stop=0x40056c82,regs=preserved)
@@ -131,6 +142,10 @@ def port(source, selected=None):
         'octave':(panel.PANEL+panel.combo(1500,0x21)+'2000 key 0 down\n2400 quit\n','Cm',[60,63,67]),
         'sequence':(panel.PANEL+panel.key(1600,0x28)+'2100 quit\n',None,None),
         'next-sequence':(panel.PANEL+panel.key(1600,0x28)+'2300 quit\n',None,None),
+        'grid-sequence':(panel.PANEL+panel.key(1400,0x29)+panel.key(1600,0x28)+'2100 quit\n',None,None),
+        'grid-next-sequence':(panel.PANEL+panel.key(1400,0x29)+panel.key(1600,0x28)+'2300 quit\n',None,None),
+        'grid-rest':(panel.PANEL+panel.key(1400,0x29)+panel.key(1600,0x28)+'3800 quit\n','',[]),
+        'grid-stopped':(panel.PANEL+panel.key(1400,0x29)+panel.key(1600,0x28)+panel.key(2400,0x27)+'2800 quit\n','',[]),
         'rest':(panel.PANEL+panel.key(1600,0x28)+'3800 quit\n','',[]),
         'stopped':(panel.PANEL+panel.key(1600,0x28)+panel.key(2400,0x27)+'2800 quit\n','',[]),
     }
@@ -148,6 +163,7 @@ def port(source, selected=None):
         path=work/f'{name}.txt';path.write_text(script)
         dump=f'{sym["ch_name_text"]:#x},32={work}/{name}-name.bin;{sym["ch_display_notes"]:#x},4={work}/{name}-notes.bin;0x400beba2,4={work}/{name}-octave.bin;0x46c77a16,32={work}/{name}-native.bin'
         dump+=f';{sym["ch_settings_buffer"]:#x},16={work}/{name}-settings.bin'
+        dump+=f';0x460d1736,4={work}/{name}-grid.bin'
         events=p.run(work,name,['--rtc','1800000000','--live-script',path,'--internal-clock','--lcd',work/f'{name}.lcd','--mem-dump',dump])
         actual=(work/f'{name}-name.bin').read_bytes().split(b'\0')[0].decode()
         notes=[n for n in (work/f'{name}-notes.bin').read_bytes() if n<128]
@@ -162,7 +178,8 @@ def port(source, selected=None):
             assert notes and set(notes)==held,(name,actual,notes,held)
             assert actual and actual!='Cm',(name,actual)
             if name=='no-scale-sequence':assert actual=='D'
-            if name=='next-sequence':assert actual!='Ddim'
+            if name in ('next-sequence','grid-next-sequence'):assert actual!='Ddim'
+        assert bool(int.from_bytes((work/f'{name}-grid.bin').read_bytes(),'big'))==name.startswith('grid-'),name
         assert int.from_bytes((work/f'{name}-octave.bin').read_bytes(),'big')==(5 if name=='octave' else 4)
         subprocess.run([sys.executable,str(ROOT/'tools/emu/lcd_view.py'),str(work/f'{name}.lcd'),'--png',str(work/f'{name}.png')],check=True,stdout=subprocess.DEVNULL)
         plane=(work/f'{name}.lcd').read_bytes()
@@ -177,6 +194,6 @@ def port(source, selected=None):
     (OUT/('receipt-'+ '-'.join(selected)+'.json' if selected else 'receipt.json')).write_text(json.dumps(dict(cases=results,image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('settings','held','accidentals','no-scale','no-scale-minor','no-scale-sequence','ninth','released','octave','sequence','next-sequence','rest','stopped'));args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('remix',nargs='?');ap.add_argument('--project',type=Path);ap.add_argument('--case',action='append',dest='selected',choices=('settings','held','accidentals','no-scale','no-scale-minor','no-scale-sequence','ninth','released','octave','sequence','next-sequence','rest','stopped','grid-sequence','grid-next-sequence','grid-rest','grid-stopped'));args=ap.parse_args()
     machine()
     if args.project:port(args.project,args.selected)

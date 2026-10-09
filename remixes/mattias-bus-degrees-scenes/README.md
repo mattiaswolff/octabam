@@ -12,4 +12,4 @@ Harmony publishes pending degree/chord identity before the native copy boundary
 owned by MIDI SCENES. Both modules retain their own processing and continuations.
 
 DEG scene roots transpose with KEY. CHRD remains a Part/pattern setting.
-See the [compatibility contract and current evidence](../../modules/harmony-degrees/SCENES.md).
+See the [compatibility contract and current evidence](../../modules/midi-harmony/degrees/SCENES.md).

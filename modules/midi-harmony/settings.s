@@ -40,9 +40,7 @@
     rts
 \prefix\()_set:
     .ifc \prefix,mh
-    .ifdef HAVE_DEGREES
     jmp hd_set
-    .endif
     .global mh_set_native
 mh_set_native:
     .endif

@@ -11,13 +11,8 @@ ch_record_post:
     movem.l %d0-%d1/%a0-%a2,(%sp)
     move.l %d5,%d0
     jsr mh_get
-    .ifdef HAVE_DEGREES
     tst.l %d0
     beq.w .post_done
-    .else
-    cmpi.l #2,%d0
-    bcs.w .post_done
-    .endif
     lea ch_messages,%a1
     move.l #256,%d1
 .post_scan:
@@ -40,13 +35,11 @@ ch_record_post:
     move.l %d5,%d0
     jsr ch_live_get
     move.b %d0,12(%a1)
-    .ifdef HAVE_DEGREES
     moveq #0,%d0
     move.b 2(%a1),%d0
     move.l %d5,%d1
     jsr hd_capture_message
     move.b %d0,15(%a1)
-    .endif
     move.l %a1,56(%sp) /* original sp+36: posted pointer argument */
 .post_done:
     movem.l (%sp),%d0-%d1/%a0-%a2
@@ -75,9 +68,7 @@ ch_record_on:
     lea -8(%sp),%sp
     movem.l %d2/%a2,(%sp)
     moveq #-1,%d2
-    .ifdef HAVE_DEGREES
     move.l %d2,hd_record_active
-    .endif
     move.l %a2,%d0
     subi.l #ch_messages,%d0
     cmpi.l #4095,%d0
@@ -85,16 +76,12 @@ ch_record_on:
     moveq #15,%d1
     and.l %d0,%d1
     bne.s .on_call
-    .ifdef HAVE_DEGREES
     jsr hd_record_consume
-    .endif
     moveq #0,%d2
     move.b 12(%a2),%d2
-    .ifdef HAVE_DEGREES
     moveq #0,%d0
     move.b 15(%a2),%d0
     move.l %d0,hd_record_active
-    .endif
     moveq #0,%d0
     move.b 13(%a2),%d0
     move.l %d0,12(%sp) /* captured track */
@@ -108,9 +95,7 @@ ch_record_on:
     lea 16(%sp),%sp
     moveq #-1,%d0
     move.l %d0,ch_record_active
-    .ifdef HAVE_DEGREES
     move.l %d0,hd_record_active
-    .endif
     movem.l (%sp),%d2/%a2
     addq.l #8,%sp
     rts
@@ -130,15 +115,11 @@ ch_record_commit:
     move.l %d5,%d1
     move.l 8(%fp),%d2
     move.l %a3,%d3
-    .ifdef HAVE_DEGREES
     jsr hd_record_sync
-    .endif
     jsr ch_lock_set
-    .ifdef HAVE_DEGREES
     move.w %sr,%d0
     move.l %d0,-(%sp)
     move.w #0x2700,%sr
-    .endif
     /* NOTE + velocity in the native bank and its current-bank mirror. */
     move.l %d6,%d0
     move.l #0x9b340,%d1
@@ -168,7 +149,6 @@ ch_record_commit:
     move.b %d1,(%a0,%d0.l)
     move.b %d2,1(%a0,%d0.l)
 .commit_done:
-    .ifdef HAVE_DEGREES
     move.l %d6,%d0
     move.l %d5,%d1
     move.l 8(%fp),%d2
@@ -181,7 +161,6 @@ ch_record_commit:
     moveq #0,%d0
     move.b 0x80000002,%d0
     jsr hd_nv_save
-    .endif
     movem.l (%sp),%d0-%d7/%a0
     lea 36(%sp),%sp
     jmp 0x400420fa
@@ -190,9 +169,7 @@ ch_record_commit:
     jmp 0x40041f78
     .balign 4
 ch_record_active: .long -1
-.ifdef HAVE_DEGREES
 hd_record_active: .long -1
-.endif
     .global ch_record_overflow
 ch_record_overflow: .long 0
     .bss

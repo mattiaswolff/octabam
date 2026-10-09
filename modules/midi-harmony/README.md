@@ -1,102 +1,59 @@
 # MIDI Harmony
 
-On a MIDI track, open **NOTE SETUP** (FUNC + SRC). Knob **F: HARM** selects:
+MIDI Harmony supplies scale-degree roots, generated chords and CHORD PLAY.
+Include `MIDI HARMONY` and its shared dependency `MIDI PART STATE` in a remix.
+MIDI FOLLOW and MIDI SCALES are optional. Degree support is part of Harmony;
+there is no separate module to select.
 
-| HARM | Output |
-| --- | --- |
-| OFF | Stock notes and stored NOT2–4 |
-| NOTE | One note snapped to the selected scale |
-| CHORD | Generate from native NOTE plus the dedicated CHRD choice |
+Open MIDI **NOTE SETUP** with **FUNC + SRC**. Turn **F: HARM**:
 
-**Press knob F on NOTE SETUP** to open the dedicated **HARMONY** window.
-Knob **A: HARM** edits the same setting; knob **B: VOIC** selects **ROOT**
-(default), **1ST**, **2ND**, **3RD** or **AUTO** (automatic voice leading).
-Knob **C: SPRD** selects **CLOSE** (default), **OPEN** or **WIDE**.
-Knob **D: ROOT** selects **KEEP** (default), **OMIT**, **-1 OCT** or **-2 OCT**.
-The controls use the stock PLAYBACK selector graphics: three positions for
-HARM, five for VOIC, three for SPRD and four for ROOT, with the value printed underneath.
-HARM, VOIC and SPRD occupy the top row of a six-cell grid, matching the
-physical encoder positions without letter prefixes. ROOT occupies the lower-left
-cell; E and F are inactive. The footer identifies HARMONY and the MIDI track, beside NO:BACK.
-NO, YES or another F press closes it. Track/page buttons
-also close it; press again to select another track/page. The footer identifies
-the track being edited. Transport and chromatic trig keys remain usable.
-Turning F on NOTE SETUP still edits HARM directly.
+| HARM | Main NOTE page | Output |
+| --- | --- | --- |
+| OFF | Native NOTE / NOT2–4 | Stock playback |
+| NOTE | A: DEG | One scale-degree root |
+| CHORD | A: DEG, D: CHRD | Chord built from that root |
 
-Choose KEY in its original position, **ARP SETUP F** (FUNC + AMP).
-Without MIDI Scales, Harmony uses stock Major/Minor. Installing MIDI Scales
-adds five modes in every key. **KEY OFF leaves roots unsnapped**: NOTE passes
-the pitch through; CHORD uses major intervals from each played root. TRI
-gives C–E–G or D–F♯–A, and 7TH adds the major seventh. Other CHRD choices
-retain their intervals, including explicit MIN and DOM7. HARM OFF restores stock behavior.
-Voicing, spread and ROOT still apply without a scale. HARM defaults OFF.
+Choose **KEY** on **ARP SETUP F** (FUNC + AMP). MIDI SCALES adds five modes
+to stock Major/Minor. DEG reads `1:3`: degree 1, tonic octave 3. Turning A
+advances through the scale; **FUNC + A changes only the octave**. Hold steps
+to edit their DEG locks; press A while holding steps to toggle those locks.
+FUNC octave editing also works on held steps and MIDI Scene root locks.
 
-For example, C Major with HARM CHORD and CHRD TRI turns C, D and F into C major, D minor
-and F major. C Dorian gives C minor, D minor and F major. Chromatic trig keys
-snap to nearest valid notes (ties downward), so adjacent keys can coincide.
-This first version does not replace a running pattern's chord from the live
-keyboard: live performance transposition remains a separate future feature.
+Changing KEY preserves stored degrees. For example, 1–4–5 in C minor plays
+Cm–Fm–Gm; changing KEY to D minor plays Dm–Gm–Am. Turning HARM on converts
+native roots to the nearest scale degree (ties downward). Turning it OFF
+materializes resolved roots as native NOTE. NOTE ↔ CHORD preserves degrees.
+KEY OFF uses C major for degree mapping and unscaled chord recipes. Native
+NOT2–4 remain stored and become active again in OFF. A degree resolving
+outside MIDI 0–127 is silent; OFF conversion clamps to that native range.
 
-Shared scale logic serves live MIDI keys and sequenced NOTE/P-locks.
-Generated chords enter the **stock arp before its note selection**. ARP MODE,
-SPD, RNGE, NLEN, LEG and step offsets retain their stock controls. Original
-NOT2–4 values are never overwritten. Turning HARM OFF restores their use.
-High chord voices beyond MIDI 127 are omitted; pitches do not wrap.
+Press **F** on NOTE SETUP to open **HARMONY**:
 
-With MIDI Follow, RFOL stays on NOTE SETUP D. The follower retains its own
-HARM, rhythm and TRAN/P-locks, while its chord root and KEY come from the
-ultimate source track. The receiver's MIDI Follow MODE/OCT setting chooses a
-fixed register or the source root's octave (with -2..+2 octave offset) before
-TRAN and root snapping. Source capture retains the harmonic root before VOIC,
-SPRD and ROOT placement. This requires the matching MIDI Follow register update.
-KEY is displayed from that source and is read-only
-on the follower. Disable RFOL to restore the follower's own Part KEY.
-For **NOTE and CHORD**, the root passes through TRAN/P-locks and then
-snaps to the effective KEY/scale. TRI and 7TH build their additional notes
-from that snapped scale degree. In C Major, C +2 gives D–F–A (or D–F–A–C),
-not a chromatically shifted C-major chord. B +7 snaps F♯ down to F, then
-builds F–A–C (or F–A–C–E). Followers use their source's scale throughout.
+| Knob | Setting | Values |
+| --- | --- | --- |
+| A | HARM | OFF / NOTE / CHORD |
+| B | VOIC | ROOT / AUTO / 1ST / 2ND / 3RD |
+| C | SPRD | CLOSE / OPEN / WIDE |
+| D | ROOT | KEEP / OMIT / -1 OCT / -2 OCT |
 
-A chromatic keyboard press chooses the pitch directly, without replacing it
-with a followed root. With the arp OFF, TRAN does not affect these live notes,
-matching stock. With the arp ON, its outgoing notes use the current stock
-TRAN and arranger offset on every tick. Turning TRAN changes subsequent arp
-notes without another key press. This applies to chromatic keys and CHORD PLAY.
-The source supplies the keyboard's scale. Scale-derived qualities receive
-final scale correction after transposition; explicit MAJ/MIN/DOM7 do not.
+E/F are inactive. YES, NO or F closes the window; track/page keys close it
+before changing selection on a second press. Edits apply immediately. YES
+on NOTE SETUP preserves RFOL and HARM while confirming stock staged fields.
+Fresh Parts use HARM OFF, DEG `1:3`, CHRD TRI and ROOT/CLOSE/KEEP voicing.
 
-Sequenced generated notes enter the stock arp with TRAN already applied once. Its
-pitch offsets receive a final scale correction before MIDI transmission for
-scale-derived choices. Explicit MAJ, MIN and DOM7 preserve their chromatic
-chord tones through the arp.
-A sequenced chord is rebuilt on its next note trig, using that trig's current
-TRAN/P-lock; changing TRAN between trigs does not rebuild an existing arp
-pool. Invalid transposed roots are silent until a valid trig; high chord
-voices are omitted. Live keyboard pools remain playable independently.
+Generated notes enter the stock arp. Sequenced TRAN/P-locks apply once before
+chord generation; scale-derived qualities receive final scale correction.
+Explicit MAJ/MIN/DOM7 retain their chromatic tones. Live keys use stock TRAN
+behavior: none with arp OFF, current TRAN and arranger offset with arp ON.
+Live recording captures one root degree and CHRD per played event, never
+extra chord tones in NOT2–4. Live keys do not replace a running pattern's root.
 
-Live recording stores the **physical key played** in NOTE once, even in
-CHORD mode. Extra generated voices only sound; they do not enter the
-recorder or become NOT2–4 locks. An out-of-scale key remains that key in
-NOTE and snaps when Harmony plays it. Shared chord tones do not suppress
-a new key's recording. Playback regenerates the chord from NOTE, including
-when NOT2–4 contain explicit disabled locks. HARM and KEY must remain active.
-
-HARM, VOIC, SPRD and ROOT are native Part settings for each MIDI track,
-alongside KEY. UI edits address the selected working Part; playback reads each
-track's playing Part. MIDI Follow stores its source, register choices and
-response in that same native Part. KITS carries these bytes through ordinary
-Part operations; neither module depends on KITS. Runtime note ownership and
-voice-leading history are not stored in Parts.
-
-This is a greenfield storage format. There is no decoder or migration for the
-previous global project-comment settings. Native Part lifecycle gates pass with
-and without KITS. Project SAVE, cold reload and retained-memory resume pass on
-the shared carrier; combined degree/Kit acceptance is tracked separately.
+With MIDI FOLLOW, the receiver keeps its rhythm, HARM, CHRD, voicing and TRAN.
+Its root and effective KEY come from the ultimate source, before voicing or
+ROOT placement; MODE/OCT sets the receiver's register. Source KEY is shown
+read-only on the receiver. Held notes retain their original release identity.
 
 ## CHORD PLAY and CHRD
-
-This is a development candidate. Source and emulator checks do not establish
-hardware timing, MIDI electrical behavior or physical battery retention.
 
 Set HARM to CHORD, then return to the main MIDI NOTE page. D displays CHRD
 in the old NOT2 position; E/F are inactive. Native NOT2–4 values remain stored
@@ -144,113 +101,15 @@ Generated chord tones are never recorded into NOT2–4.
 The LCD shows the resulting chord name below CHORD PLAY, leaving the native
 footer intact. Root and variation groups use opposite trig LED channels; a held
 key uses both. Physical colors and brightness require hardware acceptance.
-Names use flat enharmonic pitch spellings. Scale alterations are retained:
+Names use sharps. Scale alterations are retained:
 in C minor, D ADD9 is Ddim(addb9), and D SUS2 is Dsusb2b5. Explicit qualities
 bypass the final scale correction: G DOM7 remains G–B–D–F in C minor.
 
-Grid recording keeps the normal 16-step layout. VOIC, SPRD and ROOT remain
+Grid recording keeps the normal 16-step layout and the guide follows the
+sounding sequence. Rests and STOP clear the chord name and pitches. VOIC, SPRD and ROOT remain
 track-wide controls in the Harmony window; they are not CHRD locks. Follow
 inherits roots and scales as before, while every follower resolves its own
 CHRD. Live playing does not take over a running leader pattern.
-
-## CHRD storage
-
-Bank-load companion handling runs after the native load calls return. Their
-original callsites and return addresses remain intact so caller-sensitive
-modules such as KITS can distinguish project load, bank reload and resume.
-CHRD locks stay with patterns; Part-owned settings and base CHRD travel with Kits.
-The `verify_chord_storage.py` gate checks all four load continuations, including
-negative native results. Run `verify_chord_play_port.py --project <copy>
---load-lifecycle-only` for recorded CHRD save/load/resume/reload coverage.
-
-CHRD uses one byte per bank/pattern/MIDI-track/step: 8192 bytes per bank,
-131072 total. 0xff is unlocked; values 0–7 match the table above. Native bank
-formats, NOTE, NOT2–4 and CC lanes remain unchanged. Keep the companions with
-the project when copying or backing it up:
-
-- `chrd01.work` through `chrd16.work` accompany working banks.
-- `.strd` companions follow project store/reload and Save As copies.
-- Version 2 has a 32-byte big-endian header: CHD2 magic, version, bank index,
-  payload length, FNV-1a payload checksum, native NOTE/trig fingerprint, and
-  two zero reserved words. Payload length is exactly 8192 bytes.
-- A 32-byte CHD0 marker with zero remaining words explicitly represents a
-  stored bank without companion data; it replaces any stale target.
-
-Missing companions mean unlocked steps that inherit native base CHRD. Bad size, version,
-checksum or value range is rejected before any table byte is published. A
-native NOTE/trig fingerprint mismatch also rejects the companion. The main
-NOTE label becomes CH!, and the CHORD PLAY guide identifies a bad file,
-mismatch or save error. Saving refuses to overwrite rejected companions or copy rejected working
-data over the stored backup; restore the matching native bank and companion from a backup, or remove the
-bad companion from a local project copy and reload it to explicitly discard
-its locks. The fingerprint checks NOTE roots and note-trig placement, not all
-unrelated CC/Part contents or project identity.
-
-The greenfield companion has no decoder for earlier formats. Native Part
-defaults are neither stored in the companion nor covered by its fingerprint.
-
-The current bank has a dense checksummed battery-RAM mirror at 0x100f8600
-(8224 bytes including its header). It retains all 8192 locks without a sparse
-capacity limit. A generation ticket prevents concurrent writers from
-publishing mixed snapshots. The mirror retains the current bank’s file-error
-status as well, so a restart cannot turn rejected data into a valid empty bank.
-Torn CHRD snapshots are rejected in favor of the working companion. The
-CHRD mirror is not an atomic transaction with the native NOTE mirror.
-Companion/native file writes are not an atomic pair;
-interruption between them can require recovery from a matching backup.
-
-This reservation and several native editing hooks conflict with PLOCKS P2.
-The build ledger rejects composing both; the personal Harmony remix does not
-select PLOCKS P2. This candidate does not claim that combination is supported.
-
-## CHORD PLAY verification and hardware acceptance
-
-Run the linked gates with `make check REMIX=mattias-midi-harmony`. For the
-panel/UART and companion lifecycle gate, use a local project template:
-
-```sh
-.venv/bin/python tools/verify/verify_chord_play_port.py --project /absolute/path/to/template
-```
-
-The gate copies that project into ignored `out/chord-play-port/`; it uses
-an immutable image plus matching symbol snapshot so another build cannot
-silently change later cases. The receipt records that image's SHA-256.
-It checks the mode selector, LED bitmaps, live base and held overrides,
-recorded NOTE/CHRD playback, same-step replacement, arp, editing/copy/clear/
-undo across banks, unlocked fallback, project/current-bank reload, Save To
-New, creation, unsaved resume, malformed companions and refusal to overwrite
-rejected data after resume. LCD captures show the actual firmware UI.
-For composed audio gates, supply a bus-equipped project to `OT_PROJECT`;
-a MIDI-only fixture does not meet TEMPO BUS's host precondition.
-
-After a separately authorized firmware transfer, use a disposable project:
-
-1. Set T1 HARM CHORD, KEY C minor, VOIC ROOT, SPRD CLOSE, ROOT KEEP.
-   On the main NOTE page verify D is CHRD and E/F are blank. Enter CHORD PLAY
-   with FUNC + UP/DOWN; check the 1–8 and 9–16 LED groups are distinct both
-   stopped and running, and held keys are distinguishable.
-2. Hold trig 1, then hold trig 10, then trig 13. Hear Cm, Cm7 and Csus4 and
-   check the chord name. Release trig 10 first: Csus4 stays. Release trig 13:
-   Csus4 keeps sounding without a retrigger. Release the root, then play trig 4 for Fm.
-3. Turn D to 7TH. A root now starts as a seventh; held variations temporarily
-   override it. Hold trig 5 plus trig 16 and verify G–B–D–F, including through
-   the stock arp. Exit the mode, switch to grid and change MIDI/audio mode
-   with notes held: no note should remain sounding.
-4. Record the Cm/Cm7/Csus4/Fm gesture. Replay it; inspect native NOTE and
-   CHRD locks. Turn D live to another quality: recorded locks remain intact.
-   Clear one CHRD lock after a different-quality step: it must inherit base CHRD.
-   Hold a step and turn/push D; check its lock without changing NOT2–4.
-5. Copy/paste and clear/undo steps, tracks and patterns, including another
-   bank. Save, edit, reload the current bank and project; use Save To New and
-   load that copy. Keep bank files and companions together in backups.
-6. With an unsaved current-bank CHRD edit, perform a normal power cycle and
-   confirm retention.
-   Check HARM OFF restores the original notes, NOT2–4 and CC behavior.
-
-Emulation does not prove physical LED colors/brightness, audio load under
-hardware timing, electrical MIDI behavior, battery retention or resilience
-to power loss during a file write. Companion/native files are not committed
-atomically; keep a matching project backup before hardware acceptance.
 
 ## Manual inversions
 
@@ -272,7 +131,7 @@ HARM, VOIC, SPRD and ROOT are track defaults, not parameter-lock destinations.
 With HARM CHORD and VOIC AUTO, each track remembers its previous generated
 chord and chooses a nearby inversion for the next one. With CLOSE spacing,
 C3–E3–G3 followed by F produces C3–F3–A3. The harmonic root is still **F**:
-Follow gets F, and recording the physical F key stores F in NOTE. Neither
+Follow gets F, and recording the physical F key captures its degree. Neither
 the lowest voiced note nor the last generated chord tone replaces the root.
 Voicing is applied before the stock arp, which therefore plays the chosen
 inversion too. A follower with its own HARM CHORD and VOIC AUTO chooses its
@@ -294,8 +153,7 @@ selected spread. Every sounded candidate must remain inside MIDI 0–127 and
 have its lowest note within one octave of the requested root. It first
 minimizes total semitone travel between corresponding sorted **sounded** voices, then
 prefers more unchanged voices. Exact ties prefer root position, then earlier
-inversions and offsets in the listed order. This is our algorithm, not a
-claim to reproduce OXI's unpublished implementation. At most twelve candidates
+inversions and offsets in the listed order. At most twelve candidates
 of four voices are considered per chord; there is no unbounded search.
 
 The first chord uses root position with the selected spread. History is per track and shared between
@@ -322,7 +180,7 @@ AUTO evaluates movement **after** applying this spacing. OPEN and WIDE may
 therefore choose a different inversion from CLOSE. The bass stays near the
 requested root while the upper voices can extend into the next octave.
 Octave moves preserve the scale and chord identity; Follow still gets the
-harmonic root and recording still stores the physical key once.
+harmonic root and recording captures the physical key as one degree.
 
 If a complete chord's root-position spread exceeds MIDI 127, its initial
 chord falls back to CLOSE. Subsequent AUTO chords may find another valid
@@ -354,7 +212,7 @@ there is no separate bass channel or special sustained-bass behavior.
 
 Only HARM CHORD uses ROOT, including with KEY OFF. NOTE and OFF stay
 unchanged. MIDI Follow still receives the original harmonic root and live
-recording still stores the physical key once. AUTO optimizes and remembers
+recording captures the physical key as one degree. AUTO optimizes and remembers
 the full underlying chord before ROOT placement, as it previously did for
 OMIT. Changing ROOT resets that track's AUTO history and affects the next
 chord trigger. Already-held keys retain their original release pitches.
@@ -367,232 +225,31 @@ remains silent with balanced key/recording ownership and a safe arp pool.
 
 ROOT is a per-track Part setting, not a parameter-lock destination.
 
-## Implementation boundaries
+## Storage and validation
 
-The sequence hook changes the four-note scratch buffer before the stock arp
-initializer. Unused voices duplicate the root (lowest voice after voicing) for its valid-pitch bitmap;
-stock deduplicates them. Invalid roots use safe zero-pitch padding and a
-per-track volatile mute flag, so invalid bytes never index the arp bitmap.
-The recorder uses the native handoff at `0x4009eb7a` once per physical key
-press/release; generated voices call the stock sender with recording disabled.
-Live keys keep the generated pitches until release, with reference counts
-for shared chord tones. A bypassed press also retains
-its stock release path if HARM or KEY is enabled while held. Stock owns MIDI
-transmission, arp insertion/removal and sequenced note-off records.
+HARM, DEG, CHRD, KEY, voicing and Follow settings live in each native Part.
+UI edits use the selected Part; playback uses each track's playing Part.
+Part/Kit recall supplies incoming defaults; explicit DEG/CHRD locks stay with
+patterns. Runtime roots, note ownership and AUTO history are not persisted.
 
-Harmony skips stock scale correction for generated notes, then applies its
-own final correction for scale-derived chords before note ownership is
-recorded. Explicit MAJ, MIN and DOM7 qualities retain their selected intervals. Follow captures Harmony's selected root before the arp and bypasses
-its old final bass-only
-replacement when Harmony is active. Each module also builds independently.
+Keep `hdeg01.work`–`hdeg16.work` and their `.strd` companions with the project.
+They store pattern DEG/CHRD locks in HDP2 format, compatible with the DS
+candidate. There is no migration from earlier experimental CHD2-only or
+project-comment settings. See [degree storage](degrees/README.md) for the
+layout, failure handling and native boundary rules, [KITS](degrees/KITS.md)
+and [MIDI Scenes](degrees/SCENES.md) for composition details. PLOCKS P2 conflicts
+with the retained-memory reservation and editing hooks; the ledger rejects it.
 
-Native MIDI SETUP stores HARM at offset 5; VOIC/SPRD/ROOT share offset 16
-(bits 0–2 / 3–4 / 5–6). Follow MODE/response use the shared offset-12
-flags byte. Base CHRD uses offset 18. These fields have
-explicit native ranges and defaults and use the shared Part access helpers.
-No project-comment or private battery settings store is used. The native
-Part lifecycle owns persistence; held-note identity, voice-leading history
-and window state remain runtime-only.
+Run `make check REMIX=harmony-degrees` for the minimal verification carrier.
+For a prepared local project copy, run the full firmware gates:
 
-## Reusable verification
-
-```
-make check REMIX=midi-harmony
-make check REMIX=midi-scales
-make check REMIX=midi-follow
-make check REMIX=midi-harmony-follow
-.venv/bin/python3 tools/verify/verify_midi_harmony_port.py --project /path/to/local/template
+```sh
+.venv/bin/python tools/verify/verify_harmony_degree_port.py --project /path/to/project
+.venv/bin/python tools/verify/verify_chord_display.py --project /path/to/project
+.venv/bin/python tools/verify/verify_midi_setup_port.py --project /path/to/project
 ```
 
-The template is read only; generated projects, virtual CF cards, UART MIDI,
-LCD captures and receipts go under `out/harmony-port-suite/`. The machine
-checks execute linked ColdFire bytes, including all keys/scales/pitches,
-register/memory boundaries, OFF behaviour, overlapping live-key releases,
-HARM/KEY edits while held, native control passthrough and malformed comments.
-The full-port checks exercise actual firmware MIDI, encoder controls and
-project persistence, plus added-scale output with Harmony OFF. NOTE/TRI/7TH
-regressions cover TRAN/P-locks before root snapping and chord generation,
-matching source-root capture, and absolute keyboard pitches on followers
-with direct output and live arp. Machine checks also cover invalid-root
-muting/recovery and final arp scale correction. Live-recording cases use
-REC+PLAY, play C♯/D/F, exit REC and compare the next loop with live output;
-they inspect recorded NOTE bytes and explicitly disabled NOT2–4 locks.
-Use `--recording-only` with the port script for these focused cases.
-Use `--live-transpose-only` for physical TRAN edits during held chromatic and
-CHORD PLAY notes: stock direct/arp behaviour, all eight qualities, scale
-correction, combined voicing/spread/ROOT placement, MIDI bounds and releases.
-The machine gate also compares the live transpose path with native stock
-instructions across every MIDI pitch, signed TRAN offsets and arranger offsets.
-Use `--voicing-only` for AUTO sequence/keyboard/arp, recorded physical roots,
-SPRD variants, Harmony-page controls, and actual save/reload/warm-resume checks. These also
-produce the Harmony window screenshot at `out/harmony-port-suite/harmony-page/page.png`.
-Use `--bypass-follow-only` for live HARM OFF / KEY OFF source roots driving rhythmic followers.
-Use `--octave-only` for live C-minor octave jumps in TRI/7TH with every spacing.
-Use `--spread-only` for the ten spaced sequence/arp and follower-root cases.
-Use `--root-only` for ROOT octave placement through sequences, live overlapping
-keys, arp, followers, recording/replay, physical encoders/LCD and save/reload/warm resume.
-Use `--inversions-only` for manual inversions, stock arp, follower-root identity,
-root omission, physical-key recording/replay and manual-VOIC/OMIT save/reload/warm resume.
-The default full suite includes all groups. The machine gate compares AUTO's
-movement cost against all valid compact and spaced voicings across keys/scales/MIDI range,
-checks per-track history and context resets, and polices writes and registers.
-They do not verify electrical MIDI timing, battery
-retention, musical feel or a physical flash. No device transfer is performed.
-
-### Hardware acceptance for ROOT placement
-
-With KEY C Major, HARM CHORD, CHRD 7TH, VOIC ROOT and SPRD CLOSE, open NOTE SETUP,
-press F and turn D through KEEP, OMIT, -1 OCT and -2 OCT. For a C root,
-expect the table above. Repeat with manual inversions, AUTO and OPEN/WIDE:
-only the harmonic root moves or disappears, while a separate MIDI follower
-retains the original root. Repeat with the stock arp.
-
-Hold overlapping C and E chords, change ROOT while they are held, then
-release both: no stuck notes or incorrect releases. Live-record C/D/F and
-confirm NOTE stores the physical keys and replay reproduces the moved roots.
-Save/reload and power-cycle to check persistence. Near the bottom of MIDI,
-an unavailable lowered root must disappear rather than wrap. These checks
-remain pending on hardware; emulator results do not prove electrical timing
-or physical battery retention.
-
-### Hardware acceptance for inversions, AUTO and physical-key recording
-
-With HARM CHORD, CHRD TRI, VOIC 1ST/2ND, SPRD CLOSE and KEY C Major, check C gives
-E–G–C / G–C–E. Select 3RD: a triad still uses 2ND; CHRD 7TH gives
-B–C–E–G. Repeat with OPEN/WIDE and the stock arp. A root-following bass
-must still play C, then F when playing F. Record physical C/D/F keys and
-confirm NOTE stores those keys and replay regenerates the selected inversion.
-Select ROOT OMIT and confirm only C disappears from each C chord, regardless
-of inversion, while the bass still plays C. Save/reload the project and check
-the manual VOIC and ROOT choices survive.
-
-
-Use a disposable pattern, with T1 KEY C Major and TRAN 0. Set HARM CHORD and CHRD TRI,
-press F on NOTE SETUP, set B VOIC AUTO and C SPRD CLOSE. Play C then F: expect C–E–G
-then C–F–A. Hold both keys and release them in either order: shared C must
-continue until its final owner releases, with no stuck notes. Repeat with
-the stock arp active, and with CHRD 7TH. Set VOIC ROOT and check each
-SPRD against the table above; repeat with AUTO and change SPRD while
-a key is held to check that its release leaves no stuck notes.
-
-Set T2 RFOL T1, HARM NOTE, TRAN 0 and program its rhythm. While performing
-on T1, F must make T2's next trig play F, even though T1's lowest voice is C.
-Repeat with T2 HARM CHORD, CHRD TRI and its own AUTO: it must retain its own rhythm and
-voicing history while using T1's root/scale.
-
-Live-record C, D and F on T1. Inspect NOTE on those trigs: it must show
-the physical keys C, D, F; Harmony must not add NOT2–4 locks. Replay with
-HARM/KEY still enabled and expect chords. A physical C-sharp key must remain
-C-sharp in NOTE while the heard root snaps to C in C Major. Previously
-misrecorded takes are not repaired. Finally save/reload the test project:
-HARM/VOIC/SPRD should return, while the first AUTO chord starts in root
-position with the saved spread.
-
-### Live-recording regression found on OCTABAM4
-
-Device feedback identified unexpected NOTE values and explicit empty NOT2–4
-locks after chromatic live recording. The released image reproduced both
-in the port: playing C/D/F triads stored G/A/C as NOTE and raw 64 (zero
-offset) in each extra-note lane. Each generated voice had been sent through
-the native recorder path, so later voices replaced the root.
-
-The correction records the physical key once and keeps generated voices out
-of that path. It does not repair notes already recorded by OCTABAM4. The
-reported single-note playback has not been reproduced in the port: even
-explicit empty extra-note locks still generated chords with HARM and KEY
-active. That hardware symptom remains to be checked with the corrected image.
-
-### AUTO octave regression (OCTABAM5 hardware report)
-
-With C minor, HARM CHORD, CHRD TRI, VOIC AUTO, SPRD OPEN, ROOT KEEP, play C3 → C4 → C3.
-Expect C3–G3–E♭4 → C4–G4–E♭5 → C3–G3–E♭4, with no stuck notes.
-OCTABAM5 incorrectly reused the first chord for both roots; the emulator
-reproduced that failure through actual chromatic-key events. Repeat with
-7TH and other spacing choices, then C → F to retain smooth voice leading.
-The automated regressions live in the linked gate and full-firmware suite;
-a passing emulator run is not hardware acceptance of the corrected build.
-
-UI refinement: HARM and the detail-page choices use the stock encoder accumulator
-with four raw counts per selection and a one-choice cap per input report. Closing
-the detail window redraws NOTE SETUP from the current HARM value. Hardware feel
-still needs a physical check.
-
-CHORD PLAY's guide shows the currently sounding chord and its captured MIDI
-pitches on one line above the chord name. The octave uses the stock CHROMATIC
-PLAY box, position and numbering (MIDI 60 is C4). Long pitch lists use compact
-sharps and separators to keep all four notes visible. Released chords disappear;
-sequencer playback supplies its own root/CHRD identity and native active-note
-ownership. With overlapping live roots, the latest still-held root is shown;
-releasing it reveals another held root or the sequencer. The display reads
-captured voices and each held root's captured quality rather than rerunning AUTO. Live and held-step CHRD selection
-uses the same four-count stock accumulator as Harmony's other new controls.
-
-`tools/verify/verify_chord_display.py --project DIR` checks captured pitches,
-release/STOP clearing, native octave changes and sequencer UART agreement on a
-copied virtual card. These remain emulator checks, not hardware acceptance.
-
-### Root anchoring and spacing
-
-AUTO now admits only candidates containing the exact generated root pitch.
-Playing C4 keeps C4 in the chord, regardless of earlier progressions; other
-voices can still invert around it. KEY snapping and TRAN happen before this
-anchor, and ROOT OMIT/-1 OCT/-2 OCT still apply afterward. A root need not be
-the lowest voice. The bounded search and MIDI limits remain unchanged.
-
-SPRD alone selects chord spacing. For a C4 major triad with VOIC ROOT and
-ROOT KEEP, CLOSE gives C4–E4–G4, OPEN gives C4–G4–E5, and WIDE gives
-C4–E5–G5. At MIDI boundaries a spread that cannot fit falls back to the
-unspread chord. SPRD follows native Part save, recall, copy and retained-memory
-resume, and is carried by KITS when present. Hardware playing feel remains
-to be evaluated.
-
-`tools/verify/verify_harmony_playability.py` exercises anchored AUTO through
-repeated scale/fifths progressions, octave changes, all available keys/scales,
-all spreads and MIDI boundaries. This is machine-code
-emulation, not electrical MIDI or hardware acceptance.
-
-
-## Concert stress findings (8 October 2026)
-
-The eight-track full-firmware reproduction in `out/concert-port` exposed
-an ownership defect: sounding C/E/G on channels 1 through 8 produced 24
-note-ons, but only three releases, all on channel 8. Stock keyboard release
-tokens at `0x46c79d70` are indexed only by pitch. Harmony's per-track reference
-counts did not protect the stock layer from overwriting those tokens.
-
-A second reproduction switches HARM OFF while C/E/G remains held, then
-presses/releases E. The bypass call releases the held chord's E prematurely.
-The dense active-Harmony model alone did not catch either problem: 1,024
-simultaneous physical keys and 14,742 edges passed at the intercepted stock
-keyboard boundary. This is why both boundary checks and real UART captures
-are required. The fix gives generated notes private per-track stock release tokens and
-coalesces shared direct channel/pitch owners. Captured tokens release the
-original destination after channel edits and CHAN OFF. Bypass notes that
-intersect held Harmony tones join its reference counts; an earlier bypass
-note is adopted when a new chord shares it. Unrelated bypass stays native.
-Four pinned slot detours recognize only the owned-call return PC; there is
-no shared temporary pointer or new interrupt mask.
-
-The stateful linked gate runs three reproducible seeds, over 44,000 key
-edges, 1,024 simultaneous keys, NOTE/triad/seventh changes, all track/scale
-contexts available in the selected image, and randomized release order.
-With `OT_PROJECT` set, the image gate also invokes the full port suite.
-The standalone full port suite passes 12 scenarios and 5,998 UART note events:
-1,024 simultaneous pitches, separate/shared/paired channels, both bypass
-transition orders, stock bypass parity, channel changes/OFF while held,
-eight arps, 80 shared-channel churn cycles, and an eight-track sequence.
-Every scenario checks balanced notes, empty ownership and unchanged banks.
-In a combined build, the sequence additionally runs an eight-track Follow
-chain. Fixtures and receipts are under `out/midi-concert-port/`.
-
-```
-.venv/bin/python tools/verify/verify_midi_harmony_stress.py
-.venv/bin/python tools/verify/verify_midi_concert_port.py --project /path/to/template
-```
-
-Live port events enter the real keyboard C ABI; sequence events run through
-native transport. They do not prove external-input parser throughput,
-physical DIN/USB jitter, hardware CPU headroom, or hours of continuous performance.
-The port itself needed a caller-stack cleanup fix before the longest floods
-were meaningful; `tools/emu/README.md` records that separate finding.
-No physical firmware was flashed or tested.
+The manifest declares linked-code gates for routing, voicing, ownership,
+recording, native Part publication, degree boundaries and companion storage.
+See the [hardware acceptance sequence](degrees/ACCEPTANCE.md) for instrument
+checks. Emulator results do not establish physical MIDI timing or battery retention.

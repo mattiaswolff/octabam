@@ -14,10 +14,8 @@ ch_stage_fill:
     move.l %d7,%d3 /* exact scheduled step */
     move.l 76(%sp),%d0 /* bank: original sp+48 */
     move.l %a3,%d1
-    .ifdef HAVE_DEGREES
     move.l 88(%sp),%d4
     jsr hd_stage
-    .endif
     jsr ch_lock_ptr
     moveq #-1,%d4
     tst.l %a0
@@ -50,10 +48,8 @@ ch_stage_fill:
 ch_stage_copy_a:
     lea -8(%sp),%sp
     movem.l %d0/%a0,(%sp)
-    .ifdef HAVE_DEGREES
     move.l %d2,%d0
     jsr hd_stage_copy
-    .endif
     lea ch_staged,%a0
     move.b (%a0,%d2.l),%d0
     lea ch_pending,%a0
@@ -69,10 +65,8 @@ ch_stage_copy_a:
 ch_stage_copy_b:
     lea -8(%sp),%sp
     movem.l %d0/%a0,(%sp)
-    .ifdef HAVE_DEGREES
     move.l %d1,%d0
     jsr hd_stage_copy
-    .endif
     lea ch_staged,%a0
     move.b (%a0,%d1.l),%d0
     lea ch_pending,%a0
@@ -113,9 +107,7 @@ ch_pending_publish:
     lsr.l #5,%d0
     cmpi.l #31,%d0
     bhi.s .fire_done
-    .ifdef HAVE_DEGREES
     jsr hd_fire
-    .endif
     move.l %d0,%d1
     lea ch_pending,%a0
     move.b (%a0,%d0.l),%d0

@@ -344,8 +344,8 @@ ch_play_guide:
     bne.w .guide_stock
     tst.l 0x80000012
     beq.w .guide_stock
-    tst.l 0x460d1736
-    bne.w .guide_stock
+    /* The guide also describes sequenced chords while grid REC is active.
+     * Stock still owns the grid key dispatch and ch_play_leds grid path. */
     tst.l 0x460d1aec
     bne.w .guide_done
     /* Keep the stock CHROMATIC octave box at its exact native position.

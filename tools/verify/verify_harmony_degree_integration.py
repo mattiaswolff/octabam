@@ -28,6 +28,16 @@ def main():
     assert 'hd_set' in s, 'build REMIX=harmony-degrees or mattias-bus-degrees first'
     def put(a,v,n=1): u.mem_write(a,v.to_bytes(n,'big'))
     def get(a,n=1): return int.from_bytes(u.mem_read(a,n),'big')
+    # FUNC edits the tonic octave, including saturation at both ends.
+    for held in (0,0x20):
+        put(0x46100b1d,held)
+        for code in range(84):
+            for delta in (-1000,-2,-1,0,1,2,1000):
+                expected=(max(0,min(11,code//7+delta))*7+code%7 if held
+                          else max(0,min(83,code+delta)))
+                assert m.c('hd_ui_advance_c',code,delta)==expected,(held,code,delta)
+    put(0x46100b1d,0)
+    print('[ok] FUNC DEG changes octaves and preserves degree at both limits',flush=True)
     m.call('ch_lock_init')
     bank=0x400e21e0
     u.mem_write(bank,b'\xff'*0x9b340)

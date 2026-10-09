@@ -183,9 +183,7 @@ ch_notes_text: .space 32
 ch_display_tick:
     lea -60(%sp),%sp
     movem.l %d0-%d7/%a0-%a6,(%sp)
-    .ifdef HAVE_DEGREES
     jsr hd_ui_observe_c
-    .endif
     bsr.w ch_display_poll
     movem.l (%sp),%d0-%d7/%a0-%a6
     lea 60(%sp),%sp
@@ -200,8 +198,7 @@ ch_display_poll:
     bne.w .poll_inactive
     tst.l 0x80000012
     beq.w .poll_inactive
-    tst.l 0x460d1736
-    bne.w .poll_inactive
+    /* Grid REC keeps the sounding-chord guide; only key dispatch changes. */
     tst.l 0x460d1aec
     bne.w .poll_inactive
     moveq #0,%d0

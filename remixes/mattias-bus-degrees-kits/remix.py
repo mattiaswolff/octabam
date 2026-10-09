@@ -9,5 +9,5 @@ REMIX = replace(
     _base, name='mattias-bus-degrees-kits', proof=Proof.PORT,
     proof_note='Nine degree firmware groups and 18 Kit recalls passed; hardware untested',
     doc='Personal bus rig with degree/register Harmony, Part settings and KITS.',
-    modules=(*_base.modules, 'HARMONY DEGREES', 'KITS'),
+    modules=(*_base.modules, 'KITS'),
 )

@@ -548,13 +548,13 @@ hd_scene_delta_c:
 	move.l %d1,%a0
 	moveq #7,%d1
 	cmp.l %a0,%d1
-	jcc .L135
+	jcc .L131
 .L111:
 	move.l 32(%sp),%d0
 	move.l (%sp)+,%d2
 	lea (16,%sp),%sp
 	rts
-.L135:
+.L131:
 	moveq #3,%d2
 	and.l %d0,%d2
 	lsr.l #2,%d0
@@ -572,7 +572,7 @@ hd_scene_delta_c:
 	moveq #2,%d1
 	subq.l #3,%d0
 	cmp.l %d0,%d1
-	jcc .L120
+	jcc .L116
 	tst.l 28(%sp)
 	jne .L111
 	move.l 12(%sp),%d2
@@ -602,49 +602,35 @@ hd_scene_delta_c:
 	add.l %d0,%a1
 	mvz.b (%a1),%d1
 	cmp.l #255,%d1
-	jeq .L136
-.L115:
-	move.l 32(%sp),%d0
-	moveq #-127,%d2
-	cmp.l %d0,%d2
-	jle .L116
-	moveq #-127,%d0
-.L117:
-	add.l %d1,%d0
-	moveq #83,%d2
-	cmp.l %d0,%d2
-	jge .L118
-	moveq #83,%d0
-.L119:
-	sub.l %d1,%d0
-.L137:
+	jeq .L132
+	move.l 32(%sp),-(%sp)
+	move.l %d1,-(%sp)
+	move.l %d1,16(%sp)
+	jsr hd_ui_advance_c
+	addq.l #8,%sp
+	sub.l 8(%sp),%d0
+.L133:
 	move.l (%sp)+,%d2
 	lea (16,%sp),%sp
 	rts
-.L136:
+.L132:
 	move.l %a0,-(%sp)
 	move.l 20(%sp),-(%sp)
 	move.l 20(%sp),-(%sp)
 	move.l %a1,20(%sp)
 	jsr hd_base_c
 	move.l 20(%sp),%a1
-	move.l %d0,%d1
 	lea (12,%sp),%sp
+	move.l %d0,%d1
 	move.b %d0,(%a1)
-	jra .L115
-.L118:
-	tst.l %d0
-	jge .L119
-	clr.l %d0
-	sub.l %d1,%d0
-	jra .L137
+	move.l 32(%sp),-(%sp)
+	move.l %d1,-(%sp)
+	move.l %d1,16(%sp)
+	jsr hd_ui_advance_c
+	addq.l #8,%sp
+	sub.l 8(%sp),%d0
+	jra .L133
 .L116:
-	moveq #127,%d2
-	cmp.l %d0,%d2
-	jge .L117
-	moveq #127,%d0
-	jra .L117
-.L120:
 	move.l (%sp)+,%d2
 	move.l #-2147483648,%d0
 	lea (16,%sp),%sp
@@ -659,16 +645,16 @@ hd_scene_ui_c:
 	move.l %d2,-(%sp)
 	jsr hd_scenes_c
 	tst.l %d0
-	jeq .L141
+	jeq .L137
 	tst.l 24(%sp)
-	jeq .L147
-.L141:
+	jeq .L143
+.L137:
 	move.l 28(%sp),%d0
 	move.l (%sp)+,%d2
 	move.l (%sp)+,%d3
 	lea (12,%sp),%sp
 	rts
-.L147:
+.L143:
 	move.l 1175262876,%d1
 	moveq #1,%d3
 	move.l %d1,14(%sp)
@@ -678,13 +664,13 @@ hd_scene_ui_c:
 	move.l 14(%sp),%d1
 	subq.l #1,%d1
 	cmp.l %d1,%d3
-	jcs .L141
+	jcs .L137
 	tst.l %d0
-	jlt .L141
+	jlt .L137
 	mvz.b %d2,%d1
 	moveq #7,%d2
 	cmp.l %d1,%d2
-	jcs .L141
+	jcs .L137
 	moveq #3,%d3
 	and.l %d0,%d3
 	lsr.l #2,%d0
@@ -698,7 +684,7 @@ hd_scene_ui_c:
 	mvz.b %d2,%d0
 	move.b %d2,17(%sp)
 	cmp.l #255,%d0
-	jeq .L141
+	jeq .L137
 	move.b %d2,%d3
 	moveq #15,%d2
 	move.l %d1,10(%sp)
@@ -713,7 +699,7 @@ hd_scene_ui_c:
 	moveq #83,%d1
 	mvz.b (%a0,%d0.l),%d0
 	cmp.l %d0,%d1
-	jcs .L141
+	jcs .L137
 	bset #8,%d0
 	move.l (%sp)+,%d2
 	move.l (%sp)+,%d3

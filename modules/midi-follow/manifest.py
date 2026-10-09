@@ -2,7 +2,7 @@
 from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
 
 def harmony_inc(modules):
-    return ('.set HAVE_HARMONY,1\n' if 'MIDI HARMONY' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '') + ('.set HAVE_DEGREES,1\n' if 'HARMONY DEGREES' in modules else '')
+    return ('.set HAVE_HARMONY,1\n' if 'MIDI HARMONY' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '')
 
 
 MODULE = Module(

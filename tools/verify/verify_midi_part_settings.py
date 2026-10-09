@@ -29,6 +29,25 @@ def main():
                 byte(at(bank,part,track,17),1)
     ui(0,0)
     for t in range(8):play(t,1,2)
+    # YES refreshes only module-owned staged values in the selected Part.
+    # Execute the real detour and stop after the displaced native prologue.
+    for part in range(4):
+        ui(0,part)
+        for track in range(8):
+            byte(0x100b14cc,track)
+            staged=[4,17,29,7,31,0]
+            u.mem_write(0x460d5cb4,b''.join(v.to_bytes(4,'big') for v in staged))
+            byte(at(0,part,track,3),2);byte(at(0,part,track,5),1)
+            expected=staged[:]
+            if 'bf_source_get' in m.sym:expected[3]=2
+            if 'mh_get' in m.sym:expected[5]=1
+            m.sym['native_note_confirm']=0x4004af20
+            m.call('native_note_confirm',stop=0x4004af28)
+            actual=[int.from_bytes(u.mem_read(0x460d5cb4+4*i,4),'big') for i in range(6)]
+            assert actual==expected,(part,track,actual,expected)
+            byte(at(0,part,track,3),0);byte(at(0,part,track,5),0)
+    ui(0,0);byte(0x100b14cc,0)
+    print('  [ok] NOTE SETUP YES keeps live RFOL/HARM across all tracks/Parts and preserves stock staged fields')
     if 'mh_set' in m.sym:
         for t in range(8):
             for prefix,maximum in [('mh',2),('mh_voic',4),('mh_sprd',2),('mh_root',3)]:

@@ -1,7 +1,7 @@
 # Mattias bus: degrees and Kits
 
 Production integration candidate combining the personal bus rig with
-[Harmony degrees](../../modules/harmony-degrees/README.md) and
+[Harmony degrees](../../modules/midi-harmony/degrees/README.md) and
 [KITS](../../modules/kits/README.md). All musical defaults are native Part
 settings. Patterns retain explicit DEG and CHRD locks. The modules work
 independently of KITS; the library carries ordinary native Parts.
@@ -14,7 +14,7 @@ default. No legacy degree or settings migration is provided.
 Build with `BUILD=DK make bus REMIX=mattias-bus-degrees-kits`. Acceptance
 requires the selected `make check` with `OT_PROJECT`, the degree firmware
 lifecycle suite, native Part transition matrix and KITS library scenarios.
-See [the coordination and evidence record](../../modules/harmony-degrees/KITS.md).
+See [the coordination and evidence record](../../modules/midi-harmony/degrees/KITS.md).
 
 Prepare the shared KITS gate's project assumptions in a separate copy:
 

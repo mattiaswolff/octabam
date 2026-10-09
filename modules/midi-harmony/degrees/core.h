@@ -83,6 +83,7 @@ void hd_import_c(unsigned bank, const uint8_t *payload);
 uint32_t hd_native_hash_c(unsigned bank, uint32_t hash);
 void hd_nv_save_c(unsigned bank);
 int hd_nv_restore_c(unsigned bank);
+int hd_ui_advance_c(int code, int delta);
 int hd_ui_value_c(int step);
 int hd_ui_edit_c(int delta, int toggle, int steps);
 void hd_copy_before_c(uintptr_t destination, uintptr_t source, unsigned length);

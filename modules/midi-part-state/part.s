@@ -1,5 +1,5 @@
-/* Shared native MIDI Part access. Harmony supplies this unit when selected;
- * standalone Follow supplies the identical unit. No KITS references/hooks.
+/* Shared native MIDI Part access, owned by MIDI PART STATE.
+ * Harmony and Follow use the same implementation. No KITS references/hooks.
  * Context = bank * 4 + Part, 0..63; -1 means unavailable. Read/write take
  * explicit context so queued events never consult the current UI selection.
  * All public entries preserve every register except d0 and condition codes.

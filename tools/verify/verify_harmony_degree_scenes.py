@@ -153,6 +153,10 @@ def mode_editor():
     assert m.get(m.sym['msc21_ram'])==36
     assert m.c('hd_base_c',0,0,0)==35
     assert m.c('hd_ui_value_c',-1)==292
+    m.put(0x46100b1d,0x20)
+    edit(1);assert m.get(m.sym['msc21_ram'])==43
+    edit(-1);assert m.get(m.sym['msc21_ram'])==36
+    m.put(0x46100b1d,0)
     edit(1000);assert m.get(m.sym['msc21_ram'])==83
     edit(-1000);assert m.get(m.sym['msc21_ram'])==0
     edit(39);assert m.get(m.sym['msc21_ram'])==39

@@ -1,0 +1,84 @@
+# Degree roots and persistence
+
+Internal implementation of [MIDI Harmony](../README.md). C files are the
+authoritative source; regenerate assembly with `python3 modules/midi-harmony/degrees/generate.py`
+and verify drift with `--check`.
+
+## Musical contract
+
+OFF uses native NOTE and NOT2–4. HARM NOTE and CHORD use one degree/register
+value, displayed as `1:3` (degree 1, tonic octave 3). Degree 7 advances to
+degree 1 of the next tonic octave. Thus `7:3` is B-flat3 in C minor but C4 in
+D minor. Octave names follow the native display (MIDI 60 = C4).
+
+When a fresh or missing Harmony value requires a fallback, use `1:3`,
+resolving to C3 under C major. Existing native notes are converted on entry;
+the fallback does not replace them.
+
+- OFF -> HARM converts absolute NOTE into degree/register using the applicable
+  KEY. Nearest in-scale pitch wins; exact ties choose the lower pitch.
+- NOTE <-> CHORD keeps the degree unchanged.
+- KEY changes while HARM is active preserve degrees and change resolved pitches.
+- HARM -> OFF writes resolved roots into native NOTE before native playback
+  resumes. It preserves NOT2–4. It does not restore old absolute roots.
+- A later OFF -> HARM uses the KEY at that later transition, establishing new
+  degrees. KEY changes while OFF receive only stock processing.
+- KEY OFF uses C major for degree conversion/resolution. Existing no-scale
+  chord recipes remain unchanged (TRI makes major intervals on the root).
+- TRAN/arranger offsets operate on resolved pitches, once. They are not baked
+  into stored roots during conversion. Voicing, spread and ROOT are likewise
+  output treatments, never inputs to representation conversion.
+- Scale-derived CHRD choices adapt to the current scale. Explicit MAJ/MIN/DOM7
+  preserve their interval recipes.
+- A degree outside the MIDI range is silent in HARM. On conversion to OFF,
+  which has no separate silent-root representation, it commits to the nearest
+  MIDI boundary (0 or 127). It never wraps octaves or removes a root lock.
+
+## Data and lifecycle contract
+
+Native NOTE always remains a valid pitch or its native unlocked sentinel.
+Harmony degree defaults and locks are separate data. Only the selected
+representation is authoritative; conversion synchronizes at OFF/HARM boundaries.
+Degree locks preserve native lock presence and Part-default inheritance.
+Edits publish each root and its native snapshot together under a short
+interrupt mask. Recording uses the same boundary; bank retention runs after
+interrupts are restored. Clearing a HARM root removes its native mirror with
+the degree so an intervening reader cannot reconstruct the deleted value.
+
+HARM, Follow, voicing, DEG and CHRD defaults belong to each native Part.
+Explicit DEG/CHRD locks stay with their patterns. An explicit HARM edit converts
+the edited Part's default and its attached pattern roots. Recall inherits the
+incoming Part's defaults. HARM-to-OFF locks preserve the outgoing scale's root;
+for example, C-minor 1:3 becomes native C3 even when the incoming OFF Part has
+D-minor KEY. A transient outgoing snapshot protects replacement of the same
+physical slot. Inactive patterns retain their last scale until next used.
+
+Native Part Save/Reload/copy/clear carries defaults directly. The companion
+contains only 128 pattern/track root records: 64 degrees, 64 native edit
+snapshots, representation, outgoing scale and context. Reusable slot context
+is detached on load and before replacement. Part assignment and defaults are
+excluded from the native pattern fingerprint. Dirty flags and retained mirrors
+follow native bank ownership.
+
+Native pitch consumers and generated note ownership receive real pitches.
+Recording captures degree identity at the event, not a later queue-consumption
+KEY. Releases retain their original track and emitted pitches. Pending events
+cannot mix old representation data with a new mode. UI reads do not regenerate
+AUTO voicing. The UI queue boundary reconciles the selected pattern even when
+stopped; no trig is required for an OFF/HARM mode boundary.
+
+Copy, paste, undo, clear, new trigs, new projects, bank load/store/reload,
+Part save/reload/copy, Save As and battery retention carry the degree data
+alongside their native counterparts. Corrupt or mismatched storage cannot
+publish partially validated data. A rejected working save cannot overwrite
+the stored bank/companion backup. Native bank and companion writes remain
+separate filesystem operations; arbitrary power-loss atomicity is not claimed.
+No earlier experimental format is migrated. Harmony uses its own companion
+identity so it cannot masquerade as the current module's CHRD format.
+
+KITS uses the same native Part fields and requires no special adapter. The
+combined KITS selection is `mattias-bus-degrees-kits`. The additional
+`mattias-bus-degrees-scenes` candidate adds DEG-aware MIDI Scenes; its
+[compatibility boundaries and validation](SCENES.md) are documented separately.
+See [native Part storage and KITS boundaries](KITS.md).
+

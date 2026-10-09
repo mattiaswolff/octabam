@@ -108,7 +108,7 @@ bf_latch:
     move.l %d7,%d1
     jsr mh_prepare
     move.l (%sp)+,%d1
-    .ifdef HAVE_DEGREES
+    .ifdef HAVE_HARMONY
     cmpi.l #127,%d0
     bhi.w .latch_return
     .endif

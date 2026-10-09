@@ -1,6 +1,6 @@
 # Harmony degrees
 
-Isolated selection for the [degree-based Harmony replacement](../../../modules/harmony-degrees/README.md).
+Isolated selection for the [degree-based Harmony replacement](../../../modules/midi-harmony/degrees/README.md).
 Includes MIDI Scales so all seven modes are exercised. The existing
 `midi-harmony` selection remains the control.
 

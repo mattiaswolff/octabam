@@ -25,7 +25,7 @@ LANE = 131
 
 
 def main():
-    subprocess.run(['python3', str(ROOT/'modules/harmony-degrees/generate.py'), '--check'], check=True)
+    subprocess.run(['python3', str(ROOT/'modules/midi-harmony/degrees/generate.py'), '--check'], check=True)
     with tempfile.TemporaryDirectory(prefix='harmony-degree-core-') as tmp:
         out = pathlib.Path(tmp)
         scales = '--without-scales' not in sys.argv
@@ -45,16 +45,16 @@ mp_snapshot: .space 1152
 mp_part_epochs: .space 256
 """)
         objects = []
-        for name, source in [('codec', ROOT/'modules/harmony-degrees/codec.s'),
-                             ('roots', ROOT/'modules/harmony-degrees/roots.s'),
-                             ('core', ROOT/'modules/harmony-degrees/core.s'),
-                             ('access', ROOT/'modules/harmony-degrees/part-access.s'),
-                             ('part', ROOT/'modules/midi-harmony/part.s'),
-                             ('events', ROOT/'modules/harmony-degrees/events.s'),
-                             ('scenes', ROOT/'modules/harmony-degrees/scenes.s'),
-                             ('scene_access', ROOT/'modules/harmony-degrees/scene-access.s'),
-                             ('recording', ROOT/'modules/harmony-degrees/recording.s'),
-                             ('storage', ROOT/'modules/harmony-degrees/storage.s'),
+        for name, source in [('codec', ROOT/'modules/midi-harmony/degrees/codec.s'),
+                             ('roots', ROOT/'modules/midi-harmony/degrees/roots.s'),
+                             ('core', ROOT/'modules/midi-harmony/degrees/core.s'),
+                             ('access', ROOT/'modules/midi-harmony/degrees/part-access.s'),
+                             ('part', ROOT/'modules/midi-part-state/part.s'),
+                             ('events', ROOT/'modules/midi-harmony/degrees/events.s'),
+                             ('scenes', ROOT/'modules/midi-harmony/degrees/scenes.s'),
+                             ('scene_access', ROOT/'modules/midi-harmony/degrees/scene-access.s'),
+                             ('recording', ROOT/'modules/midi-harmony/degrees/recording.s'),
+                             ('storage', ROOT/'modules/midi-harmony/degrees/storage.s'),
                              ('stub', out/'stub.s')]:
             obj = out/f'{name}.o'
             subprocess.run(['m68k-elf-as', '-mcpu=54455', '-I', str(out), '-o', str(obj), str(source)], check=True)

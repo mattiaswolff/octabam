@@ -1,4 +1,4 @@
-# MIDI Follow (experimental)
+# MIDI Follow
 
 Each MIDI track can follow another MIDI track's chord root while keeping its
 own rhythm, velocity and note length. By default, FIXED octave 3 with TRAN=0 uses MIDI notes 36–47:
@@ -57,7 +57,7 @@ its output CHAN. Several followers can select the same source. The selector
 skips the track itself and choices that would create a circular dependency.
 Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 
-- **OFF** plays the track's original notes. Every track starts OFF at boot.
+- **OFF** plays the track's original notes. Fresh Parts default to OFF.
 - Root means the source's first NOTE, with its stock transpose/scale processing;
   it does not infer the root from a chord inversion. C–E–G arp notes leave the
   bass on C. A new F–A–C chord moves it to F.
@@ -80,8 +80,7 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 - Roots latch through rests and transport stops and remain runtime state.
   Configuration belongs to the native Part; roots and held-note ownership are
   not copied or persisted with it. This greenfield format has no migration
-  from the previous volatile settings. Native persistence and live Part/Kit
-  replacement are still undergoing integration validation on this branch.
+  from the previous volatile settings. Native Part operations own persistence.
 - **Muting a source silences its sequenced MIDI output but keeps its root
   progression available to followers**, including when playback starts muted.
   Muting a follower independently silences that follower. Mute/unmute does not
@@ -93,8 +92,9 @@ Chains resolve to their final source: T3 → T2 → T1 follows T1's root.
 
 On its own, MIDI Follow supplies bass-root following. MIDI Harmony optionally
 adds live keyboard chords and follower chords/arp, as described below. Audio
-following, live performance transposition of a running pattern and shared output
-MIDI channels remain outside the tested use. This image has **not been flashed**.
+following and live transposition of a running pattern are outside its scope.
+Shared output channels have ownership stress coverage; physical MIDI timing
+requires instrument validation.
 
 ## Implementation
 
@@ -126,174 +126,6 @@ also publishes live keyboard root octaves into `bf_pitches`.
 Native Part operations own persistence, with or without KITS. The generic
 MIDI sender is not hooked. The existing DRAM platform reserves about 10 MB of sample RAM;
 this small module shares that reserve when composed with other DRAM modules.
-
-## Reproduce
-
-With your own unpacked stock 1.40C image and prepared toolchain:
-
-```sh
-make emu-cf
-make check REMIX=midi-follow
-.venv/bin/python3 tools/verify/verify_midi_follow.py midi-follow --project /path/to/local/project
-```
-
-The last command reads the project as a template and creates disposable virtual
-cards under `out/midi-follow/`. It does not edit the template or a device card.
-The module gate also accepts `OT_PROJECT`; without one, the full-port checks
-explicitly skip and the controlled machine-code gate still runs.
-
-The register gate executes 12,288 combinations of source pitch, FIXED/SOURCE
-register, receiver TRAN and direct/chained routing. When Harmony is linked it
-also checks register selection before scale snapping, live root capture and
-out-of-range suppression. The panel/MIDI register runner is:
-
-```sh
-.venv/bin/python3 tools/verify/verify_midi_follow_register_port.py --project /path/to/local/project
-# Optional: combined image/symbols, using this checkout's emulator:
-.venv/bin/python3 tools/verify/verify_midi_follow_register_port.py --project /path/to/local/project --harmony --build-root /path/to/combined/worktree
-```
-
-It captures FIXED 3/4 and SOURCE 0/-2/+2, checks MIDI releases and unchanged
-Part data, and saves LCD images with an image-hash receipt. The Harmony fixture
-uses source CHORD/ROOT -2 OCT and receiver NOTE to check that root placement
-does not alter the captured source register.
-
-The controlled gate executes the actual linked bytes: all 56 source/follower
-pairs, OFF, chains/cycles, 128 root notes, all 128 follower TRAN values for
-each of 12 roots, out-of-range suppression, arp isolation, source transposition/scales,
-same-tick T8 capture, mute/channel/velocity gates, invalid notes, formatters and
-register preservation. A write hook rejects writes outside the declared module
-state, scratch result, displaced stock write and bounded call stack in these tests.
-Full-port stock/patched UART captures cover chords,
-source arpeggiation, T8 → T2, fallback, held-note release, unchanged other tracks
-and stored banks. An all-OFF run must match stock MIDI events exactly.
-Additional stock/patched captures set follower TRAN to +7 and lock individual
-steps to 0, +12 and -12. They check return to the base +7 on an unlocked step,
-a held transposed note's release across a source-root change, reverse source
-order, and exact stock behavior with RFOL OFF. Fixture timing is explicitly
-set so the input project's scale mode cannot change the capture window.
-
-Two live-change cases switch RFOL OFF and from T1 to T3 while playing. A separate
-truncated capture first proves that the bass C is still held at the change
-instant. The complete runs require that C's original note-off, the expected
-new notes, and no hanging notes. The callbacks are invoked by the port's script;
-the separate panel test below checks the actual UART encoder path.
-
-The panel test sends actual UART1 key/encoder reports: enter MIDI NOTE SETUP,
-select RFOL, share the source across tracks, leave/reopen the page, switch OFF,
-and boot with defaults. It checks module settings and verifies that the working
-Part mirror is unchanged. LCD screenshots are under `out/midi-follow/ui/`.
-`out/midi-follow/result.json` is written only after all cases pass and records
-the tested image hashes; artifacts are local and uncommitted.
-
-For the personal composed remix, the additional safety runner creates disposable
-MIDI and audio fixtures from the same local project template:
-
-```sh
-make check REMIX=mattias-midi-follow BUILD=2
-.venv/bin/python3 tools/verify/verify_midi_follow_safety.py --project /path/to/local/project
-.venv/bin/python3 tools/verify/verify_midi_follow_safety.py --project /path/to/local/project --mode soak --seconds 120
-.venv/bin/python3 tools/verify/verify_midi_follow_safety.py --project /path/to/local/project --mode soak --seconds 120 --off
-```
-
-Keep that build and its runtime symbols in place until the commands finish.
-The transition suite compares stock and patched UART captures for stop/restart,
-pattern, Part and project changes. Truncated captures prove that notes really
-are held at the tested change boundaries. Part/project cases change the output
-channel too, exercising release ownership. The soak runs eight dense MIDI tracks
-beside eight FLEX tracks and the remix's audio effects, then switches through
-A01–A04 and Parts 1–4 using panel input. It checks balanced MIDI releases, audio
-activity on every track, RFOL state, module instructions, DSP status and unchanged
-stored banks. Each soak uses its own generated project and virtual card.
-Receipts, captured MIDI, audio and command logs are in `out/midi-follow-safety/`.
-Neither suite measures worst-case physical CPU timing. Follower arp and shared
-output channels remain outside the supported test setup.
-
-For a device trial, use a new build number and verify the final packaged image
-against the tested MAIN_OS, with a backup and the known-good image available.
-Start with RFOL OFF, then one source and one follower on different MIDI
-channels. Check C/F/G, source arp, RFOL changes during long notes and STOP on
-physical MIDI before extending the setup. These are pending hardware checks,
-not evidence supplied by the emulator.
-
-## What the emulator allows
-
-The full port runs the patched CPU firmware, modeled timers and RTOS tasks,
-virtual CF storage, panel input and MIDI UART. It can load projects, run the
-sequencer, capture MIDI bytes, operate buttons/encoders and render the firmware's
-LCD. `make panel REMIX=midi-follow OT_PROJECT=/path/to/project` opens an
-interactive virtual panel. These tests do not require emulator audio output.
-
-The extended soak also runs both DSP cores with `--dsp-rt` and captures audio;
-its duration is emulated time, and it may take much longer on the host computer.
-
-The relative-TRAN extension is newer than the packaged OCTABAM3 trial image.
-It requires a new build; copying or testing OCTABAM3 does not test this extension.
-
-The controlled Unicorn test proves behavior in selected states; the full port
-checks the real UI/sequencer paths. Neither proves electrical DIN output,
-hardware timing/jitter, external synth behavior, or safe flash/boot on a physical
-Octatrack. Hardware testing remains pending.
-
-## MIDI Harmony and MIDI Scales
-
-The module is named **MIDI Follow** (formerly Bass Follow). RFOL is still
-NOTE SETUP D and the standalone bass-root behaviour is unchanged. With
-MIDI Harmony active, root selection happens before chord generation and
-stock arp processing, so a follower can play NOTE, TRI or 7TH instead of
-having its extra notes collapsed. The source's native KEY is inherited.
-MIDI Scales extends that native KEY selector independently.
-
-The NOTE SETUP callback forwards every non-D control to stock. Harmony can
-own F without intercepting CHAN, BANK, PROG or SBNK. The two enable flags
-are claimed as separate bytes so their manifests compose independently.
-
-With HARM NOTE, TRI or 7TH enabled, the follower root is snapped into the
-inherited scale after TRAN/P-locks, then any chord tones are built from that
-scale degree. Arp output also receives a final scale correction. With HARM OFF, the standalone chromatic offset
-behaviour described above is retained.
-
-
-### Live source with Harmony bypassed
-
-When MIDI Harmony is installed, chromatic key presses publish the source
-root even with its HARM OFF or KEY OFF. A rhythmic follower can use RFOL
-with its own HARM OFF, NOTE, TRI or 7TH. Bypassed source keys keep the stock
-sound and recording path; the root is the physical key's pitch class.
-Note-offs retain the last played root. Arp-only ticks from a live keyboard
-pool must not replace it with the source's unrelated stored NOTE. Ordinary
-source pattern trigs still publish their own root when they occur.
-
-Run `verify_midi_harmony_port.py --bypass-follow-only --project /path/to/template`
-for live-source/follower UART regressions with source arp on/off and KEY OFF.
-The keyboard linked-code gate also checks bypass recording arguments, root
-retention on release, and protection from stale stored NOTE during live arp.
-
-### Muted-source regression
-
-With a copied local project, `verify_midi_follow.py --project DIR` also tests
-muted sources and followers, both track orders, source arp, and mute/unmute
-while a bass note is held. When installed, Scales and Harmony receive the same
-checks; Chord Play quality locks are exercised alongside source scale changes.
-Use `--mute-only` to run this focused suite plus the linked machine-code gate.
-Captures, frozen candidate bytes, logs and `result.json` stay under the remix's
-`out/*midi-follow/mute/` directory. These are emulator checks, not hardware proof.
-
-Register verification: `tools/verify/verify_midi_follow_register.py` covers full MIDI range, both register modes, every octave choice, TRAN, chains, invalid roots and bounded writes. It also executes native drawing for 32 settings combinations, checks OCT alignment and both switch icons, and writes previews to `out/follow-ui/`. `tools/verify/verify_midi_follow_register_port.py --project DIR` exercises physical RFOL/window encoders, source octave changes, MIDI release balance and unchanged native Part bytes on a disposable virtual card.
-
-FOLLOW uses the same six-cell grid as Harmony: **A RFOL, B MODE, C OCT**.
-RFOL and OCT share the stock numeric/text field and value baseline. MODE and
-UPDT use the native two-position switch, including its stock icon.
-Custom selectors accumulate four raw encoder counts per choice and cap each
-report to one choice. Closing FOLLOW redraws RFOL on NOTE SETUP.
-
-The detail page has A=RFOL, B=MODE, C=OCT. Only C edits octave values.
-FIXED remembers an absolute octave; SOURCE remembers a relative octave offset.
-Changing MODE recalls that mode's own OCT value without editing either value.
-The OCT label/value are centered in cell C, including negative offsets and
-octave 10; the footer shows only NO:BACK. The stock field suppresses negative
-widget values, so OCT passes a nonnegative index and formats it back to the
-signed octave. Register values and behavior are unchanged.
 
 ## Root update timing: TRIG / LIVE
 
@@ -341,3 +173,11 @@ editing one receiver cannot change another, no selectable route introduces
 a cycle, and runtime fallback terminates without writing outside its scratch
 and stack. Run it on both standalone Follow and the combined Harmony image.
 This exercises linked ColdFire code, not physical outgoing-MIDI timing.
+
+## Verification
+
+Run `make check REMIX=midi-follow` for the standalone module. With a prepared
+project copy, `verify_midi_follow_response_port.py --project DIR` checks LIVE
+response through physical panel events and MIDI output. Combined Harmony
+settings/persistence coverage lives in `verify_midi_harmony_port.py --settings-only`,
+and NOTE SETUP confirmation in `verify_midi_setup_port.py`.

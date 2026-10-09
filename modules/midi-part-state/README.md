@@ -2,7 +2,7 @@
 
 Shared support for MIDI Follow and MIDI Harmony. Include `MIDI PART STATE`
 with either module; the repository's remix selections already do so. It adds
-no panel control and requires neither KITS nor DEG. One owner supplies the
+no panel control and does not require KITS. One owner supplies the
 native hooks whether Follow, Harmony or both are selected.
 
 Working native Parts are the authority. UI access uses the selected working
@@ -57,8 +57,6 @@ The latter requires Harmony and also checks Follow fields when present.
 The low-level native Clear initializes both working and saved Part; unlike
 Reload/Paste, its CS1 working mirror refresh belongs to its caller.
 
-The native Part lifecycle gate passes with Follow alone, Harmony alone and
-the `mattias-bus-part-kits` carrier. The shared `mattias-bus` project gate also
-passes panel edits, SAVE, cold reload, retained-memory resume and fresh defaults.
-Follow-on and OFF audio/MIDI soaks each pass 20 emulated seconds across all four
-Parts. Combined degree/Kit musical acceptance belongs to that candidate's gates.
+NOTE SETUP YES refreshes RFOL/HARM staging from the selected Part before
+stock confirms all six fields. This preserves immediately applied module
+edits without replaying mode conversion or changing stock staged controls.

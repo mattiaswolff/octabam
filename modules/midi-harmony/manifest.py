@@ -3,7 +3,7 @@ from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, P
 
 
 def follow_inc(modules):
-    return ('.set HAVE_FOLLOW,1\n' if 'MIDI FOLLOW' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '') + ('.set HAVE_DEGREES,1\n' if 'HARMONY DEGREES' in modules else '')
+    return ('.set HAVE_FOLLOW,1\n' if 'MIDI FOLLOW' in modules else '') + ('.set HAVE_SCALES,1\n' if 'MIDI SCALES' in modules else '')
 
 
 MODULE = Module(
@@ -28,7 +28,26 @@ MODULE = Module(
             Linked('chordsequence', 'modules/midi-harmony/chord-sequence.s', dram=True, include=follow_inc),
             Linked('chordui', 'modules/midi-harmony/chord-ui.s', dram=True, include=follow_inc),
             Linked('chordlocks', 'modules/midi-harmony/locks.s', dram=True, include=follow_inc),
-            Linked('harmonyplay', 'modules/midi-harmony/play.s', dram=True, include=follow_inc)),
+            Linked('harmonyplay', 'modules/midi-harmony/play.s', dram=True, include=follow_inc),
+            Linked('degreecodec', 'modules/midi-harmony/degrees/codec.s', dram=True),
+            Linked('degreeroots', 'modules/midi-harmony/degrees/roots.s', dram=True),
+            Linked('degreeaccess', 'modules/midi-harmony/degrees/part-access.s', dram=True,
+                   include=lambda modules: '.set HD_FOLLOW,' + str(int('MIDI FOLLOW' in modules)) +
+                   '\n.set HD_SCALES,' + str(int('MIDI SCALES' in modules)) +
+                   '\n.set HD_SCENES,' + str(int('MIDI SCENES' in modules)) + '\n'),
+            Linked('degreescenes', 'modules/midi-harmony/degrees/scenes.s', dram=True),
+            Linked('degreesceneaccess', 'modules/midi-harmony/degrees/scene-access.s', dram=True,
+                   include=lambda modules: '.set HD_SCENES,' + str(int('MIDI SCENES' in modules)) + '\n'),
+            Linked('degreecore', 'modules/midi-harmony/degrees/core.s', dram=True),
+            Linked('degreestorage', 'modules/midi-harmony/degrees/storage.s', dram=True),
+            Linked('degreeevents', 'modules/midi-harmony/degrees/events.s', dram=True),
+            Linked('degreerecording', 'modules/midi-harmony/degrees/recording.s', dram=True),
+            Linked('degreeui', 'modules/midi-harmony/degrees/ui.s', dram=True),
+            Linked('degreepanel', 'modules/midi-harmony/degrees/panel.s', dram=True),
+            Linked('degreeoperations', 'modules/midi-harmony/degrees/operations.s', dram=True),
+            Linked('degreeedit', 'modules/midi-harmony/degrees/edit-hooks.s', dram=True),
+            Linked('degreepool', 'modules/midi-harmony/degrees/pool.s', dram=True),
+            Linked('degreehooks', 'modules/midi-harmony/degrees/hooks.s', dram=True)),
     symbol_refs=(
         *(SymbolRef(addr, 0x400a74c0, 'harmonyplay', 'ch_play_modes', 'MIDI trig modes include CHORD PLAY') for addr in (0x40035a24,0x40051efc,0x40051f6c)),
         *(SymbolRef(addr, 0x400beb72, 'harmonyplay', 'ch_mode_names', 'mode names with CHORD PLAY') for addr in (0x400359fc,0x40036048)),
@@ -44,9 +63,11 @@ MODULE = Module(
         Poke(0x400d3f64, bytes(4), bytes.fromhex('400467a4'), 'TYPE text widget'),
         Poke(0x400d3fca, b'\x01', b'\x11', 'enable NOTE SETUP F only'),
         Poke(0x400d4092, bytes.fromhex('00000001'), bytes.fromhex('00000080'), 'packed Harmony Part settings range'),
-    ),
-    claims=Claims(sram=((0x100f8600, 8224, 'CHRD dense current bank mirror'),),
-                  part_window=tuple((0x4e2+36*t+f, 1, 'Harmony Part setting') for t in range(8) for f in (5,16,18))),
+    Poke(0x400d4359, b'\x00', b'\x23', 'Native Part DEG default 1:3'),
+           Poke(0x400d43aa, bytes.fromhex('00000080'), bytes.fromhex('00000054'), 'Native Part DEG range 0..83')),
+    claims=Claims(sram=((0x100f8600, 8224, 'CHRD dense current bank mirror'),
+                               (0x100fa620, 16768, 'Pattern degree current-bank mirror')),
+                  part_window=tuple((0x4e2+36*t+f, 1, 'Harmony Part setting') for t in range(8) for f in (5,16,18,19))),
     detours=(
         *(Detour(addr, bytes.fromhex('41f946c78d70'), 'harmonyownership', symbol,
                  'track-owned generated keyboard release slot') for addr,symbol in (
@@ -130,7 +151,16 @@ MODULE = Module(
         Detour(0x4007a2ec, bytes.fromhex('4fefffdc48d71cfc'), 'midiharmony', 'mh_arp_encoder', 'inherited native KEY is read-only', pad_to=8),
         Detour(0x40025ac8, bytes.fromhex('42b9100b14d8'), 'midiharmony', 'mh_defaults', 'new project settings defaults'),
         Detour(0x40010224, bytes.fromhex('7139100b14ae'), 'midiharmony', 'mh_boot', 'validate battery-backed settings'),
-    ),
+    Detour(0x400a44ee, bytes.fromhex('23c080006628'), 'degreesceneaccess', 'hd_scene_commit_stack',
+                    'Reserve the pinned MIDISC2.1 pattern-commit stack window'),
+             Detour(0x4002c76c, bytes.fromhex('103c0001e7a8'), 'degreeedit', 'hd_step_apply',
+                    'Degree identity after native step paste'),
+             Detour(0x4009f9c6, bytes.fromhex('206effdc7110'), 'degreepool', 'hd_tick',
+                    'Rebuild a sequence arp pool after a mode boundary'),
+             Detour(0x400534c2, bytes.fromhex('4eb94006dbcc'), 'degreesceneaccess', 'hd_scene_hold_a',
+                    'Degree scene A seed/range before unchanged MIDISC hold', kind='jsr'),
+             Detour(0x40052ec2, bytes.fromhex('4eb94006dbcc'), 'degreesceneaccess', 'hd_scene_hold_b',
+                    'Degree scene B seed/range before unchanged MIDISC hold', kind='jsr')),
     gates=(Gate('tools/verify/verify_midi_harmony_stress.py', stage='image', venv=True),
            Gate('tools/verify/verify_midi_part.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_part.py', stage='image', venv=True),
@@ -138,5 +168,13 @@ MODULE = Module(
            Gate('tools/verify/verify_harmony_playability.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_play.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_display.py', stage='image', venv=True),
-           Gate('tools/verify/verify_chord_storage.py', stage='image', venv=True)),
+           Gate('tools/verify/verify_chord_storage.py', stage='image', venv=True),
+            Gate('tools/verify/verify_harmony_degree_scenes.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_codec.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_roots.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_core.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_integration.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_part_state.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_publication.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_files.py', stage='image', venv=True)),
 )

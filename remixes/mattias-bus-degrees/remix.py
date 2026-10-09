@@ -9,5 +9,5 @@ REMIX = replace(
     _base, name='mattias-bus-degrees', proof=Proof.PORT,
     proof_note='DN degree lifecycle, panel, playback and scene-absent adapter checks; hardware untested',
     doc='Personal bus selection plus degree/register Harmony roots.',
-    modules=(*_base.modules, 'HARMONY DEGREES'),
+    modules=(*_base.modules),
 )

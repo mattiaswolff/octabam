@@ -14,15 +14,9 @@
         .set    IOB_LEN,    0x1000
 
     .set BANK_B,8192
-.ifdef HAVE_DEGREES
     .set FILE_B,24960
     .set FILE_MAGIC,0x48445032 /* HDP2: pattern degrees, Part-owned defaults */
     .set FILE_NONE,0x48445030  /* HDP0: explicit empty companion */
-.else
-    .set FILE_B,8192
-    .set FILE_MAGIC,0x43484432
-    .set FILE_NONE,0x43484430
-.endif
     .text
     .global ch_saveb,ch_loadall,ch_loadmask,ch_tocs1,ch_fromcs1
     .global ch_loaded_all,ch_loaded_resume,ch_loaded_project,ch_loaded_bank
@@ -81,9 +75,7 @@ bank_at:
 
 | blank: d0 = bank -> its CHRD bank all 0xff. Keeps d2-d7/a2-a6.
 blank:
-.ifdef HAVE_DEGREES
         jsr hd_bank_reset
-.endif
         bsr.w   bank_at
         moveq   #-1,%d0
         movel   #BANK_B/4,%d1
@@ -133,17 +125,10 @@ rn_copy:
         bra.s   rn_copy
 rn_end: movel   %a3,%d0
         beq.s   rn_none
-.ifdef HAVE_DEGREES
         moveb   #'h',%a3@+
         moveb   #'d',%a3@+
         moveb   #'e',%a3@+
         moveb   #'g',%a3@
-.else
-        moveb   #'c',%a3@+
-        moveb   #'h',%a3@+
-        moveb   #'r',%a3@+
-        moveb   #'d',%a3@
-.endif
         moveal  %sp@+,%a1
         moveq   #1,%d0
         rts
@@ -157,9 +142,7 @@ rn_none:
  * Unrelated CC edits and native transient/dirty fields do not invalidate it.
  */
 ch_native_hash:
-.ifdef HAVE_DEGREES
     move.l %d0,-(%sp)
-.endif
     lea -28(%sp),%sp
     movem.l %d1-%d5/%a0-%a1,(%sp)
     move.l #0x9b340,%d1
@@ -200,20 +183,16 @@ ch_native_hash:
     bne.s .hash_pattern
     movem.l (%sp),%d1-%d5/%a0-%a1
     lea 28(%sp),%sp
-.ifdef HAVE_DEGREES
     move.l %d1,-(%sp)
     move.l %d0,%d1
     move.l 4(%sp),%d0
     jsr hd_native_hash
     move.l (%sp)+,%d1
     addq.l #4,%sp
-.endif
     rts
 /* a0 payload -> d0 checksum, d1=1 valid byte range / 0 invalid. */
 .payload_hash:
-.ifdef HAVE_DEGREES
     jmp hd_payload_hash
-.endif
     lea -16(%sp),%sp
     movem.l %d2-%d4/%a0,(%sp)
     move.l #0x811c9dc5,%d0
@@ -265,11 +244,9 @@ ch_file_write:
     move.l (%a0)+,(%a1)+
     subq.l #1,%d0
     bne.s .wr_snapshot
-.ifdef HAVE_DEGREES
     move.l %d2,%d0
     lea PAYLOAD+8192,%a0
     jsr hd_export
-.endif
     lea PAYLOAD,%a0
     bsr.w .payload_hash
     move.l %d0,HDR+16
@@ -388,11 +365,9 @@ ch_file_read:
     move.l (%a1)+,(%a0)+
     subq.l #1,%d0
     bne.s .rd_publish
-.ifdef HAVE_DEGREES
     move.l %d2,%d0
     lea PAYLOAD+8192,%a0
     jsr hd_import
-.endif
     moveq #1,%d3
     bra.s .rd_status
 .rd_none:
@@ -415,10 +390,8 @@ ch_file_read:
     move.l %d2,%d0
     bsr.w blank
 .rd_status:
-.ifdef HAVE_DEGREES
     move.l %d2,%d0
     jsr hd_bank_loaded
-.endif
     lea ch_lock_status,%a0
     move.b %d3,(%a0,%d2.l)
     movem.l (%sp),%d2-%d3/%a2
@@ -559,24 +532,14 @@ ch_fromcs1:
     addq.l #8,%sp
     rts
 ch_newproj:
-    .ifdef HAVE_DEGREES
     bsr.w .new_project
-    .else
-    bsr.s .new_project
-    .endif
-    .ifdef HAVE_DEGREES
     jsr 0x400909d8
     jsr hd_ready_all
     rts
-    .else
-    jmp 0x400909d8
-    .endif
 ch_newproj2:
     bsr.s .new_project
     jsr 0x400909d8
-    .ifdef HAVE_DEGREES
     jsr hd_ready_all
-    .endif
     move.l %d3,%d0
     jmp 0x400915a0
 .new_project:
@@ -598,9 +561,7 @@ ch_newproj2:
     clr.l 8(%a0)
     clr.l 12(%a0)
     clr.l 0x100f8600
-.ifdef HAVE_DEGREES
     jsr hd_reset
-.endif
     movem.l (%sp),%d0-%d1/%a0
     lea 12(%sp),%sp
     rts
@@ -689,11 +650,7 @@ ch_d5_f2a6:
 ch_d5_f33a:
     move.l #ch_fcopy,%d5
     jmp 0x4008f340
-.ifdef HAVE_DEGREES
 FMT_WORK: .asciz "%s/hdeg%02d.work"
-.else
-FMT_WORK: .asciz "%s/chrd%02d.work"
-.endif
 MODE_R: .asciz "r"
 MODE_W: .asciz "w"
     .balign 4

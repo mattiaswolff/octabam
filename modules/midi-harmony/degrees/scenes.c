@@ -120,11 +120,7 @@ int hd_scene_delta_c(unsigned side, unsigned flat, int delta) {
     volatile uint8_t *slot=(volatile uint8_t *)(hd_scene_memory_c()+(scene&15u)*256+track*32);
     unsigned value=*slot;
     if (value==255) { value=(unsigned)hd_base_c((unsigned)context/4,(unsigned)context%4,track); *slot=(uint8_t)value; }
-    if (delta>127) delta=127;
-    if (delta<-127) delta=-127;
-    int next=(int)value+delta;
-    if (next<0) next=0;
-    if (next>=84) next=83;
+    int next=hd_ui_advance_c((int)value,delta);
     return next-(int)value;
 }
 
