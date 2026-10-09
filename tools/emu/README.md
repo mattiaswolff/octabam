@@ -147,7 +147,8 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
     of a call).
   - `--dsp-peek core:X|Y|P:addr,len` (upper-case space letter).
   - `--mem-dump addr,len=file`.
-  - `--midi-out FILE` (UART0's transmit bytes).
+  - `--midi-out FILE` (UART0's transmit bytes). Also works with `--interactive`
+    and `--dsp-rt`; send `quit` and wait for process exit to finish the file.
 - **Addresses.** A track's DSP instance record is `0x80000110 + 64·t` (32
   halfwords; see `docs/firmware/MIDI.md`). Its page-2 lane is
   `0x80000810 + 72·t`.
@@ -520,3 +521,15 @@ count.
 - **Aliases.** The OS image's uncached alias at `0x48000000` is folded onto
   `0x40000000` (the DRAM loader depacks through it). The `0x46000000`
   region's alias at `0x4e000000` is separate here.
+
+### Repeated injected calls and stack ownership
+
+The concert stress run on 8 October 2026 exposed a harness defect, not a
+firmware crash: `Rtos::callAsMain` left C ABI arguments on main's stack.
+Four-argument keyboard events leaked 16 bytes each; sustained eight-track
+churn eventually ran into firmware state and halted at an invalid PC.
+The RTOS regression reproduces the leak on its first call (SP falls by 16).
+The caller now restores its original stack pointer after a successful return.
+`ot_rtos_test` checks return values and an unchanged stack across 2,048 calls;
+full UART flood scenarios must also be rerun with the rebuilt port. Failed
+calls retain their crash state for diagnosis.
