@@ -148,6 +148,8 @@ def main():
         return int.from_bytes(img[o:o + 4], "big") if 0 <= o < len(img) - 4 else 0
 
     def page2_ok(fx_id):
+        if fx_id == 0:
+            return False
         p = rd32(DESC2 + 4 * fx_id)
         return p and rd32(p + 0x9a + 4 * 6) >= 2
 
@@ -159,6 +161,24 @@ def main():
     for f in pdir.iterdir():
         if f.is_file() and f.suffix.lower() == ".work":
             shutil.copy2(f, copy / f.name)
+    # Install the fallback in the copied bank files, including saved Parts.
+    # Poking only RAM/live IDs after load leaves the UI's SRAM Part as NONE;
+    # it then records no lock even though the descriptor probe looks valid.
+    sys.path.insert(0, str(ROOT / "tools/hw"))
+    import ot_project
+    fallback = next((i for i in REVERBS if page2_ok(i)), None)
+    if fallback is None:
+        sys.exit("verify_plocksp2: no FX2 page-2 slot 0 available for the fixture")
+    for bankfile in sorted(copy.glob("bank*.work")):
+        def usable_fx(data):
+            for part_index in range(ot_project.NPARTS_ALL):
+                part_start = ot_project.PART_BASE + part_index * ot_project.PART_STRIDE
+                for track in range(8):
+                    at = part_start + ot_project.FX2_OFF + track
+                    if not page2_ok(data[at]):
+                        data[at] = fallback
+        ot_project._bank_write(copy, int(bankfile.stem[4:]), usable_fx, guard=False)
+
     card = OUT / "card.img"
     r = subprocess.run([str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(copy), a.set_name, a.name,
                         "--tree", str(OUT / "tree"), "--out", str(card)], cwd=ROOT, capture_output=True, text=True)
@@ -222,8 +242,11 @@ def main():
     def undo(s):
         pclear(s); s.hold("func", "play")
 
+    def tap_clear(s):
+        record(s); s.tap("t1")
+
     scen = [panel("record", copy_paste), panel("clear", clear5), panel("pattern", pattern),
-            panel("pclear", pclear), panel("undo", undo)]
+            panel("pclear", pclear), panel("undo", undo), panel("tap_clear", tap_clear)]
 
     # playback: T1 step 1 FX2 page-2 slot 0 = 99 everywhere, trigs on steps 1 and 2
     lock = [f"{STORE + ((b * 16 + p) * 8 + 0) * TRACK_B + 6:#x}=99" for b in range(16) for p in range(16)]
@@ -264,6 +287,8 @@ def main():
     rec = steps("record", 0)
     v = rec[0][6]
     check(f"record: step 1 FX2 page-2 slot 0 locked ({v}, the Part's {knob})", v not in (0xff, knob))
+    check("bare trig tap after editing still clears the step's page-2 locks",
+          steps("tap_clear", 0)[0] == b"\xff" * REC)
     check(f"record: no other page-2 byte of step 1 ({rec[0].hex()})",
           all(b == 0xff for i, b in enumerate(rec[0]) if i != 6))
     stock = (OUT / "record_stock.bin").read_bytes()

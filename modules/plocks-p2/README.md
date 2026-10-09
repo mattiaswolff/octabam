@@ -74,6 +74,17 @@ measured on the port or the unit.
 
 - `tools/verify/verify_plocksp2.py`.
 
+## Held-trig release regression
+
+The page-2 editor now mirrors stock's gesture state: mark the edit and
+clear its five pending trig-tap masks plus the extra edit word. Previously,
+releasing a trig after turning a SETUP knob could run the ordinary tap
+handler and erase the new lock. The port gate checks the lock after release,
+copy/paste, clear and undo, and a subsequent bare trig tap still clears it.
+The gate installs a usable FX2 in its temporary project when needed; NONE's
+descriptor alone is not evidence of an editable effect. No source project
+is changed. Hardware acceptance remains outstanding.
+
 ## What stock does
 
 `docs/firmware/STEP_LOCKS.md`. A step record is 32 lock bytes, page 1 of

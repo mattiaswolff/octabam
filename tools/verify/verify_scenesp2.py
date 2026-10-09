@@ -110,6 +110,12 @@ def main():
     for f in pdir.iterdir():
         if f.is_file() and f.suffix.lower() == ".work":
             shutil.copy2(f, copy / f.name)
+    # A blank/MIDI-only project has no active audio voice: TRK_BANK remains
+    # 0xff and the frame hook correctly skips it. Give this copied fixture
+    # a THRU voice and first-step trig, without depending on sample files.
+    sys.path.insert(0, str(ROOT / "tools/hw"))
+    import ot_project
+    ot_project.thru_track(copy, 1, guard=False)
     card = OUT / "card.img"
     r = subprocess.run([str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(copy), a.set_name, a.name,
                         "--tree", str(OUT / "tree"), "--out", str(card)], cwd=ROOT, capture_output=True, text=True)
