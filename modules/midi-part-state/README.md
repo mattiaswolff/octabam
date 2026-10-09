@@ -36,7 +36,8 @@ not advance the epoch.
 
 DEG receives one `hd_part_before` callback per affected Part after snapshot
 publication and must consult the affected-Part mask to defer reattachment.
-That combined path still needs the degree task's integration gate.
+The degree integration gate covers that combined path, including interrupted
+replacement with all eight tracks and four pending-event slots per track.
 
 The linked-code gates exercise explicit contexts, bounded writes, native
 copy/initialization byte and ABI equivalence, and interruption while settings

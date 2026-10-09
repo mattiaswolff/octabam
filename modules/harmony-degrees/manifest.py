@@ -5,7 +5,7 @@ MODULE = Module(
     name='harmony-degrees', key='HARMONY DEGREES', kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author='Mattias Wolff',
     author_url='https://github.com/mattiaswolff/octabam', proof=Proof.PORT,
-    proof_note='D0 port: degree conversion, editing, recording, retention and project lifecycle; hardware untested',
+    proof_note='Native Part roots, degree lifecycle and 18 Kit recalls verified under the port; hardware untested',
     doc='Degree/register roots with explicit conversion across stock/Harmony mode boundaries.',
     requires=('MIDI HARMONY',),
     conflicts=(('MIDI SCENES', 'Native NOTE interpolation has no degree representation contract'),),

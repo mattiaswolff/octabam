@@ -104,7 +104,7 @@ Strict validation, failed-write protection and atomic publication remain.
 | `601e4b21` | `95af7d31` | Remove WIDTH entirely; SPRD only |
 | `6545a434` | `c2d9c679` | Correct anchored OPEN page oracle |
 | `49c6e603` | `336a639a` | Native Follow safety fixtures and architecture |
-| `76c76f87` | imported | Completed shared lifecycle validation docs |
+| `76c76f87` | `2dba1e71` | Completed shared lifecycle validation docs |
 
 Earlier WIDTH persistence `bc05b081`/`a386f381` is superseded by the removal.
 
@@ -146,7 +146,8 @@ Passed without KITS:
   explicit roots versus incoming defaults, unchanged unrelated Parts and C3.
 - Recording, project SAVE, cold load, CS1 resume, physical DEG editing,
   pattern/track/bank copy, clear/undo, native trig deletion/replacement, and
-  native Part Save/Reload/Clear. All nine no-KITS firmware groups pass, including project reload/Save As/
+  native Part Save/Reload/Clear. All nine no-KITS firmware groups pass, including
+  project reload/Save As/
   New Project, corrupt companions, Follow, stock-OFF UART and active arp modes.
 - Plain-key recording: 15 performed/replayed voicing/spread/ROOT cases and
   four explicit-empty NOT2-4 cases. CHORD PLAY linked shape/ownership gates.
@@ -164,33 +165,34 @@ Combined evidence:
 - The first full KITS gate exposed five test-project assumptions: receive
   clock/transport/program settings, saturated LEVEL, the first empty pattern,
   and an out-of-scale raw note normalized by degree paste. All five pass with
-  the copied fixture calibrated explicitly. The clean full rerun passes with zero failures (optional legacy-import and
+  the copied fixture calibrated explicitly. The clean full rerun passes with
+  zero failures (optional legacy-import and
   external corrupt-bank fixtures unavailable). `--only` also reads stale
   unselected results in the KITS verifier; keep those outputs isolated.
 - Final combined SPRD/grid-corrected image is frozen as SHA-256
   `11e01381100f93436115c745dd35e484484a8be2a27cf1536bbef59a9a29b748`.
-  All 18 musical Kit recalls have passed on that exact image. The complete
-  all nine degree firmware groups also pass on that exact image.
-- Final-source per-remix checks for no-KITS `mattias-bus-degrees` and no-Follow
-  `harmony-degrees` run in isolated `out/degree-check-shards` worktrees.
+  All 18 musical Kit recalls and all nine degree firmware groups pass on
+  that exact image.
+- Per-remix checks pass in isolated `out/degree-check-shards` worktrees:
+  no-KITS `mattias-bus-degrees` has 24 image gates and no skips; no-Follow
+  `harmony-degrees` has 18 image gates and one inapplicable audio-FX CC40 skip.
 
 The combined per-remix TEMPO BUS gate needs the real audio rig fixture: the
 MIDI fixture deliberately clears FX hosts/samples. Project/TEMPO BUS now pass
 against the audio rig, including send/return audio and CC delivery; both logs
-are retained. The preparation helper is for the
-shared KITS half; README gives the two `make check` component commands. No
+are retained. The preparation helper is for the shared KITS half; README gives the two `make check` component commands. No
 firmware change was needed for these fixture issues. Emulator CI: all five
 unit tests pass.
 
 Shared Follow safety fixture/native architecture cleanup `49c6e603` is now
 imported. Seven transition pairs and the 20-second Follow-on soak pass on the
 shared carrier. OFF soak and the shared KITS per-remix check also pass; the
-latter has 17 image gates and no skips. Its
-SPRD-only panel, 172,800 AUTO transitions, native Part lifecycle on Follow,
+latter has 17 image gates and no skips. Its SPRD-only panel, 172,800 AUTO transitions, native Part lifecycle on Follow,
 Harmony and the KITS carrier, project persistence and stock-OFF UART pass.
 
-Before package: finish all running checks, resolve failures, complete combined
-pending/arp/Follow and project lifecycle coverage, reconcile shared followups,
+Before package: finish the combined image-stage gates and record the resolved
+TEMPO BUS fixture failure; all musical/lifecycle suites and shared followups
+are complete. Then
 freeze clean source/image provenance, build and independently decode BIN/SYX,
 and package the new candidate with receipts. Upstream was refreshed on
 9 October and is already contained (`063a4262`). No card copy, OS upgrade or

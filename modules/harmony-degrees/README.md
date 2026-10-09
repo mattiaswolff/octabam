@@ -131,9 +131,11 @@ CHRD native defaults and pending inheritance have linked-code checks. Full
 firmware checks pass native Part transitions across all nine mode pairs,
 independent incoming defaults, degree/CHRD recording, save, cold reload and
 retained resume. The composed hooks, interrupted native copy/clear, file
-failure paths and bounded publication checks pass. KITS library and musical
-recall checks are in progress. Earlier D0 receipts belong to the preserved D0 image and do not
-validate these new Part-owned changes. Hardware acceptance remains separate.
+failure paths and bounded publication checks pass. The combined KITS image
+passes all nine degree firmware groups and 18 resident/nonresident Kit mode
+pairs, including held-key releases, explicit locks and incoming defaults.
+Earlier D0 receipts belong to the preserved D0 image and do not validate these
+new Part-owned changes. Hardware acceptance remains separate.
 
 ## Reproduce and accept
 
