@@ -243,7 +243,7 @@ def main():
         pclear(s); s.hold("func", "play")
 
     def tap_clear(s):
-        record(s); s.tap("t1")
+        s.tap("t1")
 
     scen = [panel("record", copy_paste), panel("clear", clear5), panel("pattern", pattern),
             panel("pclear", pclear), panel("undo", undo), panel("tap_clear", tap_clear)]
