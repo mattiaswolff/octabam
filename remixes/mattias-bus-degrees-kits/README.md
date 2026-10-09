@@ -16,5 +16,17 @@ requires the selected `make check` with `OT_PROJECT`, the degree firmware
 lifecycle suite, native Part transition matrix and KITS library scenarios.
 See [the coordination and evidence record](../../modules/harmony-degrees/KITS.md).
 
+Prepare the shared KITS gate's project assumptions in a separate copy:
+
+```sh
+.venv/bin/python tools/verify/prepare_degree_kits_fixture.py --project /path/to/project --out out/degree-kits-fixture/new
+OT_PROJECT="$PWD/out/degree-kits-fixture/new/project" make check REMIX=mattias-bus-degrees-kits BUILD=DK
+```
+
+The helper refuses an existing output directory and leaves the source project
+untouched. Its receipt hashes every prepared project file. The musical recall
+matrix uses `tools/verify/verify_harmony_degree_kits_port.py --project /path/to/project`
+after building this remix; it freezes the image and symbols for all 18 cases.
+
 This candidate has not yet been packaged or tested on hardware. The delivered
 D0 degree package remains a separate, unchanged build.
