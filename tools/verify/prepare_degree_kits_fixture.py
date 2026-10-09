@@ -4,6 +4,7 @@
 The gate expects bank 3, rotating Part assignments, pattern 14 as the first
 empty pattern, enabled external transport/program reception and LEVEL headroom.
 In-scale roots make native pattern-byte copy assertions meaningful with DEG.
+The personal bus FX2 layout also supplies TEMPO BUS hosts and CC40 targets.
 """
 import argparse
 import hashlib
@@ -39,6 +40,7 @@ def main():
             for pattern in range(16):data[starts[pattern+1]-5]=pattern%4
             for part in range(8):
                 base=p.otp.PART_BASE+part*p.otp.PART_STRIDE+9
+                data[base+8:base+16]=bytes((6,9,9,9,7,9,9,8))
                 for track in range(8):
                     data[base+0x12+2*track]=100
                     data[base+0x4e2+track*36+17]=1
@@ -48,6 +50,7 @@ def main():
         p.otp._bank_write(work/'project',bank,seed,guard=False)
     receipt={'source':str(source),'source_read_only':True,'bank':3,
              'degree_default':'1:3','key':'C major','levels':100,
+             'fx2_ids':[6,9,9,9,7,9,9,8],
              'bank3_first_empty_pattern':14,'project_settings':values,
              'files':{x.name:hashlib.sha256(x.read_bytes()).hexdigest()
                       for x in sorted((work/'project').iterdir()) if x.is_file()}}
