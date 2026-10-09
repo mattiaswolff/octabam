@@ -178,4 +178,6 @@ This exercises linked ColdFire code, not physical outgoing-MIDI timing.
 
 Run `make check REMIX=midi-follow` for the standalone module. With a prepared
 project copy, `verify_midi_follow_response_port.py --project DIR` checks LIVE
-response through physical panel events and MIDI output.
+response through physical panel events and MIDI output. Combined Harmony
+settings/persistence coverage lives in `verify_midi_harmony_port.py --settings-only`,
+and NOTE SETUP confirmation in `verify_midi_setup_port.py`.
