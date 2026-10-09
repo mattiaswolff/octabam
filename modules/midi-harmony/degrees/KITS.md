@@ -38,7 +38,7 @@ wrapper and its unused verifier have been removed.
 Pattern roots are 131-byte records: 64 degrees, 64 native edit snapshots,
 representation, outgoing scale and last context. One bank is 16,768 bytes;
 CHRD plus roots is 24,960 bytes. Files use HDP2/version 2; retention uses
-HDN2/version 2. Non-DEG CHRD uses CHD2/CHN2. Empty files use HDP0/CHD0.
+HDN2/version 2. Empty files use HDP0.
 Companions contain no Part defaults and ignore Part assignments/defaults in
 their native fingerprint. Loads detach reusable physical-slot provenance.
 Strict validation, failed-write protection and atomic publication remain.

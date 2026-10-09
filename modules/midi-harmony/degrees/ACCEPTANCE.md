@@ -1,7 +1,7 @@
 # Harmony degree hardware acceptance
 
-Use the packaged degree image and a complete copy of a project. DS includes
-KITS and MIDI SCENES; DN excludes both. Skip those modules' steps on DN.
+Use the packaged image and a complete copy of a project. H0 includes KITS
+and MIDI SCENES. Skip those modules' steps in selections without them.
 Keep the current firmware and original project as the comparison.
 The package's source reference and hashes identify the image under test.
 Automated checks do not establish hardware timing or hardware acceptance.
@@ -11,7 +11,8 @@ Automated checks do not establish hardware timing or hardware acceptance.
 - MIDI NOTE SETUP, F: HARM selects OFF, NOTE or CHORD.
 - In HARM NOTE or CHORD, MIDI NOTE page A is DEG, displayed as `degree:octave`.
   One detent advances one scale position; degree 7 advances to degree 1 in the
-  next tonic octave. Hold a trig to edit its degree. Push A to unlock it.
+  next tonic octave. FUNC + A changes only the octave, including on held
+  steps and Scene root locks. Hold a trig to edit its degree; push A to unlock it.
 - In HARM CHORD, D is CHRD. In HARM NOTE, D/E/F are inactive.
 - ARP KEY selects the tonic and scale. KEY OFF uses C major as the reference
   for degrees. Without a selected scale, TRI retains its major chord recipe.
@@ -29,7 +30,8 @@ the music already in a Part or sequence.
 
 ## Acceptance sequence
 
-1. On a MIDI track, choose C minor, HARM CHORD and CHRD TRI. Program three
+1. Change RFOL/HARM on NOTE SETUP and press YES; confirm both remain set.
+   On a MIDI track, choose C minor, HARM CHORD and CHRD TRI. Program three
    trigs with `1:3`, `4:3`, `5:3`. Confirm Cm–Fm–Gm.
 2. Change KEY to D minor. Confirm Dm–Gm–Am and unchanged DEG values. Return
    to C minor and confirm the exact original progression. Repeat with a
@@ -66,7 +68,7 @@ the music already in a Part or sequence.
    the effective source KEY. Selecting a different source preserves degrees.
 10. Switch HARM OFF and compare ordinary note editing, NOT2–4, recording,
     copying and playback with the current firmware on the original project.
-11. On DS, assign scenes A/B and hold each scene while turning MIDI NOTE
+11. With MIDI SCENES, assign scenes A/B and hold each scene while turning MIDI NOTE
     page A. Set different DEG endpoints, sweep the crossfader, then change
     KEY. Confirm scale-relative roots, unchanged scene degrees and balanced
     releases. Repeat with CHORD and an arp, including several MIDI tracks.
@@ -97,7 +99,7 @@ the complete stored pair, not one file from each save.
 Degrees resolving beyond MIDI 0–127 are silent in HARM. Turning HARM OFF
 commits the closest MIDI boundary because native NOTE has no separate silent
 root value. KITS carries native Part defaults; it adds no degree storage or
-conversion adapter. DS uses the pinned MIDISC2.1 implementation with an
+conversion adapter. H0 uses the pinned MIDISC2.1 implementation with an
 adapter in our modules; see [SCENES.md](SCENES.md). Native LFO designer use
 alongside the upstream scene storage window has not been established by
 these checks. Test it separately if it is part of your performance project.

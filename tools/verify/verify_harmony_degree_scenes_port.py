@@ -57,6 +57,14 @@ def editor(source,sym):
     sparse=bank[0x90522:0x90522+144]
     assert sparse[:10]==bytes.fromhex('4d530200000024010027'),sparse[:16].hex()
     assert bank[0x8ed80+0x4e2+19]==35
+    # FUNC + the same physical Scene encoder advances only the tonic octave.
+    octave=w/'octave.txt'
+    octave.write_text(script.read_text().replace('1600 enc 0 1',
+        '1300 key 0x2d down\n1600 enc 0 1\n1800 key 0x2d up'))
+    options=list(extra);options[options.index('--live-script')+1]=octave
+    events=p.run(w,'octave',options,physical_panel=True);p.balanced(events)
+    octave_bank=(w/'bank.bin').read_bytes()
+    assert octave_bank[0x90522+6]==42,octave_bank[0x90522:0x90522+10].hex()
     # Physical SAVE, cold reload and retained resume use native scene storage.
     script.write_text(script.read_text().replace('2600 quit\n','')+cp.SAVE)
     events=p.run(w,'save',extra,physical_panel=True);p.balanced(events)

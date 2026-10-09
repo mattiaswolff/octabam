@@ -464,3 +464,9 @@ Entries from here to the end of the file (5 Oct 2026) were recorded in other doc
 - **Seen:** the personal bus remix with KITS and MIDI HARMONY builds with no resource conflicts, but the emulator's fresh project load leaves every Kit assignment at `0xff`. The focused KITS suite reports 18 failures; no hardware result is claimed.
 - **Cause:** KITS classifies the masked bank load by the native caller's return address. Harmony's CHRD companion wrapper calls that entry from DRAM, hiding the project-load and resume callers. Restoring only the two original callsites in a diagnostic image restores library migration and loading Kit 7, but bypasses CHRD load handling and is not a usable fix.
 - **Fix:** Harmony leaves all four bank-load calls intact and runs companion handling at their return sites, before replaying stock's stack cleanup and result check. KITS is unchanged. `verify_harmony_load_hooks.py` executes the native callers and continuations for success, zero and negative results; the focused composed `verify_kits.py` run passes migration, load/save/undo, pattern assignment, project save, fresh reload and simulated power-up. Recorded companion lifecycle verification is separate from Kit-library verification.
+
+## NOTE SETUP YES resets RFOL and HARM — reproduced under the port, fixed
+
+- **Seen:** reported on the DS package, 9 Oct 2026; physical YES reproduces both resets under the port.
+- **Cause:** stock `0x4004af20` commits all six staged values at `0x460d5cb4`. RFOL/HARM edit the native Part immediately, leaving their staged slots stale.
+- **Fix:** MIDI PART STATE refreshes only the selected Part's module-owned slots before the native confirmation. It does not repeat Harmony conversion or replace stock staged edits. `verify_midi_setup_port.py` covers direct and modal edits, repeated YES, OFF conversion and mixed CHAN edits; the linked Part gate covers every track/Part.
