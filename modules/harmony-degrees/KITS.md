@@ -103,6 +103,7 @@ Strict validation, failed-write protection and atomic publication remain.
 | `afca19f1` | `b55b3011` | Native KEY gesture without Scales |
 | `601e4b21` | `95af7d31` | Remove WIDTH entirely; SPRD only |
 | `6545a434` | `c2d9c679` | Correct anchored OPEN page oracle |
+| `49c6e603` | `336a639a` | Native Follow safety fixtures and architecture |
 
 Earlier WIDTH persistence `bc05b081`/`a386f381` is superseded by the removal.
 
@@ -144,7 +145,8 @@ Passed without KITS:
   explicit roots versus incoming defaults, unchanged unrelated Parts and C3.
 - Recording, project SAVE, cold load, CS1 resume, physical DEG editing,
   pattern/track/bank copy, clear/undo, native trig deletion/replacement, and
-  native Part Save/Reload/Clear. Project reload/Save As/New Project and corrupt companion rejection also pass; playback groups are running.
+  native Part Save/Reload/Clear. All nine no-KITS firmware groups pass, including project reload/Save As/
+  New Project, corrupt companions, Follow, stock-OFF UART and active arp modes.
 - Plain-key recording: 15 performed/replayed voicing/spread/ROOT cases and
   four explicit-empty NOT2-4 cases. CHORD PLAY linked shape/ownership gates.
 - Ordinary root edits mask at most 65 instructions. Dense first recording
@@ -163,11 +165,15 @@ Combined evidence:
   and an out-of-scale raw note normalized by degree paste. All five pass with
   the copied fixture calibrated explicitly. A full clean rerun is required:
   `--only` also reads stale unselected results in the KITS verifier.
+- Final combined SPRD/grid-corrected image is frozen as SHA-256
+  `11e01381100f93436115c745dd35e484484a8be2a27cf1536bbef59a9a29b748`.
+  The complete degree firmware suite is now running against it.
 - Final-source per-remix checks for no-KITS `mattias-bus-degrees` and no-Follow
   `harmony-degrees` run in isolated `out/degree-check-shards` worktrees.
 
-Shared task owns the remaining Follow safety fixture/native architecture
-cleanup (`bf_sources` references) and its standalone final checks. Its
+Shared Follow safety fixture/native architecture cleanup `49c6e603` is now
+imported. Seven transition pairs and the 20-second Follow-on soak pass on the
+shared carrier; OFF soak and its combined check are running. Its
 SPRD-only panel, 172,800 AUTO transitions, native Part lifecycle on Follow,
 Harmony and the KITS carrier, project persistence and stock-OFF UART pass.
 
