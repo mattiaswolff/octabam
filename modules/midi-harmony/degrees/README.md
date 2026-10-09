@@ -74,7 +74,7 @@ publish partially validated data. A rejected working save cannot overwrite
 the stored bank/companion backup. Native bank and companion writes remain
 separate filesystem operations; arbitrary power-loss atomicity is not claimed.
 No earlier experimental format is migrated. Harmony uses its own companion
-identity so it cannot masquerade as the current module's CHRD format.
+identity and rejects incompatible experimental CHRD formats.
 
 KITS uses the same native Part fields and requires no special adapter. The
 combined KITS selection is `mattias-bus-degrees-kits`. The additional

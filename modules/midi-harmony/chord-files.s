@@ -567,7 +567,7 @@ ch_newproj2:
     rts
 
 /* Copy only after stock succeeded. Missing companion creates an explicit
- * CHNO marker, preventing an older destination's CHRD from surviving. */
+ * HDP0 marker, preventing an older destination's CHRD from surviving. */
 ch_fcopy:
     move.l 8(%sp),%a0
     bsr.w ch_copy_guard

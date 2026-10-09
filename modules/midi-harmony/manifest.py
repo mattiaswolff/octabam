@@ -1,4 +1,4 @@
-"""MIDI scale notes and diatonic chords, before the stock arpeggiator."""
+"""Scale-degree MIDI roots and generated chords before the stock arpeggiator."""
 from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, Proof, Poke, SymbolRef
 
 
@@ -11,7 +11,7 @@ MODULE = Module(
     category=Category.MIDI_USB, author='Mattias Wolff',
     author_url='https://github.com/mattiaswolff/octabam', proof=Proof.PORT,
     proof_note='Development candidate; hardware untested',
-    doc='MIDI NOTE SETUP HARM using stock ARP KEY/scale; optional MIDI Follow inheritance.',
+    doc='Scale-degree roots, generated chords and CHORD PLAY using native ARP KEY; optional MIDI Follow.',
     requires=('MIDI PART STATE',),
     linked=(Linked('chordpart', 'modules/midi-harmony/chord-part.s', dram=True),
             Linked('harmonyownership', 'modules/midi-harmony/ownership.s', dram=True),
@@ -53,8 +53,8 @@ MODULE = Module(
         *(SymbolRef(addr, 0x400beb72, 'harmonyplay', 'ch_mode_names', 'mode names with CHORD PLAY') for addr in (0x400359fc,0x40036048)),
         *(SymbolRef(addr, 0x400beb8a, 'harmonyplay', 'ch_mode_icons', 'mode glyph table bound') for addr in (0x40035856,0x40035a46)),
         SymbolRef(0x400d3f34, 0, 'midiharmony', 'mh_type_format', 'NOTE SETUP F TYPE formatter'),
-                 SymbolRef(0x400bc5d8, 0x4004ae08, 'harmonypage', 'mh_page_open', 'NOTE SETUP F press opens Harmony'),
-                 SymbolRef(0x400bc5dc, 0x4004ae08, 'harmonypage', 'mh_page_noop', 'NOTE SETUP F release has no native commit')),
+        SymbolRef(0x400bc5d8, 0x4004ae08, 'harmonypage', 'mh_page_open', 'NOTE SETUP F press opens Harmony'),
+        SymbolRef(0x400bc5dc, 0x4004ae08, 'harmonypage', 'mh_page_noop', 'NOTE SETUP F release has no native commit')),
     pokes=(
         Poke(0x400d43a6, bytes.fromhex('00000080'), bytes.fromhex('00000008'), 'Part CHRD default range in disabled CTRL1 SETUP A'),
         Poke(0x4005872e, bytes.fromhex("7003"), bytes.fromhex("7004"), "four MIDI trig modes"),
@@ -63,8 +63,8 @@ MODULE = Module(
         Poke(0x400d3f64, bytes(4), bytes.fromhex('400467a4'), 'TYPE text widget'),
         Poke(0x400d3fca, b'\x01', b'\x11', 'enable NOTE SETUP F only'),
         Poke(0x400d4092, bytes.fromhex('00000001'), bytes.fromhex('00000080'), 'packed Harmony Part settings range'),
-    Poke(0x400d4359, b'\x00', b'\x23', 'Native Part DEG default 1:3'),
-           Poke(0x400d43aa, bytes.fromhex('00000080'), bytes.fromhex('00000054'), 'Native Part DEG range 0..83')),
+        Poke(0x400d4359, b'\x00', b'\x23', 'Native Part DEG default 1:3'),
+        Poke(0x400d43aa, bytes.fromhex('00000080'), bytes.fromhex('00000054'), 'Native Part DEG range 0..83')),
     claims=Claims(sram=((0x100f8600, 8224, 'CHRD dense current bank mirror'),
                                (0x100fa620, 16768, 'Pattern degree current-bank mirror')),
                   part_window=tuple((0x4e2+36*t+f, 1, 'Harmony Part setting') for t in range(8) for f in (5,16,18,19))),
@@ -169,7 +169,7 @@ MODULE = Module(
            Gate('tools/verify/verify_chord_play.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_display.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_storage.py', stage='image', venv=True),
-            Gate('tools/verify/verify_harmony_degree_scenes.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_degree_scenes.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_codec.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_roots.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_degree_core.py', stage='image', venv=True),

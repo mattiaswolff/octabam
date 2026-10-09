@@ -1,7 +1,7 @@
 # Harmony degree hardware acceptance
 
-Use the packaged image and a complete copy of a project. H0 includes KITS
-and MIDI SCENES. Skip those modules' steps in selections without them.
+Use the packaged image and a complete copy of a project. Skip KITS and MIDI
+SCENES steps in selections without those modules.
 Keep the current firmware and original project as the comparison.
 The package's source reference and hashes identify the image under test.
 Automated checks do not establish hardware timing or hardware acceptance.
@@ -99,7 +99,8 @@ the complete stored pair, not one file from each save.
 Degrees resolving beyond MIDI 0–127 are silent in HARM. Turning HARM OFF
 commits the closest MIDI boundary because native NOTE has no separate silent
 root value. KITS carries native Part defaults; it adds no degree storage or
-conversion adapter. H0 uses the pinned MIDISC2.1 implementation with an
+conversion adapter. The Scenes adapter targets the pinned MIDISC2.1 implementation
+with an
 adapter in our modules; see [SCENES.md](SCENES.md). Native LFO designer use
 alongside the upstream scene storage window has not been established by
 these checks. Test it separately if it is part of your performance project.
