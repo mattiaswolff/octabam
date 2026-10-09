@@ -1,7 +1,8 @@
 # Harmony degree hardware acceptance
 
-Use the packaged `mattias-bus-degrees-kits` image and a complete copy of a
-project. Keep the current firmware and original project as the comparison.
+Use the packaged degree image and a complete copy of a project. DS includes
+KITS and MIDI SCENES; DN excludes both. Skip those modules' steps on DN.
+Keep the current firmware and original project as the comparison.
 The package's source reference and hashes identify the image under test.
 Automated checks do not establish hardware timing or hardware acceptance.
 
@@ -65,6 +66,16 @@ the music already in a Part or sequence.
    the effective source KEY. Selecting a different source preserves degrees.
 10. Switch HARM OFF and compare ordinary note editing, NOT2–4, recording,
     copying and playback with the current firmware on the original project.
+11. On DS, assign scenes A/B and hold each scene while turning MIDI NOTE
+    page A. Set different DEG endpoints, sweep the crossfader, then change
+    KEY. Confirm scale-relative roots, unchanged scene degrees and balanced
+    releases. Repeat with CHORD and an arp, including several MIDI tracks.
+    Leave one endpoint empty and check inheritance from the pattern/Part.
+12. Save and reload those scenes, power-cycle, then recall resident and
+    other-bank Kits while playing and holding keys. Confirm incoming scene
+    roots, DEG/CHRD defaults and no stuck notes. Switch OFF and back to HARM;
+    confirm native NOTE/degree conversion. Holding a scene must not edit
+    CHRD or dormant NOT2–4 while HARM is active.
 
 Record the displayed build, device model, receiving synth, steps performed,
 actual notes and any timing or release issue. Retain the exact failing project
@@ -86,4 +97,7 @@ the complete stored pair, not one file from each save.
 Degrees resolving beyond MIDI 0–127 are silent in HARM. Turning HARM OFF
 commits the closest MIDI boundary because native NOTE has no separate silent
 root value. KITS carries native Part defaults; it adds no degree storage or
-conversion adapter. MIDI SCENES remains incompatible with the degree model.
+conversion adapter. DS uses the pinned MIDISC2.1 implementation with an
+adapter in our modules; see [SCENES.md](SCENES.md). Native LFO designer use
+alongside the upstream scene storage window has not been established by
+these checks. Test it separately if it is part of your performance project.

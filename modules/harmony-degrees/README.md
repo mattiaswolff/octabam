@@ -79,7 +79,7 @@ identity so it cannot masquerade as the current module's CHRD format.
 KITS uses the same native Part fields and requires no special adapter. The
 combined KITS selection is `mattias-bus-degrees-kits`. The additional
 `mattias-bus-degrees-scenes` candidate adds DEG-aware MIDI Scenes; its
-[compatibility checks](SCENES.md) are in progress.
+[compatibility boundaries and validation](SCENES.md) are documented separately.
 See [the integration plan and ownership record](KITS.md).
 
 ## Implementation and evidence plan

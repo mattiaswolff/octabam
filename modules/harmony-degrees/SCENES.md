@@ -1,6 +1,6 @@
 # Degree compatibility with MIDI Scenes
 
-Development candidate: `mattias-bus-degrees-scenes`, build DS. Based on the
+Hardware-test candidate: `mattias-bus-degrees-scenes`, build DS. Based on the
 completed degree/Part/KITS handoff `9cf41ec9` and upstream PR #647
 `83a9d6c103e9f127c191769d9f51f01555419c89`. MIDI SCENES remains pinned to
 MIDISC2.1 submodule `52eaab0a7bff43b0316e522a03199106d1553e98`.
@@ -43,7 +43,7 @@ supply the degree display. No separate persistent scene store is introduced.
   registers across valid, unchanged and invalid context paths. A different
   upstream hook requires revalidation of this adapter.
 
-## Evidence in progress
+## Validation
 
 `tools/verify/verify_harmony_degree_scenes.py` covers all 32 pending slots,
 24,576 fader/key/track combinations, empty endpoints, malformed data, capacity,
@@ -52,19 +52,26 @@ copy. It also checks that adapters are inert when MIDI SCENES is absent.
 The worst measured scene-root preparation masks 2,844 emulated instructions;
 this is not a hardware timing measurement.
 
-The full-firmware verifier is `verify_harmony_degree_scenes_port.py`. Native
-scene editing, project SAVE, cold reload and retained resume passed during
-iteration. NOTE/CHORD roots follow KEY, and native OFF retains NOT2 locks.
-The first nonresident Kit recall with scenes passed with held-key releases,
-explicit CHRD locks, incoming scene roots and unchanged library bytes.
+The full-firmware verifier is `verify_harmony_degree_scenes_port.py`. It
+checks NOTE/CHORD scene roots under different KEYs, native OFF with NOT2
+locks, physical scene editing, project SAVE, cold reload and retained resume.
+Eight-track physical-fader sweeps cover shared-channel chords and
+individual-channel arps, with balanced releases and empty ownership state.
 
-The original shared check's 15 KITS playback failures are retained in
-`out/scenes-check-shared.log`. The stack adapter fixes live pattern changes; the complete KITS rerun passes
-with zero failures. Eight-track physical-fader sweeps pass for shared-channel
-chords and distinct-channel arps. A fixture that zeroed unused sparse padding
-silenced arps even on stock; preserving untouched bytes, as the native packer
-does, fixes the fixture. This does not establish compatibility with every
-use of the upstream Part window (notably native LFO designer records).
+The larger composition exposed a Harmony recording queue that assumed zeroed
+BSS. Our first-use initializer now clears all 256 message slots. Its linked
+regression starts with dirty RAM and verifies repeated initialization preserves
+queued ownership; full-firmware recording/save checks pass in DS and DN.
 
-The final degree lifecycle, musical Kit matrix and selected remix gates are
-running on the frozen image. Packaging and hardware acceptance remain pending.
+The original shared check's 15 KITS playback failures are retained in the
+package evidence. The stack adapter fixes those live pattern changes. The
+full KITS gate, 18 musical resident/nonresident Kit transitions and nine degree
+lifecycle/playback groups are required before packaging. DS also requires the
+scene suite; DN requires the scene-absent adapter checks. Packaging independently
+decodes BIN and SYX and compares the MAIN OS with the tested image.
+
+A fixture that zeroed unused sparse padding silenced arps even on stock;
+preserving untouched bytes, as the native packer does, fixes the fixture.
+These checks do not establish compatibility with every use of the upstream
+Part window, notably native LFO designer records. Hardware MIDI timing,
+battery retention and musical acceptance still require the instrument.
