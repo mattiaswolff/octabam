@@ -20,13 +20,17 @@ Prepare the shared KITS gate's project assumptions in a separate copy:
 
 ```sh
 .venv/bin/python tools/verify/prepare_degree_kits_fixture.py --project /path/to/project --out out/degree-kits-fixture/new
-OT_PROJECT="$PWD/out/degree-kits-fixture/new/project" make check REMIX=mattias-bus-degrees-kits BUILD=DK
+OT_PROJECT="$PWD/out/degree-kits-fixture/new/project" make check-shared REMIXES=mattias-bus-degrees-kits BUILD=DK
+OT_PROJECT=/path/to/audio-rig make check-remix REMIX=mattias-bus-degrees-kits BUILD=DK
 ```
 
 The helper refuses an existing output directory and leaves the source project
 untouched. Its receipt hashes every prepared project file. The musical recall
 matrix uses `tools/verify/verify_harmony_degree_kits_port.py --project /path/to/project`
 after building this remix; it freezes the image and symbols for all 18 cases.
+The audio-rig fixture supplies BusDelay/BusVerb hosts, sends and sample routing
+for the project and TEMPO BUS checks. These two targets are the shared and
+per-remix halves of `make check`, with the appropriate fixture for each.
 
 This candidate has not yet been packaged or tested on hardware. The delivered
 D0 degree package remains a separate, unchanged build.

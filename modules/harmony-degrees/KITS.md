@@ -163,13 +163,22 @@ Combined evidence:
 - The first full KITS gate exposed five test-project assumptions: receive
   clock/transport/program settings, saturated LEVEL, the first empty pattern,
   and an out-of-scale raw note normalized by degree paste. All five pass with
-  the copied fixture calibrated explicitly. A full clean rerun is required:
-  `--only` also reads stale unselected results in the KITS verifier.
+  the copied fixture calibrated explicitly. The clean full rerun passes with zero failures (optional legacy-import and
+  external corrupt-bank fixtures unavailable). `--only` also reads stale
+  unselected results in the KITS verifier; keep those outputs isolated.
 - Final combined SPRD/grid-corrected image is frozen as SHA-256
   `11e01381100f93436115c745dd35e484484a8be2a27cf1536bbef59a9a29b748`.
-  The complete degree firmware suite is now running against it.
+  All 18 musical Kit recalls have passed on that exact image. The complete
+  degree firmware suite is running against it; project lifecycle groups pass.
 - Final-source per-remix checks for no-KITS `mattias-bus-degrees` and no-Follow
   `harmony-degrees` run in isolated `out/degree-check-shards` worktrees.
+
+The combined per-remix TEMPO BUS gate needs the real audio rig fixture: the
+MIDI fixture deliberately clears FX hosts/samples. Rerun project/TEMPO BUS
+against the audio rig and retain both logs. The preparation helper is for the
+shared KITS half; README gives the two `make check` component commands. No
+firmware change was needed for these fixture issues. Emulator CI: all five
+unit tests pass.
 
 Shared Follow safety fixture/native architecture cleanup `49c6e603` is now
 imported. Seven transition pairs and the 20-second Follow-on soak pass on the
