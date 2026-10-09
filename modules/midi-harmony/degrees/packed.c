@@ -7,24 +7,31 @@
  * NOTE edit since the checkpoint must be detected, including after reboot. */
 #include "packed.h"
 
+static inline int token(const HdRoots *r, unsigned step, unsigned q) {
+    unsigned d = r->degree[step];
+    if (q > 7 && q != HD_NONE) return -1;
+    if (r->state == HD_ROOT_HARM && r->note[step] != hd_mirror_c(d)) return -1;
+    return (int)((d == HD_NONE ? 84u : d) * 9u + (q == HD_NONE ? 8u : q));
+}
+
 int hd_pack_c(const HdBank *bank, const uint8_t *qualities, volatile uint8_t *p) {
     for (unsigned lane = 0; lane < HD_LANES; ++lane) {
         const HdRoots *r = &bank->roots[lane];
         if (!hd_roots_valid_c(r)) return 0;
         *p++ = (uint8_t)(r->state * 84u + r->scale);
-        uint32_t pending = 0;
-        unsigned bits = 0;
-        for (unsigned step = 0; step < HD_STEPS; ++step) {
-            unsigned q = *qualities++, d = r->degree[step];
-            if (q > 7 && q != HD_NONE) return 0;
-            if (r->state == HD_ROOT_HARM && r->note[step] != hd_mirror_c(d)) return 0;
-            unsigned token = (d == HD_NONE ? 84u : d) * 9u + (q == HD_NONE ? 8u : q);
-            pending = (pending << 10) | token;
-            bits += 10;
-            while (bits >= 8) {
-                bits -= 8;
-                *p++ = (uint8_t)(pending >> bits);
-            }
+        /* Four ten-bit tokens always occupy five bytes. The format is
+         * unchanged; no per-token reservoir or variable shift loop. */
+        for (unsigned step = 0; step < HD_STEPS; step += 4) {
+            int a = token(r,step,qualities[0]), b = token(r,step+1,qualities[1]);
+            int c = token(r,step+2,qualities[2]), d = token(r,step+3,qualities[3]);
+            if ((a | b | c | d) < 0) return 0;
+            p[0] = (uint8_t)((unsigned)a >> 2);
+            p[1] = (uint8_t)(((unsigned)a << 6) | ((unsigned)b >> 4));
+            p[2] = (uint8_t)(((unsigned)b << 4) | ((unsigned)c >> 6));
+            p[3] = (uint8_t)(((unsigned)c << 2) | ((unsigned)d >> 8));
+            p[4] = (uint8_t)d;
+            p += 5;
+            qualities += 4;
         }
     }
     return 1;

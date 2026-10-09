@@ -43,13 +43,15 @@ def symbols():
     return {n:int(a,16) for a,n in re.findall(r'^([0-9a-f]+) [Tt] ((?:hd|mh|bf|ms)_\w+)$',raw,re.M)}
 
 class Machine:
-    def __init__(self, symbol_loader=symbols):
+    def __init__(self, symbol_loader=symbols, artifact_root=None):
         self.sym=symbol_loader(); self.uc=Uc(UC_ARCH_M68K,UC_MODE_BIG_ENDIAN)
+        out = artifact_root or ROOT/'out'
+        self.initial_sr = 0x2700
         u=self.uc; u.ctl_set_cpu_model(UC_CPU_M68K_CFV4E)
         for a,n in [(0x40000000,0x1000000),(0x46000000,0x200000),(0x47000000,0x10000),(0x46c70000,0x20000),(0x10000000,0x200000),(0x80000000,0x10000)]:u.mem_map(a,n)
-        u.mem_write(0x40000400,(ROOT/'out/mainos_bus.bin').read_bytes())
-        self.base=json.loads((ROOT/'out/platform/layout.json').read_text())['base']
-        u.mem_write(self.base,(ROOT/'out/platform/runtime/runtime.bin').read_bytes())
+        u.mem_write(0x40000400,(out/'mainos_bus.bin').read_bytes())
+        self.base=json.loads((out/'platform/layout.json').read_text())['base']
+        u.mem_write(self.base,(out/'platform/runtime/runtime.bin').read_bytes())
         self.stack=0x47008000;self.done=0x4700fff0;self.scratch=0x47001000
         self.stops={self.done}; self.arrival=None;self.writes=[]
         u.hook_add(UC_HOOK_CODE,self.stop)
@@ -95,7 +97,7 @@ class Machine:
         if p in self.stops:self.arrival=p;u.emu_stop()
     def call(self,name,d0=0,d1=0,a0=None,stop=None,regs=None):
         u=self.uc;self.stops={stop or self.done};self.arrival=None;self.writes=[]
-        u.reg_write(UC_M68K_REG_SR,0x2700);u.reg_write(UC_M68K_REG_A7,self.stack)
+        u.reg_write(UC_M68K_REG_SR,self.initial_sr);u.reg_write(UC_M68K_REG_A7,self.stack)
         u.mem_write(self.stack,self.done.to_bytes(4,'big'))
         u.reg_write(UC_M68K_REG_D0,d0);u.reg_write(UC_M68K_REG_D1,d1)
         if a0 is not None:u.reg_write(UC_M68K_REG_A0,a0)

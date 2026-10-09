@@ -17,7 +17,7 @@ REMIX = Remix(
     name="mattias-bus",
     family="rig",
     proof=Proof.CHECK,
-    proof_note="H3 candidate; hardware acceptance pending",
+    proof_note="H5 CPU candidate; hardware acceptance pending",
     doc=("Personal bus rig: BusDelay/BusVerb/SEND; Spectrum, Character and "
          "Modulation on FX1; RLEN PLEN, Tuner, MIDI Follow, Scales and Harmony with Chord Play; KITS and MIDI Scenes."),
     modules=(

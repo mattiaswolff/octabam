@@ -569,6 +569,7 @@ mh_sort_chord:
     movem.l %d0-%d4,(%sp)
     move.l %d6,%d4
 .sort_pass:
+    moveq #0,%d3 /* Already sorted candidates need only one pass. */
     moveq #1,%d2
 .sort_pair:
     moveq #0,%d0
@@ -579,12 +580,17 @@ mh_sort_chord:
     bls.s .sort_next
     move.b %d1,-1(%a0,%d2.l)
     move.b %d0,(%a0,%d2.l)
+    moveq #1,%d3
 .sort_next:
     addq.l #1,%d2
-    cmp.l %d6,%d2
+    cmp.l %d4,%d2
     blt.s .sort_pair
+    tst.l %d3
+    beq.s .sort_done
     subq.l #1,%d4
-    bne.s .sort_pass
+    cmpi.l #1,%d4
+    bgt.s .sort_pass
+.sort_done:
     movem.l (%sp),%d0-%d4
     lea 20(%sp),%sp
     rts

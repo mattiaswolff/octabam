@@ -14,3 +14,6 @@ NOTE snapshots. Prior Harmony companions are not migrated. See [Harmony storage]
 
 Source and emulator validation do not establish hardware acceptance. Package
 receipts record the exact source, checks, firmware hashes and known limitations.
+
+H5 includes measured CPU optimizations to the existing H3 behavior. See
+[CPU measurements](CPU.md) for the repeatable benchmark, results and tradeoffs.

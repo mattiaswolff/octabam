@@ -72,35 +72,11 @@ ms_decode:
     beq.s .decode_off
     cmpi.l #84,%d0
     bhi.s .decode_off
-    cmpi.l #24,%d0
-    bhi.s .decode_extra
     subq.l #1,%d0
-    move.l %d0,%d1
-    lsr.l #1,%d0
-    lsl.l #2,%d0
-    btst #0,%d1
-    beq.s .decode_ret
-    ori.l #320,%d0
-.decode_ret:
-    rts
-.decode_extra:
-    subi.l #25,%d0
-    moveq #0,%d1
-.decode_div:
-    cmpi.l #5,%d0
-    blt.s .decode_mode
-    subq.l #5,%d0
-    addq.l #1,%d1
-    bra.s .decode_div
-.decode_mode:
-    addq.l #1,%d0
-    cmpi.l #5,%d0
-    bne.s .decode_pack
-    addq.l #1,%d0
-.decode_pack:
-    lsl.l #6,%d0
-    lsl.l #2,%d1
-    or.l %d1,%d0
+    move.l %a0,-(%sp)
+    lea ms_decode_table,%a0
+    move.w (%a0,%d0.l*2),%d0 /* upper word was zero after the range check */
+    move.l (%sp)+,%a0
     rts
 .decode_off:
     moveq #-1,%d0
@@ -324,6 +300,20 @@ ms_format:
     rts
     .balign 2
 ms_masks: .word 0xab5,0x6ad,0x5ab,0xad5,0x6b5,0x5ad,0x56b
+/* Immutable native KEY mapping. Major/minor retain values 1..24;
+ * the five additional modes follow in tonic order at 25..84. */
+ms_decode_table:
+    .set .decode_tonic,0
+    .rept 12
+    .word .decode_tonic*4,320+.decode_tonic*4
+    .set .decode_tonic,.decode_tonic+1
+    .endr
+    .set .decode_tonic,0
+    .rept 12
+    .word 64+.decode_tonic*4,128+.decode_tonic*4,192+.decode_tonic*4
+    .word 256+.decode_tonic*4,384+.decode_tonic*4
+    .set .decode_tonic,.decode_tonic+1
+    .endr
 ms_keys: .ascii "C\0C#D\0D#E\0F\0F#G\0G#A\0A#B\0"
 ms_names: .ascii "MAJ\0DOR\0PHR\0LYD\0MIX\0MIN\0LOC\0"
 /* d0 physical encoder, d1 raw movement -> d0 choice delta.

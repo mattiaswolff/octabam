@@ -23,6 +23,9 @@ hd_decode:
     cmpi.l #83,%d0
     bhi.w .decode_bad
     bsr.w .scale
+    mulu.w #7,%d3
+    lea hd_scale_degrees,%a0
+    adda.l %d3,%a0
     move.l %d0,%d2
     moveq #7,%d1
     divu.l %d1,%d0
@@ -34,18 +37,7 @@ hd_decode:
     muls.l %d1,%d0
     add.l %d5,%d0 /* tonic pitch */
     moveq #0,%d3
-.decode_degree:
-    btst %d3,%d4
-    beq.s .decode_next
-    tst.l %d2
-    beq.s .decode_found
-    subq.l #1,%d2
-.decode_next:
-    addq.l #1,%d3
-    cmpi.l #12,%d3
-    bcs.s .decode_degree
-    bra.s .decode_bad
-.decode_found:
+    move.b (%a0,%d2.l),%d3
     add.l %d3,%d0
     cmpi.l #127,%d0
     bls.s .decode_done
@@ -118,8 +110,8 @@ hd_encode:
     lea 28(%sp),%sp
     rts
 
-/* d1 -> d4 mask,d5 tonic. Invalid scale falls back to C major.
- * Does not modify d0/d2/d3. */
+/* d1 -> d3 mode,d4 mask,d5 tonic. Invalid scale falls back to C major.
+ * Does not modify d0/d2. Both public callers preserve d3. */
 .scale:
     moveq #0,%d4
     moveq #0,%d5
@@ -138,6 +130,7 @@ hd_encode:
     moveq #0,%d4
     moveq #0,%d5
 .scale_mask:
+    move.l %d4,%d3
     lea hd_masks,%a0
     move.w (%a0,%d4.l*2),%d4
     rts
@@ -197,3 +190,11 @@ hd_format:
     rts
     .balign 4
 hd_masks: .word 0xab5,0x6ad,0x5ab,0xad5,0x6b5,0x5ad,0x56b
+hd_scale_degrees:
+    .byte 0,2,4,5,7,9,11
+    .byte 0,2,3,5,7,9,10
+    .byte 0,1,3,5,7,8,10
+    .byte 0,2,4,6,7,9,11
+    .byte 0,2,4,5,7,9,10
+    .byte 0,2,3,5,7,8,10
+    .byte 0,1,3,5,6,8,10

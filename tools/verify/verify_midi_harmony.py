@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Execute linked Harmony firmware; optionally exercise full firmware on a virtual card."""
 import argparse
+import itertools
 import json
 import pathlib
 import re
@@ -748,6 +749,24 @@ def controls_gate():
     print('  [ok] NOTE controls pass through, HARM clamps per track, inherited KEY is read-only')
 
 
+def voicing_sort_gate():
+    """All orderings/ties of up to four ranked pitches; independent oracle."""
+    m=Machine(); u=m.uc; count=0
+    registers=[UC_M68K_REG_D0+i for i in range(8)]+[UC_M68K_REG_A0+i for i in range(7)]
+    for voices in (3,4):
+        for pitches in itertools.product((0,12,64,127),repeat=voices):
+            data=bytes(pitches)+(b'\xd3' if voices==3 else b'')
+            u.mem_write(m.scratch,data)
+            before={r:0x12340000+i for i,r in enumerate(registers)}
+            before[UC_M68K_REG_D6]=voices;before[UC_M68K_REG_A0]=m.scratch
+            m.call('mh_sort_chord',regs=before)
+            assert bytes(u.mem_read(m.scratch,4))==bytes(sorted(pitches))+data[voices:]
+            assert all(u.reg_read(r)==v for r,v in before.items())
+            assert u.reg_read(UC_M68K_REG_A7)==m.stack+4
+            count+=1
+    print(f'  [ok] voicing sort: {count} pitch order/tie cases, padding and all registers preserved')
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('remix',nargs='?',default='midi-harmony')
@@ -756,6 +775,7 @@ def main():
     final_note_gate()
     keyboard_gate()
     octave_gate()
+    voicing_sort_gate()
     voicing_gate()
     inversion_gate()
     omit_gate()

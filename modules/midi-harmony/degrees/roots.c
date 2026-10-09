@@ -21,10 +21,17 @@ static unsigned absolute(unsigned degree, unsigned scale) {
     return note >= 0 ? (unsigned)note : degree < 7 ? 0u : 127u;
 }
 unsigned hd_mirror_c(unsigned degree) {
-    static const uint8_t major[7] = {0,2,4,5,7,9,11};
-    if (degree >= HD_ROOT_CODES) return HD_ROOT_NONE;
-    int note = ((int)(degree/7)-1)*12 + major[degree%7];
-    return note < 0 ? 0u : note > 127 ? 127u : (unsigned)note;
+    /* Fixed C-major mirror, clamped exactly as before. ROM data avoids two
+     * divisions per explicit step when checkpointing a dense bank. */
+    static const uint8_t mirror[HD_ROOT_CODES] = {
+        0,0,0,0,0,0,0, 0,2,4,5,7,9,11,
+        12,14,16,17,19,21,23, 24,26,28,29,31,33,35,
+        36,38,40,41,43,45,47, 48,50,52,53,55,57,59,
+        60,62,64,65,67,69,71, 72,74,76,77,79,81,83,
+        84,86,88,89,91,93,95, 96,98,100,101,103,105,107,
+        108,110,112,113,115,117,119, 120,122,124,125,127,127,127
+    };
+    return degree < HD_ROOT_CODES ? mirror[degree] : HD_ROOT_NONE;
 }
 
 void hd_roots_reset_c(HdRoots *r) {
