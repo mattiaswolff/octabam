@@ -89,8 +89,9 @@ Part operations; neither module depends on KITS. Runtime note ownership and
 voice-leading history are not stored in Parts.
 
 This is a greenfield storage format. There is no decoder or migration for the
-previous global project-comment settings. Native project persistence and live
-Part/Kit replacement are still undergoing integration validation on this branch.
+previous global project-comment settings. Native Part lifecycle gates pass with
+and without KITS. Project SAVE, cold reload and retained-memory resume pass on
+the shared carrier; combined degree/Kit acceptance is tracked separately.
 
 ## CHORD PLAY and CHRD
 

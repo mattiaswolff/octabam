@@ -40,8 +40,8 @@ That combined path still needs the degree task's integration gate.
 
 The linked-code gates exercise explicit contexts, bounded writes, native
 copy/initialization byte and ABI equivalence, and interruption while settings
-are partially replaced. They do not establish full project/Kit lifecycle or
-hardware acceptance; those integration checks remain pending.
+are partially replaced. Full firmware checks below cover native Part and
+project persistence separately. Neither layer establishes hardware acceptance.
 
 SETUP offset 12 is a shared flags byte: bit 0 Follow MODE, bit 1 Follow
 TRIG/LIVE response. This module owns its native range (0..3) and byte claim.
@@ -55,3 +55,9 @@ for actual panel edits, project SAVE, disk reload and retained-memory resume.
 The latter requires Harmony and also checks Follow fields when present.
 The low-level native Clear initializes both working and saved Part; unlike
 Reload/Paste, its CS1 working mirror refresh belongs to its caller.
+
+The native Part lifecycle gate passes with Follow alone, Harmony alone and
+the `mattias-bus-part-kits` carrier. The shared `mattias-bus` project gate also
+passes panel edits, SAVE, cold reload, retained-memory resume and fresh defaults.
+Follow-on and OFF audio/MIDI soaks each pass 20 emulated seconds across all four
+Parts. Combined degree/Kit musical acceptance belongs to that candidate's gates.
