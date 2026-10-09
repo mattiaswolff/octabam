@@ -55,7 +55,7 @@ def main():
     edits=';'.join(f'{WORK+0x4e2+36*t+f:#x}=0' for t in range(8) for f in FIELDS)
     steps.extend(['--step','-:poke:'+edits])
     call(0x4004aab4,0);dump('reloaded');dump('reloaded-cs1',CS1)
-    call(0x4004a9d0,0);dump('cleared');dump('cleared-cs1',CS1)
+    call(0x4004a9d0,0);dump('cleared');dump('cleared-cs1',CS1);dump('cleared-saved',SAVED)
     # Copy from another real working Part through the native paste entry.
     call(0x40029a4c,WORK+PS,0);dump('pasted');dump('pasted-cs1',CS1)
     dump('saved-after',SAVED)
@@ -80,10 +80,15 @@ def main():
     assert read('pasted')[:PS]==before[PS:2*PS]
     assert read('pasted')[PS:]==before[PS:]
     assert read('pasted-cs1')==read('pasted')
-    assert read('saved-after')[:PS]==clear[:PS], 'Clear must reset the saved Part too'
+    assert read('cleared-saved')[:PS]==clear[:PS], 'Clear must reset the saved Part too'
+    # MIDISC2.1's pack copies the complete working Part to its SAVE shadow
+    # on paste/apply. Its separate Part-Save freeze is not this shadow.
+    # Pinned upstream parts.py build_pack, also reproduced on the DS image.
+    expected_saved=read('pasted') if scenes else clear
+    assert read('saved-after')[:PS]==expected_saved[:PS]
     assert read('saved-after')[PS:]==read('saved')[PS:]
     receipt=dict(native_save=True,reload=True,clear=True,paste=True,reload_paste_cs1_mirrors=True,clear_matches_native_saved_part_semantics=True,
-                 unrelated_parts_unchanged=True,follow=follow,harmony=harmony,
+                 unrelated_parts_unchanged=True,follow=follow,harmony=harmony,scenes=scenes,
                  image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False)
     (p.OUT/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
     print('[ok] native Part Save/Reload/Clear/Paste, native CS1 behavior and unrelated Part guards',flush=True)

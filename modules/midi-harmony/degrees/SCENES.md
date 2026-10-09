@@ -26,6 +26,11 @@ supply the degree display. No separate persistent scene store is introduced.
 
 ## Native boundaries
 
+MIDISC2.1 packing copies the complete working Part into its native SAVE
+shadow for reboot persistence. Its explicit Part-Save freeze is separate;
+that shadow is not a stock-style unchanged backup after a scene pack/apply.
+The native lifecycle verifier checks this pinned behavior explicitly.
+
 - Harmony publishes queued DEG/CHRD identity at `0x400a19ce`, before the
   unchanged scene pending-copy hook at `0x400a19da`.
 - Scene endpoint snapshots are prepared before MIDI PART STATE publishes its
