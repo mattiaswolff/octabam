@@ -138,7 +138,8 @@ def panel(work):
     assert (work/'degree-octave-degrees.bin').read_bytes()[7]==42
     live_octave=cp.key(100,0x31)+cp.key(500,0x22)+'1100 key 0x2d down\n1400 enc 0 1\n1600 key 0x2d up\n2200 quit\n'
     run(work,'default-octave',live_octave,work/'save-card.img')
-    assert (work/'default-octave-bank.bin').read_bytes()[0x8ed80+0x4e2+19]==42
+    base=(work/'save-bank.bin').read_bytes()[0x8ed80+0x4e2+19]
+    assert (work/'default-octave-bank.bin').read_bytes()[0x8ed80+0x4e2+19]==base+7
     clear='2600 key 7 down\n3000 key 0x38 down\n3100 key 0x38 up\n3400 key 7 up\n4000 quit\n'
     run(work,'degree-unlock',setup+edit+clear,work/'save-card.img')
     assert (work/'degree-unlock-degrees.bin').read_bytes()[7]==255
