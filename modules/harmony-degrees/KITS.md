@@ -104,6 +104,7 @@ Strict validation, failed-write protection and atomic publication remain.
 | `601e4b21` | `95af7d31` | Remove WIDTH entirely; SPRD only |
 | `6545a434` | `c2d9c679` | Correct anchored OPEN page oracle |
 | `49c6e603` | `336a639a` | Native Follow safety fixtures and architecture |
+| `76c76f87` | imported | Completed shared lifecycle validation docs |
 
 Earlier WIDTH persistence `bc05b081`/`a386f381` is superseded by the removal.
 
@@ -169,20 +170,22 @@ Combined evidence:
 - Final combined SPRD/grid-corrected image is frozen as SHA-256
   `11e01381100f93436115c745dd35e484484a8be2a27cf1536bbef59a9a29b748`.
   All 18 musical Kit recalls have passed on that exact image. The complete
-  degree firmware suite is running against it; project lifecycle groups pass.
+  all nine degree firmware groups also pass on that exact image.
 - Final-source per-remix checks for no-KITS `mattias-bus-degrees` and no-Follow
   `harmony-degrees` run in isolated `out/degree-check-shards` worktrees.
 
 The combined per-remix TEMPO BUS gate needs the real audio rig fixture: the
-MIDI fixture deliberately clears FX hosts/samples. Rerun project/TEMPO BUS
-against the audio rig and retain both logs. The preparation helper is for the
+MIDI fixture deliberately clears FX hosts/samples. Project/TEMPO BUS now pass
+against the audio rig, including send/return audio and CC delivery; both logs
+are retained. The preparation helper is for the
 shared KITS half; README gives the two `make check` component commands. No
 firmware change was needed for these fixture issues. Emulator CI: all five
 unit tests pass.
 
 Shared Follow safety fixture/native architecture cleanup `49c6e603` is now
 imported. Seven transition pairs and the 20-second Follow-on soak pass on the
-shared carrier; OFF soak and its combined check are running. Its
+shared carrier. OFF soak and the shared KITS per-remix check also pass; the
+latter has 17 image gates and no skips. Its
 SPRD-only panel, 172,800 AUTO transitions, native Part lifecycle on Follow,
 Harmony and the KITS carrier, project persistence and stock-OFF UART pass.
 
