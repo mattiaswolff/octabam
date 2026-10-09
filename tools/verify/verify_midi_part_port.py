@@ -63,7 +63,8 @@ def main():
     assert clear[PS:]==before[PS:]
     for t in range(8):
         for field in FIELDS:
-            expected=3 if follow and field==13 else 2 if follow and field==15 else 0
+            expected=(35 if harmony and field==19 else 3 if follow and field==13
+                      else 2 if follow and field==15 else 0)
             assert clear[0x4e2+36*t+field]==expected,(t,field,clear[0x4e2+36*t+field],expected)
     # Stock Clear initializes both working and saved Part and leaves the
     # current CS1 working mirror to the caller's later refresh.
