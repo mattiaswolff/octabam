@@ -81,4 +81,3 @@ combined KITS selection is `mattias-bus-degrees-kits`. The additional
 `mattias-bus-degrees-scenes` candidate adds DEG-aware MIDI Scenes; its
 [compatibility boundaries and validation](SCENES.md) are documented separately.
 See [native Part storage and KITS boundaries](KITS.md).
-
