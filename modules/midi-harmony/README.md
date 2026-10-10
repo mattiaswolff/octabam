@@ -167,6 +167,8 @@ inversions and octave offsets 0/-12/+12. It searches at most twelve candidates,
 keeps the bass near the requested register and retains the exact root with
 KEEP (or the exact lowered root with a drop). Chord-quality changes keep
 history: C3–E3–G3 can become C3–E3–B3 when TRI changes to 7TH at SIZE 3.
+Minimum movement can produce close seconds: at SIZE 2, C3–E3 can move to
+B2–C3 for Cmaj7. Choose VOIC ROOT for the wider C3–B3 interval instead.
 Changing SIZE resets history; other settings, source/scale, Part replacement
 and deliberate octave jumps follow the same boundaries as NAT. There is no
 promise to avoid parallel intervals or resolve classical tendency tones.
