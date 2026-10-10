@@ -11,7 +11,7 @@ import verify_chord_play_port as cp
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=Path)
-    ap.add_argument('--case',action='append',choices=('sequence','live','follow','persistence','musical'))
+    ap.add_argument('--case',action='append',choices=('sequence','live','follow','persistence','musical','live-drop'))
     args=ap.parse_args()
     p.OUT=p.ROOT/'out/harmony-size-port';p.freeze_candidate(p.OUT)
     sym=p.harmony.symbols();results={}
@@ -96,6 +96,17 @@ def main():
             assert (work/'refs.bin').read_bytes()==bytes(1024)
             results[name]=notes
             print('[ok] native musical outcome',name,notes,flush=True)
+    if not args.case or 'live-drop' in args.case:
+        work=p.fixture(args.project,'live-drop',{0:2},sizes={0:3},roots={0:2},auto=(0,))
+        script=work/'live.txt'
+        script.write_text(cp.PANEL+'1600 key 0 down\n2200 key 9 down\n2800 key 9 up\n3400 key 0 up\n4000 quit\n')
+        events=p.run(work,'live',['--live-script',script,'--mem-dump',f'{sym["mh_refs"]:#x},1024={work}/refs.bin'])
+        p.balanced(events)
+        notes=[e[2] for e in events if e[:2]==('on',1)]
+        assert notes==[36,48,52,55,36,47,52,55],notes
+        assert (work/'refs.bin').read_bytes()==bytes(1024)
+        results['live-drop']=notes
+        print('[ok] held dropped-root triad: doubled input root becomes the seventh and all releases drain',flush=True)
     (p.OUT/('receipt-'+ '-'.join(args.case)+'.json' if args.case else 'receipt.json')).write_text(json.dumps(dict(cases=results,
         image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),
         hardware_tested=False),indent=2)+'\n')
