@@ -533,3 +533,17 @@ The caller now restores its original stack pointer after a successful return.
 `ot_rtos_test` checks return values and an unchanged stack across 2,048 calls;
 full UART flood scenarios must also be rerun with the rebuilt port. Failed
 calls retain their crash state for diagnosis.
+
+## Emulator reports a loader checksum as a boot spin
+
+- **Symptom:** with DSP enabled, boot stops at the octabam loader's `hashloop`
+  with `unrecognised spin`; the no-DSP loader identity check passes.
+- **Cause (measured, SIZE candidate):** the four half-million-instruction PC
+  samples all land in the finite read-only checksum loop for a 194,136-byte
+  runtime. Its D0 countdown decreases and A0 read cursor advances, but no RAM
+  writes occur, so the old stall detector mistakes progress for a poll.
+- **Fix:** recognize the loader's exact loop instructions and require matching
+  countdown/cursor progress across every sample. Keep the instruction budget
+  and ordinary spin detection. `ot_emac_test` covers a 400 KB finite hash,
+  a resetting-count negative control and an actual endless branch.
+- **Boundary:** this is an emulator diagnosis, not a hardware boot defect.

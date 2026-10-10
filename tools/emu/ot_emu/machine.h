@@ -645,6 +645,7 @@ namespace ot
 		bool tryAutoPoke(uint32_t _pcInLoop);
 		std::vector<uint32_t> m_window;
 		std::vector<uint64_t> m_windowWrites;
+		std::vector<std::pair<uint32_t, uint32_t>> m_windowHash; // D0 countdown, A0 read cursor
 		std::vector<AutoPoke> m_autoPokes;
 		uint64_t m_writes = 0;
 	};

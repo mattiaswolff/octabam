@@ -63,6 +63,30 @@ namespace
 int main()
 {
 	std::printf("EMAC gate (hardware semantics, docs/history/RTOS_FORK.md section 10.16):\n");
+	// Actual loader hash loop, followed by the boot handoff. A read-only
+	// 400 KB checksum exceeds the stall sampler's two-million-instruction
+	// window but has a finite countdown. Counter-reset and real-spin negative
+	// controls keep this from becoming a generic stall-detector exemption.
+	for(unsigned kind = 0; kind < 3; ++kind)
+	{
+		const std::vector<uint8_t> hash = {
+			0x24,0x01,0xeb,0x89,0xd2,0x82,0x74,0x00,0x14,0x18,
+			0xd2,0x82,0x53,0x80,0x66,0x00,0xff,0xf0,0x4e,0x40};
+		ot::Machine m(kind == 2 ? std::vector<uint8_t>{0x60,0xfe} : hash);
+		m68k_set_reg(m.getCpuState(), M68K_REG_D0, 400000);
+		m68k_set_reg(m.getCpuState(), M68K_REG_D1, 0);
+		m68k_set_reg(m.getCpuState(), M68K_REG_A0, 0x46010000);
+		if(kind == 1) m.setStepHook([](ot::Machine& machine, uint32_t pc) {
+			if(pc == 0x40000400) m68k_set_reg(machine.getCpuState(), M68K_REG_D0, 400000);
+		});
+		const auto stopped = m.run(4000000);
+		check(kind == 0 ? "finite read-only hash reaches handoff" : "non-progressing boot loop remains a fault",
+			static_cast<uint32_t>(stopped), static_cast<uint32_t>(kind == 0 ? ot::Machine::Stop::Handoff : ot::Machine::Stop::Fault));
+		if(kind == 0) {
+			check("hash countdown exhausted", m.getD(0), 0);
+			check("hash consumed every byte", m.getA(0), 0x46010000 + 400000);
+		}
+	}
 
 	// The firmware's own block-walk idiom: position x (2^31 / blocksize), in
 	// fractional mode. `movel #0x20,%macsr` selects fractional+signed.

@@ -867,10 +867,12 @@ namespace ot
 			{
 				m_window.push_back(pc());
 				m_windowWrites.push_back(m_writes);
+				m_windowHash.emplace_back(getD(0), getA(0));
 				if(m_window.size() > g_stallBursts)
 				{
 					m_window.erase(m_window.begin());
 					m_windowWrites.erase(m_windowWrites.begin());
+					m_windowHash.erase(m_windowHash.begin());
 				}
 				if(m_window.size() == g_stallBursts)
 				{
@@ -878,11 +880,40 @@ namespace ot
 					const auto hi = *std::max_element(m_window.begin(), m_window.end());
 					if(hi - lo <= 64)
 					{
-						// A memset makes progress; a poll does not.
-						if(m_windowWrites.back() - m_windowWrites.front() > 2000)
-							m_window.clear(), m_windowWrites.clear();
+						// The octabam loader's byte hash makes read-only progress.
+						// Pin its complete loop, then require a declining count and
+						// matching advancing cursor. PC sampling alone mistook the
+						// 194 KB Harmony/SIZE runtime hash for a spin with DSP on.
+						// No emulated state is changed and the instruction budget
+						// still applies. Polls and non-decreasing counters still fail.
+						static constexpr uint16_t hashLoop[] = {
+							0x2401, 0xeb89, 0xd282, 0x7400, 0x1418,
+							0xd282, 0x5380, 0x6600, 0xfff0};
+						bool hashProgress = false;
+						for(uint32_t back = 0; back <= 16 && back <= lo; back += 2)
+						{
+							const uint32_t start = lo - back;
+							if(uint64_t(hi) >= uint64_t(start) + sizeof(hashLoop) || !mapped(start, sizeof(hashLoop)))
+								continue;
+							bool match = true;
+							for(unsigned i = 0; i < sizeof(hashLoop)/sizeof(hashLoop[0]); ++i)
+								match &= read16(start + 2*i) == hashLoop[i];
+							if(!match) continue;
+							hashProgress = true;
+							for(size_t i = 1; i < m_windowHash.size(); ++i)
+							{
+								const auto [count0, cursor0] = m_windowHash[i-1];
+								const auto [count1, cursor1] = m_windowHash[i];
+								const int64_t delta = int64_t(count0) - count1 - (int64_t(cursor1) - cursor0);
+								hashProgress &= count1 < count0 && cursor1 > cursor0 && delta >= -1 && delta <= 1;
+							}
+							break;
+						}
+						// A memset or a proven counted hash makes progress; a poll does not.
+						if(m_windowWrites.back() - m_windowWrites.front() > 2000 || hashProgress)
+							m_window.clear(), m_windowWrites.clear(), m_windowHash.clear();
 						else if(tryAutoPoke(pc()))
-							m_window.clear(), m_windowWrites.clear();
+							m_window.clear(), m_windowWrites.clear(), m_windowHash.clear();
 						else
 						{
 							char msg[160];
