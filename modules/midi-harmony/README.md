@@ -140,8 +140,9 @@ removes the root from consideration before selection: a normal seventh at
 SIZE 2 gives third + seventh; a triad gives third + fifth. Scale-derived
 alterations stay intact; no new chord tones are invented.
 
-Invert the **retained distinct tones**, then fill spare voices with octave
-copies, starting from the lowest tone and working upward. Doublings do not
+Invert the **retained distinct tones**, place a dropped ROOT if requested,
+then fill spare voices with octave copies, starting from the actual bass
+and working upward. Doublings do not
 create additional inversions. An unavailable inversion uses the last one:
 3RD on a three-tone chord uses 2ND; 2ND/3RD on two tones use 1ST.
 
@@ -155,20 +156,26 @@ SPRD operates on the expanded chord. OPEN raises the second-lowest note an
 octave; if a doubling already occupies that pitch, use the next free octave.
 WIDE raises every note above the bass an octave. For two voices, OPEN and
 WIDE are equivalent. A spread that exceeds MIDI 127 falls back to CLOSE.
-ROOT -1/-2 OCT places exactly one root at the requested lower register;
-extra voices double non-root tones. SIZE therefore remains the **sounding**
+ROOT -1/-2 OCT places one root at the requested lower register; a spare voice
+can double that root above it. For example, C3–E3–G3 at SIZE 4 / ROOT -1 OCT
+becomes C2–C3–E3–G3. SIZE therefore remains the **sounding**
 count with KEEP, OMIT or a dropped root. When MIDI limits make that impossible,
 sound fewer notes and reset AUTO history; never wrap or add an unrelated tone.
 
-Fixed SIZE AUTO compares the final sorted sounding notes, including doubling,
-spread and root placement. It minimizes total semitone movement, then prefers
+Fixed SIZE AUTO first opens crowded low notes by octaves and excludes an ADD9
+ninth from the bass. It then compares the final sorted sounding notes,
+including doubling, spread and root placement. It minimizes total semitone
+movement among these candidates, then prefers
 more stationary voices. Equal scores prefer root position, then earlier
 inversions and octave offsets 0/-12/+12. It searches at most twelve candidates,
 keeps the bass near the requested register and retains the exact root with
 KEEP (or the exact lowered root with a drop). Chord-quality changes keep
 history: C3–E3–G3 can become C3–E3–B3 when TRI changes to 7TH at SIZE 3.
-Minimum movement can produce close seconds: at SIZE 2, C3–E3 can move to
-B2–C3 for Cmaj7. Choose VOIC ROOT for the wider C3–B3 interval instead.
+At low registers, SIZE 2 moves C–E to C–B rather than a crowded B–C.
+The spacing policy is conservative: below MIDI 48, leave at least seven
+semitones above the bass and five between other low voices; below MIDI 60,
+leave at least three. Higher voices may use seconds. Manual VOIC remains
+literal, and the requested root anchor never moves to repair another voice.
 Changing SIZE resets history; other settings, source/scale, Part replacement
 and deliberate octave jumps follow the same boundaries as NAT. There is no
 promise to avoid parallel intervals or resolve classical tendency tones.
@@ -180,6 +187,19 @@ omit a tone implied by that name. Native Part Save/Reload, copy and KITS recall
 carry SIZE. Old valid CHRD bytes select NAT. Pattern HDP3/HDN3 storage and the
 10,400-byte retained reservation are unchanged. Older firmware does not decode
 the newly packed CHRD/SIZE byte; use a project copy when testing this candidate.
+
+The musical audit uses [Open Music Theory's Jazz Voicings guide](https://viva.pressbooks.pub/openmusictheorycopy/chapter/jazz-voicings/)
+as a reference for stable doubling, reduced seventh chords, register spacing
+and smooth upper lines. The numeric spacing limits above are our implementation
+policy, not thresholds stated in the guide. The actual ii–V–I upper voices are
+F–C → F–B → E–B, both with a generated bass and with ROOT OMIT. Two total voices
+with ROOT KEEP cannot retain root, third and seventh together; use SIZE 3, or
+SIZE 2 / ROOT OMIT with a separate bass, for that shell. Altered-fifth reductions
+remain a deliberate tradeoff because three voices cannot retain all four tones.
+
+`verify_harmony_size_musical.py --audio` executes the linked firmware and writes
+the actual note sequences, a standard MIDI file and a neutral WAV rendition to
+`out/harmony-size-musical/`. This is an audition aid, not a device recording.
 
 ## Manual inversions
 

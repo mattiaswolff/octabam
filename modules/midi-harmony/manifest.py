@@ -164,6 +164,7 @@ MODULE = Module(
                     'Degree scene B seed/range before unchanged MIDISC hold', kind='jsr')),
     gates=(Gate('tools/verify/verify_midi_harmony_stress.py', stage='image', venv=True),
            Gate('tools/verify/verify_harmony_size.py', stage='image', venv=True),
+           Gate('tools/verify/verify_harmony_size_musical.py', stage='image', venv=True),
            Gate('tools/verify/verify_midi_part.py', stage='image', venv=True),
            Gate('tools/verify/verify_chord_part.py', stage='image', venv=True),
            Gate('tools/verify/verify_midi_harmony.py', stage='image', venv=True),

@@ -11,7 +11,7 @@ import verify_chord_play_port as cp
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project',required=True,type=Path)
-    ap.add_argument('--case',action='append',choices=('sequence','live','follow','persistence'))
+    ap.add_argument('--case',action='append',choices=('sequence','live','follow','persistence','musical'))
     args=ap.parse_args()
     p.OUT=p.ROOT/'out/harmony-size-port';p.freeze_candidate(p.OUT)
     sym=p.harmony.symbols();results={}
@@ -56,7 +56,7 @@ def main():
         notes=[e[2] for e in events if e[:2]==('on',1)]
         # Common notes are released/retriggered by CHORD PLAY's established
         # variation gesture; this gate pins final pools, not legato allocation.
-        want=expected[size][0]+([47,48] if size==1 else expected[size][1])
+        want=expected[size][0]+expected[size][1]
         assert notes==want,(name,notes)
         assert (work/'refs.bin').read_bytes()==bytes(1024)
         results[name]=notes
@@ -73,6 +73,29 @@ def main():
         print('[ok] Follow inherits root/scale and keeps receiver SIZE 2 against SIZE 4 leader',flush=True)
     if not args.case or 'persistence' in args.case:
         results['persistence']=p.persistence(args.project)
+    if not args.case or 'musical' in args.case:
+        examples=[
+            ('low-size2',1,0,[48,48,48],[0,1,2],[[48,52],[48,59],[48,62]]),
+            ('bass-size4',3,2,[60,60,60],[0,1,2],[[48,60,64,67],[48,59,64,67],[48,62,64,67]]),
+            ('rootless-add9',2,1,[60,65,67],[2,2,2],[[64,67,74],[60,67,69],[59,62,69]]),
+        ]
+        for name,size,root_mode,pitches,qualities,want in examples:
+            work=p.fixture(args.project,name,{0:2},sizes={0:size},roots={0:root_mode},auto=(0,),first_note=pitches[0])
+            for path in (work/'project').glob('bank*.work'):
+                def seed(data):
+                    for step,note in zip((2,4,8),pitches):data[0x492e+0x39+step*32]=note
+                p.otp._bank_write(work/'project',int(path.stem[4:]),seed,guard=False)
+            card,_=p.emu_card.stage_project(work/'project','OCTABAM','BASS',tree=work/'musical-tree')
+            (work/'card.img').write_bytes(card)
+            locks=';'.join(f'{sym["ch_lock_table"]+step:#x}={q}' for step,q in zip((2,4,8),qualities))
+            events=p.run(work,'play',['--step','-:poke:'+locks,'--sequencer','--internal-clock','--frames','7000',
+                '--mem-dump',f'{sym["mh_refs"]:#x},1024={work}/refs.bin'])
+            p.balanced(events)
+            notes=[e[2] for e in events if e[:2]==('on',1)]
+            assert notes==sum(want,[]),(name,notes,want)
+            assert (work/'refs.bin').read_bytes()==bytes(1024)
+            results[name]=notes
+            print('[ok] native musical outcome',name,notes,flush=True)
     (p.OUT/('receipt-'+ '-'.join(args.case)+'.json' if args.case else 'receipt.json')).write_text(json.dumps(dict(cases=results,
         image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),
         hardware_tested=False),indent=2)+'\n')

@@ -51,12 +51,23 @@ static unsigned candidate(const int *base, unsigned n, unsigned target,
         out[i]=v;
     }
     sort(out,n);
-    unsigned count=n;
-    while (count<target) {
+    unsigned count=n, fill=target;
+    /* Place the actual bass before choosing doublings. A dropped root may
+     * be doubled above it; there is still only one voice in the bass octave. */
+    if (root_mode>=2) {
+        unsigned kept=0;
+        for (unsigned i=0; i<count; ++i)
+            if ((out[i]-root)%12) out[kept++]=out[i];
+        int low=root-12*(int)(root_mode-1);
+        if (low>=0) out[kept++]=low;
+        else --fill; /* Do not hide a missing required bass with another tone. */
+        count=kept;
+        sort(out,count);
+    }
+    unsigned originals=count;
+    while (count<fill) {
         int next=128;
-        for (unsigned i=0; i<n; ++i) {
-            /* Dropped ROOT remains one bass, never a second upper root. */
-            if (root_mode>=2 && (out[i]-root)%12==0) continue;
+        for (unsigned i=0; i<originals; ++i) {
             int v=out[i]+12;
             while (contains(out,count,v)) v+=12;
             if (v<next) next=v;
@@ -83,17 +94,33 @@ static unsigned candidate(const int *base, unsigned n, unsigned target,
     unsigned fits=1;
     for (unsigned i=0; i<count; ++i) if (spaced[i]>127) fits=0;
     if (fits) for (unsigned i=0; i<count; ++i) out[i]=spaced[i];
-    /* Overflow keeps CLOSE. ROOT is an anchored replacement, not transpose. */
-    if (root_mode>=2) {
-        unsigned kept=0;
-        for (unsigned i=0; i<count; ++i)
-            if ((out[i]-root)%12) out[kept++]=out[i];
-        int low=root-12*(int)(root_mode-1);
-        if (low>=0) out[kept++]=low;
-        count=kept;
-    }
+    /* Overflow keeps CLOSE. */
     sort(out,count);
     return count;
+}
+
+/* AUTO clarity guard, before movement scoring. These register thresholds are
+ * our conservative realization of wide bass / closer treble spacing, not a
+ * rule of jazz theory: a fifth above a low bass, fourths between other voices
+ * below MIDI 48, and thirds below MIDI 60. Manual VOIC
+ * remains literal. The anchored ROOT never moves to repair another voice. */
+static unsigned clarify(int *out, unsigned n, int anchor, int ninth) {
+    if (n>1 && ninth>=0 && out[0]%12==ninth) return 0;
+    for (unsigned pass=0; pass<12; ++pass) {
+        unsigned i;
+        for (i=1; i<n; ++i) {
+            int gap=out[i-1]<48?(i==1?7:5):out[i-1]<60?3:1;
+            if (out[i]-out[i-1]<gap) break;
+        }
+        if (i==n) return 1;
+        if (out[i]==anchor) return 0;
+        int v=out[i]+12;
+        while (contains(out,n,v)) v+=12;
+        if (v>127) return 0;
+        out[i]=v;
+        sort(out,n);
+    }
+    return 0;
 }
 
 void mh_size_voice_c(uint8_t pool[4], uint8_t history[8], unsigned config,
@@ -109,6 +136,9 @@ void mh_size_voice_c(uint8_t pool[4], uint8_t history[8], unsigned config,
     unsigned inversion=voic>=2?voic-1:0;
     unsigned count=candidate(base,n,target,inversion,0,spread,root_mode,root,best);
     if (!count) count=candidate(base,n,target,0,0,spread,root_mode,root,best);
+    int anchor=root_mode>=2?root-12*(int)(root_mode-1):root;
+    int ninth=quality==2 && pool[3]<128 && pool[3]>root?pool[3]%12:-1;
+    if (voic==1 && count) clarify(best,count,root_mode==1?-1:anchor,ninth);
     if (voic==1 && old==token && n) {
         int shift=(root-(int)history[4])/12*12;
         int best_cost=0x7fffffff;
@@ -118,7 +148,7 @@ void mh_size_voice_c(uint8_t pool[4], uint8_t history[8], unsigned config,
             int offset=oct==0?0:oct==1?-12:12;
             unsigned got=candidate(base,n,target,inv,offset,spread,root_mode,root,trial);
             if (got!=target) continue;
-            int anchor=root_mode>=2?root-12*(int)(root_mode-1):root;
+            if (!clarify(trial,got,root_mode==1?-1:anchor,ninth)) continue;
             int distance=trial[0]-anchor;
             if (distance < -12 || distance > 12) continue;
             if (root_mode!=1 && !contains(trial,got,anchor)) continue;
