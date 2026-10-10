@@ -16,7 +16,7 @@ from hw import ot_project as otp
 OUT=ROOT/'out/harmony-port-suite'
 
 
-def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None):
+def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_note=62, tran=None, locks=None, auto=(), spreads=None, voicings=None, omits=None, roots=None, sizes=None):
     work=OUT/name;work.mkdir(parents=True,exist_ok=True)
     leader=7 if reverse else 0
     follow.fixture(source,work/'project',arp=arp,leader=leader,offsets=locks)
@@ -31,7 +31,7 @@ def fixture(source, name, records, arp=False, reverse=False, key_raw=1, first_no
                     kind=records.get(t,0)
                     assert kind in range(4)
                     data[setup+5]=min(kind,2)
-                    data[setup+18]=int(kind==3)
+                    data[setup+18]=int(kind==3) | ((sizes or {}).get(t,0)<<3)
                     voic=(voicings or {}).get(t,int(t in auto))
                     root=(roots or {}).get(t,(omits or {}).get(t,0))
                     data[setup+16]=voic | ((spreads or {}).get(t,0)<<3) | (root<<5)
@@ -75,7 +75,7 @@ def choice_panel(text):
     lines=[]
     for line in text.splitlines():
         words=line.split()
-        if len(words)==4 and words[1]=='enc' and int(words[2])<4:
+        if len(words)==4 and words[1]=='enc' and int(words[2])<5:
             at,slot,steps=int(words[0]),int(words[2]),int(words[3])
             lines.extend(f'{at+i*25} enc {slot} {4 if steps>0 else -4}' for i in range(abs(steps)))
         elif words:lines.append(line)
@@ -376,10 +376,10 @@ def persistence(source,voic=1,omit=0):
     def key(at,k,hold=100):lines.extend([f'{at} key {k:#x} down',f'{at+hold} key {k:#x} up'])
     key(100,0x31);key(600,0x35);key(1100,0x10)
     lines.extend(['1600 key 0x2d down','1700 key 0x22 down','1850 key 0x22 up','1950 key 0x2d up','2300 enc 5 4'])
-    # Open Harmony with the physical F press. Edit all three controls and exercise
+    # Open Harmony with the physical F press. Edit the controls and exercise
     # an unused encoder; the NOTE/ARP native staged lanes must stay intact.
     key(2400,0x3d,50)
-    lines.extend([f'2500 enc 1 {4 if voic==1 else voic-1}','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1',f'2640 enc 3 {omit}','2650 enc 4 5','2660 enc 5 4'])
+    lines.extend([f'2500 enc 1 {4 if voic==1 else voic-1}','2550 enc 0 -1','2600 enc 0 1','2630 enc 2 1',f'2640 enc 3 {omit}','2650 enc 4 3','2660 enc 5 4'])
     key(2700,0x32,50)
     key(2800,0x32)
     lines.extend(['3300 key 0x2d down','3400 key 0x23 down','3550 key 0x23 up','3650 key 0x2d up',f'4000 enc 5 {4 if expected_key==25 else 1}'])
@@ -393,7 +393,8 @@ def persistence(source,voic=1,omit=0):
     expected=(work/'saved-state.bin').read_bytes()
     assert expected[0x4e2+5]==2
     assert expected[0x4e2+16]==voic+8+32*omit
-    assert expected[0x4e2+12]==0, 'Unused E/F encoders changed Part flags'
+    assert expected[0x4e2+12]==0, 'Harmony controls changed Follow flags'
+    assert expected[0x4e2+18]==24, 'SIZE 4 was not stored alongside TRI'
     for t,fields in follow_settings.items():
         for field,value in fields.items():
             assert expected[0x4e2+36*t+field]==value
@@ -416,10 +417,10 @@ def persistence(source,voic=1,omit=0):
     state=(fresh/'state.bin').read_bytes()
     for track in range(8):
         at=0x4e2+36*track
-        assert state[at+5]==state[at+16]==state[at+12]==0
+        assert state[at+5]==state[at+16]==state[at+12]==state[at+18]==0
         if follow_settings:
             assert (state[at+3],state[at+13],state[at+15])==(0,3,2)
-    print('  [ok] UART Harmony controls and inactive E/F encoders, native bank SAVE, disk reload, CS1 warm boot and fresh-project defaults',flush=True)
+    print('  [ok] UART Harmony controls including SIZE and inactive F encoder, native bank SAVE, disk reload, CS1 warm boot and fresh-project defaults',flush=True)
     return {work.name:'pass'}
 
 

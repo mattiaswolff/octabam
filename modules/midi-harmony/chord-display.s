@@ -381,6 +381,10 @@ ch_settings_token:
     move.l %d3,%d0
     jsr mh_root_get
     lsl.l #5,%d0
+    or.l %d0,%d2
+    move.l %d3,%d0
+    jsr mh_size_get
+    lsl.l #7,%d0
     or.l %d2,%d0
     move.l %d0,%d1
     movem.l (%sp),%d0/%d2-%d3
@@ -388,10 +392,11 @@ ch_settings_token:
     rts
 
     .global ch_settings_text,ch_draw_settings,ch_settings_buffer
-ch_settings_text: /* d0 track -> a0 compact V/S/R text */
+ch_settings_text: /* d0 track -> a0 compact N/V/S/R text */
     bsr.w ch_settings_token
     move.l %d1,%d0
     lsr.l #5,%d0
+    andi.l #3,%d0
     lea .settings_roots,%a0
     move.l (%a0,%d0.l*4),-(%sp)
     move.l %d1,%d0
@@ -399,13 +404,17 @@ ch_settings_text: /* d0 track -> a0 compact V/S/R text */
     andi.l #3,%d0
     lea .settings_spreads,%a0
     move.l (%a0,%d0.l*4),-(%sp)
-    andi.l #7,%d1
+    move.l %d1,%d0
+    andi.l #7,%d0
     lea .settings_voices,%a0
+    move.l (%a0,%d0.l*4),-(%sp)
+    lsr.l #7,%d1
+    lea .settings_sizes,%a0
     move.l (%a0,%d1.l*4),-(%sp)
     pea .settings_format
     pea ch_settings_buffer
     jsr 0x40013a08
-    lea 20(%sp),%sp
+    lea 24(%sp),%sp
     lea ch_settings_buffer,%a0
     rts
 ch_draw_settings:
@@ -413,7 +422,7 @@ ch_draw_settings:
     move.l %a0,-(%sp)
     pea -1
     pea 9
-    pea 78
+    pea 61
     pea 0x400bf10a
     pea 0x400ba876
     jsr 0x40012bd8
@@ -423,7 +432,12 @@ ch_draw_settings:
 .settings_voices: .long .svr,.sva,.sv1,.sv2,.sv3
 .settings_spreads: .long .ssc,.sso,.ssw
 .settings_roots: .long .srk,.sro,.sr1,.sr2
-.settings_format: .asciz "%s %s %s"
+.settings_sizes: .long .snn,.sn2,.sn3,.sn4
+.settings_format: .asciz "%s %s %s %s"
+.snn: .asciz "N:N"
+.sn2: .asciz "N:2"
+.sn3: .asciz "N:3"
+.sn4: .asciz "N:4"
 .svr: .asciz "V:R"
 .sva: .asciz "V:A"
 .sv1: .asciz "V:1"
@@ -437,5 +451,5 @@ ch_draw_settings:
 .sr1: .asciz "R:-1"
 .sr2: .asciz "R:-2"
     .balign 4
-ch_settings_buffer: .space 16
+ch_settings_buffer: .space 24
 ch_compact_name: .space 32

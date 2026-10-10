@@ -17,3 +17,11 @@ receipts record the exact source, checks, firmware hashes and known limitations.
 
 H5 includes measured CPU optimizations to the existing H3 behavior. See
 [CPU measurements](CPU.md) for the repeatable benchmark, results and tradeoffs.
+
+H6 adds per-track Harmony **SIZE NAT/2/3/4** on encoder E of the Harmony
+window. Fixed sizes preserve their sounding count through inversions,
+SPRD and ROOT placement and carry AUTO history across CHRD changes.
+See [the musical rules](../../modules/midi-harmony/README.md#chord-size).
+NAT retains H5 output. SIZE uses spare bits beside the Part's CHRD default;
+HDP3/HDN3 and the 10,400-byte retained reservation are unchanged. Use a
+project copy for the candidate: older firmware does not decode fixed SIZE.

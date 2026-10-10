@@ -84,6 +84,11 @@ mh_voice_at: /* d0 track,d1 captured context,a0 pool; all regs preserved */
     jsr mh_get_at
     cmpi.l #2,%d0
     blt.w .voice_reset
+    move.l %d7,%d0
+    move.l 88(%sp),%d1
+    jsr mh_size_get_at
+    tst.l %d0
+    bne.w .voice_fixed
     lea ch_current,%a0
     moveq #0,%d0
     move.b (%a0,%d7.l),%d0
@@ -318,6 +323,41 @@ mh_voice_at: /* d0 track,d1 captured context,a0 pool; all regs preserved */
     move.b 52(%sp),%d1 /* original harmonic root, before inversion */
     move.l %a4,%a0
     bsr.w mh_root_apply
+    bra.s .voice_done
+.voice_fixed: /* Fixed SIZE shares history/reset boundaries, not NAT recipes. */
+    lsl.l #7,%d0
+    move.l %d0,%d6
+    or.l 80(%sp),%d6
+    move.l 76(%sp),%d0
+    lsl.l #3,%d0
+    or.l %d0,%d6
+    move.l %d7,%d0
+    move.l 88(%sp),%d1
+    jsr mh_root_get_at
+    lsl.l #5,%d0
+    or.l %d0,%d6
+    move.l %d7,%d0
+    jsr mh_scale_record_at
+    tst.l %d0
+    bpl.s .fixed_scale
+    move.l #0x3ff,%d0
+.fixed_scale:
+    move.l %d0,%d5
+    move.l %d7,%d0
+    jsr mh_source_at
+    lsl.l #8,%d0
+    lsl.l #2,%d0
+    or.l %d0,%d5
+    lea ch_current,%a0
+    moveq #0,%d0
+    move.b (%a0,%d7.l),%d0
+    move.l %d5,-(%sp)
+    move.l %d0,-(%sp)
+    move.l %d6,-(%sp)
+    move.l %a2,-(%sp)
+    move.l %a4,-(%sp)
+    jsr mh_size_voice_c
+    lea 20(%sp),%sp
     bra.s .voice_done
 .voice_reset:
     clr.l 4(%a2)

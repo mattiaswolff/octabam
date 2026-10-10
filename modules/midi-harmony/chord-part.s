@@ -34,10 +34,11 @@ ch_base_at:
     move.l %d2,-(%sp)
     moveq #18,%d2
     jsr mp_read
-    cmpi.l #7,%d0
+    cmpi.l #31,%d0
     bls.s .base_valid
     moveq #0,%d0
 .base_valid:
+    andi.l #7,%d0 /* SIZE shares the upper two bits; locks remain quality-only. */
     move.l (%sp)+,%d2
     rts
 
@@ -52,6 +53,14 @@ ch_base_set:
     move.l %d0,%d1
     move.l (%sp),%d0
     moveq #18,%d2
+    jsr mp_read
+    cmpi.l #31,%d0
+    bls.s .set_packed_valid
+    moveq #0,%d0
+.set_packed_valid:
+    andi.l #24,%d0
+    or.l %d0,%d3
+    move.l (%sp),%d0
     jsr mp_write
     movem.l 4(%sp),%d1-%d3
     lea 16(%sp),%sp

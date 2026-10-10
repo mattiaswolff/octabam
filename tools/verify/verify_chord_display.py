@@ -75,24 +75,26 @@ def machine():
              if ink[x*8+y//8] & (0x80>>(y%8))]
         assert lit and all(78<=x<=118 and 16<=y<=22 for x,y in lit),(name,lit)
     print('[ok] single-line drawing: all four voices, sharps and negative octaves stay inside the guide',flush=True)
-    for voic,v in enumerate(('V:R','V:A','V:1','V:2','V:3')):
-        for spread,sp in enumerate(('S:C','S:O','S:W')):
-            for root,r in enumerate(('R:K','R:O','R:-1','R:-2')):
-                m.call('mh_voic_set',0,voic);m.call('mh_sprd_set',0,spread);m.call('mh_root_set',0,root)
-                m.call('ch_settings_text',0)
-                actual=bytes(u.mem_read(u.reg_read(UC_M68K_REG_A0),16)).split(b'\0')[0].decode()
-                assert actual==f'{v} {sp} {r}',actual
-                u.mem_write(plane,bytes(1024));m.call('ch_draw_settings',0)
-                ink=bytes(u.mem_read(plane,1024))
-                lit=[(x,y) for x in range(128) for y in range(64) if ink[x*8+y//8] & (0x80>>(y%8))]
-                assert lit and all(78<=x<=118 and 9<=y<=14 for x,y in lit),(actual,lit)
-    print('[ok] all 60 V/S/R summaries fit below the chord name without touching the octave box',flush=True)
+    for size,label in enumerate(('N','2','3','4')):
+        m.call('mh_size_set',0,size)
+        for voic,v in enumerate(('V:R','V:A','V:1','V:2','V:3')):
+            for spread,sp in enumerate(('S:C','S:O','S:W')):
+                for root,r in enumerate(('R:K','R:O','R:-1','R:-2')):
+                    m.call('mh_voic_set',0,voic);m.call('mh_sprd_set',0,spread);m.call('mh_root_set',0,root)
+                    m.call('ch_settings_text',0)
+                    actual=bytes(u.mem_read(u.reg_read(UC_M68K_REG_A0),24)).split(b'\0')[0].decode()
+                    assert actual==f'N:{label} {v} {sp} {r}',actual
+                    u.mem_write(plane,bytes(1024));m.call('ch_draw_settings',0)
+                    ink=bytes(u.mem_read(plane,1024))
+                    lit=[(x,y) for x in range(128) for y in range(64) if ink[x*8+y//8] & (0x80>>(y%8))]
+                    assert lit and all(61<=x<=118 and 9<=y<=14 for x,y in lit),(actual,lit)
+    print('[ok] all 240 N/V/S/R summaries fit below the chord name without touching the octave box',flush=True)
     # The UI seam must return the queued event unchanged to native dispatch.
     u.mem_write(0x460d16f0,(6).to_bytes(4,'big'));u.mem_write(0x80000012,(1).to_bytes(4,'big'))
-    for setter in ('mh_voic_set','mh_sprd_set','mh_root_set'):m.call(setter,0,0)
+    for setter in ('mh_voic_set','mh_sprd_set','mh_root_set','mh_size_set'):m.call(setter,0,0)
     m.call('ch_display_poll',stop=s['ch_play_guide'])
     m.call('ch_display_poll') # unchanged settings must not redraw
-    for setter in ('mh_voic_set','mh_sprd_set','mh_root_set'):
+    for setter in ('mh_voic_set','mh_sprd_set','mh_root_set','mh_size_set'):
         m.call(setter,0,1)
         m.call('ch_display_poll',stop=s['ch_play_guide'])
         m.call('ch_display_poll')
@@ -162,7 +164,7 @@ def port(source, selected=None):
             (work/'card.img').write_bytes(card)
         path=work/f'{name}.txt';path.write_text(script)
         dump=f'{sym["ch_name_text"]:#x},32={work}/{name}-name.bin;{sym["ch_display_notes"]:#x},4={work}/{name}-notes.bin;0x400beba2,4={work}/{name}-octave.bin;0x46c77a16,32={work}/{name}-native.bin'
-        dump+=f';{sym["ch_settings_buffer"]:#x},16={work}/{name}-settings.bin'
+        dump+=f';{sym["ch_settings_buffer"]:#x},24={work}/{name}-settings.bin'
         dump+=f';0x460d1736,4={work}/{name}-grid.bin'
         events=p.run(work,name,['--rtc','1800000000','--live-script',path,'--internal-clock','--lcd',work/f'{name}.lcd','--mem-dump',dump])
         actual=(work/f'{name}-name.bin').read_bytes().split(b'\0')[0].decode()
@@ -188,7 +190,7 @@ def port(source, selected=None):
         assert all(bit(x,31) for x in range(60,119)),name
         assert all(bit(60,y) for y in range(25,32)),name
         summary=(work/f'{name}-settings.bin').read_bytes().split(b'\0')[0].decode()
-        assert summary==('V:1 S:O R:-1' if name=='settings' else 'V:R S:C R:K'),(name,summary)
+        assert summary==('N:N V:1 S:O R:-1' if name=='settings' else 'N:N V:R S:C R:K'),(name,summary)
         results[name]=dict(name=actual,notes=notes,title_bar=True,settings=summary)
         print('[ok]',name,actual,notes,flush=True)
     (OUT/('receipt-'+ '-'.join(selected)+'.json' if selected else 'receipt.json')).write_text(json.dumps(dict(cases=results,image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')

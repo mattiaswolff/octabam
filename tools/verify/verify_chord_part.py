@@ -122,7 +122,7 @@ def main():
     put(at(2, 1, 0), 4)
     assert m.call('ch_base_get', 0) == 4
     # Corrupt values resolve to TRI, invalid edits never touch Part memory.
-    for value in (8, 127, 255):
+    for value in (32, 127, 255):
         put(at(2, 1, 0), value)
         assert m.call('ch_base_get', 0) == 0
         assert m.call('ch_base_set', 0, value) == 0
@@ -154,7 +154,7 @@ def main():
     u.mem_write(m.stack+4, fresh.to_bytes(4, 'big'))
     m.call('native_part_init')
     assert all(u.mem_read(fresh+0x4e2+track*36+18, 1)[0] == 0 for track in range(8))
-    assert int.from_bytes(u.mem_read(0x400d43a6, 4), 'big') == 8
+    assert int.from_bytes(u.mem_read(0x400d43a6, 4), 'big') == 32
     # Plain chromatic/grid roots inherit the selected Part, even when the
     # engine plays another Part and CHORD PLAY left an older live variation.
     # The real queued recorder freezes that quality before subsequent edits.

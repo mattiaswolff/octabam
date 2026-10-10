@@ -35,11 +35,12 @@ Press **F** on NOTE SETUP to open **HARMONY**:
 | B | VOIC | ROOT / AUTO / 1ST / 2ND / 3RD |
 | C | SPRD | CLOSE / OPEN / WIDE |
 | D | ROOT | KEEP / OMIT / -1 OCT / -2 OCT |
+| E | SIZE | NAT / 2 / 3 / 4 |
 
-E/F are inactive. YES, NO or F closes the window; track/page keys close it
+F is inactive. YES, NO or F closes the window; track/page keys close it
 before changing selection on a second press. Edits apply immediately. YES
 on NOTE SETUP preserves RFOL and HARM while confirming stock staged fields.
-Fresh Parts use HARM OFF, DEG `1:3`, CHRD TRI and ROOT/CLOSE/KEEP voicing.
+Fresh Parts use HARM OFF, DEG `1:3`, CHRD TRI and ROOT/CLOSE/KEEP voicing and SIZE NAT.
 
 Generated notes enter the stock arp. Sequenced TRAN/P-locks apply once before
 chord generation; scale-derived qualities receive final scale correction.
@@ -68,8 +69,9 @@ recording, trigs 1–8 play the selected scale from tonic through the next octav
 With KEY OFF they use C–D–E–F–G–A–B–C as roots; each TRI is major.
 The stock-style inverted title bar reads CHORD PLAY when idle and shows the
 actual MIDI notes while sounding. Chord names and note names both use sharps.
-A compact line below the chord name always shows VOIC, SPRD and ROOT:
-`V:1 S:O R:-1` means first inversion, OPEN spread, root down one octave.
+A compact line below the chord name always shows SIZE, VOIC, SPRD and ROOT:
+`N:4 V:1 S:O R:-1` means four notes, first inversion, OPEN spread,
+root down one octave. N:N means SIZE NAT.
 VOIC uses R/A/1/2/3 (ROOT/AUTO/inversions), SPRD C/O/W, and ROOT
 K/O/-1/-2 (KEEP/OMIT/octave drops). Long add9 names omit parentheses here
 to leave this settings line visible.
@@ -106,12 +108,80 @@ in C minor, D ADD9 is Ddim(addb9), and D SUS2 is Dsusb2b5. Explicit qualities
 bypass the final scale correction: G DOM7 remains G–B–D–F in C minor.
 
 Grid recording keeps the normal 16-step layout and the guide follows the
-sounding sequence. Rests and STOP clear the chord name and pitches. VOIC, SPRD and ROOT remain
+sounding sequence. Rests and STOP clear the chord name and pitches. SIZE, VOIC, SPRD and ROOT remain
 track-wide controls in the Harmony window; they are not CHRD locks. Follow
 inherits roots and scales as before, while every follower resolves its own
 CHRD. Live playing does not take over a running leader pattern.
 
+## Chord size
+
+SIZE sets how many distinct MIDI pitches Harmony sends to the stock arp.
+NAT keeps the original chord recipes, inversions, ROOT behavior and AUTO
+history rules. Fixed 2/3/4 counts use the following rules instead. They affect
+HARM CHORD only and apply on the next trigger; held notes retain their releases.
+
+First choose the chord tones. Keep the root unless ROOT is OMIT. Prioritize
+the seventh/ninth for 7TH/DOM7/ADD9, or the suspension for SUS2/SUS4. Next keep
+an altered fifth if present, then the third and ordinary fifth as space allows.
+A plain triad prioritizes its third; a diminished triad prioritizes its b5.
+This is a deterministic reduction, not a reharmonization or classical
+part-writing engine. Two-note reductions necessarily leave some identity implied.
+
+| Chord, ROOT KEEP | SIZE 2 | SIZE 3 | SIZE 4 |
+| --- | --- | --- | --- |
+| TRI / MAJ / MIN, ordinary fifth | Root + third | Complete triad | Triad + octave doubling |
+| SUS2 / SUS4 | Root + suspension | Complete chord | Chord + octave doubling |
+| 7TH / DOM7, ordinary fifth | Root + seventh | Root + third + seventh | Complete chord |
+| ADD9, ordinary fifth | Root + ninth | Root + third + ninth | Complete chord |
+
+For an altered-fifth seventh/add9 at SIZE 3, retain root, altered fifth and
+extension, leaving out the third. SIZE 4 retains all four tones. ROOT OMIT
+removes the root from consideration before selection: a normal seventh at
+SIZE 2 gives third + seventh; a triad gives third + fifth. Scale-derived
+alterations stay intact; no new chord tones are invented.
+
+Invert the **retained distinct tones**, then fill spare voices with octave
+copies, starting from the lowest tone and working upward. Doublings do not
+create additional inversions. An unavailable inversion uses the last one:
+3RD on a three-tone chord uses 2ND; 2ND/3RD on two tones use 1ST.
+
+| C major, SIZE 4 / CLOSE / KEEP | Sounding pitches |
+| --- | --- |
+| VOIC ROOT | C3–E3–G3–C4 |
+| VOIC 1ST | E3–G3–C4–E4 |
+| VOIC 2ND or 3RD | G3–C4–E4–G4 |
+
+SPRD operates on the expanded chord. OPEN raises the second-lowest note an
+octave; if a doubling already occupies that pitch, use the next free octave.
+WIDE raises every note above the bass an octave. For two voices, OPEN and
+WIDE are equivalent. A spread that exceeds MIDI 127 falls back to CLOSE.
+ROOT -1/-2 OCT places exactly one root at the requested lower register;
+extra voices double non-root tones. SIZE therefore remains the **sounding**
+count with KEEP, OMIT or a dropped root. When MIDI limits make that impossible,
+sound fewer notes and reset AUTO history; never wrap or add an unrelated tone.
+
+Fixed SIZE AUTO compares the final sorted sounding notes, including doubling,
+spread and root placement. It minimizes total semitone movement, then prefers
+more stationary voices. Equal scores prefer root position, then earlier
+inversions and octave offsets 0/-12/+12. It searches at most twelve candidates,
+keeps the bass near the requested register and retains the exact root with
+KEEP (or the exact lowered root with a drop). Chord-quality changes keep
+history: C3–E3–G3 can become C3–E3–B3 when TRI changes to 7TH at SIZE 3.
+Changing SIZE resets history; other settings, source/scale, Part replacement
+and deliberate octave jumps follow the same boundaries as NAT. There is no
+promise to avoid parallel intervals or resolve classical tendency tones.
+
+SIZE is a per-track Part default, not a parameter lock. CHRD locks still
+select chord identity; SIZE determines its realization. The guide displays
+the requested chord name and actual sounding pitches; a reduced voicing can
+omit a tone implied by that name. Native Part Save/Reload, copy and KITS recall
+carry SIZE. Old valid CHRD bytes select NAT. Pattern HDP3/HDN3 storage and the
+10,400-byte retained reservation are unchanged. Older firmware does not decode
+the newly packed CHRD/SIZE byte; use a project copy when testing this candidate.
+
 ## Manual inversions
+
+The following sections describe SIZE NAT unless stated otherwise.
 
 VOIC ROOT keeps the generated root-position chord. 1ST, 2ND and 3RD rotate
 one, two or three lower chord tones upward by an octave. With CLOSE spacing,
@@ -124,7 +194,7 @@ and do not use previous-chord history. The logical root and the recorded
 physical key are unchanged. If an inversion exceeds MIDI 127, keep root
 position and apply SPRD if it fits; an already incomplete chord keeps the
 generator's omission behavior. Existing ROOT/AUTO projects keep their choices.
-HARM, VOIC, SPRD and ROOT are track defaults, not parameter-lock destinations.
+HARM, SIZE, VOIC, SPRD and ROOT are track defaults, not parameter-lock destinations.
 
 ## Automatic voice leading
 
@@ -158,7 +228,7 @@ of four voices are considered per chord; there is no unbounded search.
 
 The first chord uses root position with the selected spread. History is per track and shared between
 that track's keyboard and sequence. HARM/VOIC/SPRD/ROOT edits, project load,
-and boot reset it; a changed effective scale/source or triad/seventh count
+and boot reset it; a changed effective scale/source or chord quality/count
 reseeds it on the next chord. A truncated high-MIDI chord keeps the existing
 voice-omission behavior and resets history. Silence/STOP alone does not reset
 history; set VOIC ROOT then AUTO to deliberately reseed it. AUTO is dynamic:
@@ -227,7 +297,7 @@ ROOT is a per-track Part setting, not a parameter-lock destination.
 
 ## Storage and validation
 
-HARM, DEG, CHRD, KEY, voicing and Follow settings live in each native Part.
+HARM, DEG, CHRD, SIZE, KEY, voicing and Follow settings live in each native Part.
 UI edits use the selected Part; playback uses each track's playing Part.
 Part/Kit recall supplies incoming defaults; explicit DEG/CHRD locks stay with
 patterns. Runtime roots, note ownership and AUTO history are not persisted.
@@ -253,3 +323,8 @@ The manifest declares linked-code gates for routing, voicing, ownership,
 recording, native Part publication, degree boundaries and companion storage.
 See the [hardware acceptance sequence](degrees/ACCEPTANCE.md) for instrument
 checks. Emulator results do not establish physical MIDI timing or battery retention.
+
+The SIZE gate executes generated ColdFire code (`verify_harmony_size.py`);
+`verify_harmony_size_port.py --project DIR` checks real firmware output.
+Regenerate `size.s` with `python3 modules/midi-harmony/generate.py` and verify
+with `--check`; edit the C source, never its generated assembly.

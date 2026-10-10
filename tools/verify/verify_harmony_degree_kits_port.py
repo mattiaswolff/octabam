@@ -13,8 +13,8 @@ B=0x400e21e0
 PS=0x18b2
 
 
-def recall(source,outgoing,incoming,target,sym,scenes=False):
-    name=f'{outgoing}-to-{incoming}-kit{target+1}'
+def recall(source,outgoing,incoming,target,sym,scenes=False,size=0):
+    name=f'{outgoing}-to-{incoming}-kit{target+1}'+(f'-size{size+1}' if size else '')
     w=p.fixture(source,name,{0:outgoing},key_raw=2,first_note=48)
     for path in (w/'project').glob('project.*'):
         path.write_bytes(re.sub(rb'(?m)^BANK=\d+',b'BANK=0',path.read_bytes()))
@@ -25,7 +25,7 @@ def recall(source,outgoing,incoming,target,sym,scenes=False):
                 base=p.otp.PART_BASE+part*p.otp.PART_STRIDE+9
                 for track in range(8):data[base+0x4e2+track*36+19]=35
                 if bank==target//4+1 and part%4==target%4:
-                    for field,value in ((5,incoming),(17,6),(18,1),(19,39)):
+                    for field,value in ((5,incoming),(17,6),(18,1+(size<<3)),(19,39)):
                         data[base+0x4e2+field]=value
                     data[base+0x3e2]=65
                 if scenes:
@@ -72,12 +72,15 @@ def recall(source,outgoing,incoming,target,sym,scenes=False):
     sequence=([48,65,65] if incoming==0 else [root,57,57] if incoming==1 else
               [root,root+4,root+7]+[57,60,64,67]*2)
     if scenes:sequence=([62]*3 if incoming<2 else [62,66,69]+[62,65,69,72]*2)
+    if size==3 and incoming==2:
+        sequence=([62,66,69,74]+[62,65,69,72]*2 if scenes else
+                  [root,root+4,root+7,root+12]+[57,60,64,67]*2)
     assert notes==held+live+sequence,(name,notes,held+live+sequence)
     assert (w/'assignment.bin').read_bytes()==bytes((target,)),name
     bank=(w/'after-bank.bin').read_bytes()
     part=bank[0x8e57];assert part<4
     setup=0x8ed80+part*PS+0x4e2
-    for field,value in ((5,incoming),(17,6),(18,1),(19,39)):
+    for field,value in ((5,incoming),(17,6),(18,1+(size<<3)),(19,39)):
         assert bank[setup+field]==value,(name,field,bank[setup+field])
     assert bank[setup-0x100]==65
     assert bank[0x4900+2*32]==(47 if incoming and not outgoing else 48)  # canonical HARM mirror
@@ -97,6 +100,7 @@ def main():
     ap.add_argument('--project',required=True,type=Path)
     ap.add_argument('--frozen',action='store_true',help='reuse the image and symbols from the previous run')
     ap.add_argument('--scenes',action='store_true',help='test incoming scene roots on every Kit mode pair')
+    ap.add_argument('--size-four',action='store_true',help='incoming Kit recalls SIZE 4 alongside its CHRD default')
     ap.add_argument('--case',action='append',choices=[f'{a}-{b}-{t}' for a in range(3) for b in range(3) for t in (2,6)])
     args=ap.parse_args()
     p.OUT=p.ROOT/('out/degree-scenes-kits-port' if args.scenes else 'out/degree-kits-port');p.OUT.mkdir(parents=True,exist_ok=True)
@@ -113,7 +117,7 @@ def main():
     selected=args.case or [f'{a}-{b}-{t}' for a in range(3) for b in range(3) for t in (2,6)]
     results={}
     for case in selected:
-        results[case]=recall(args.project,*map(int,case.split('-')),sym,scenes=args.scenes)
+        results[case]=recall(args.project,*map(int,case.split('-')),sym,scenes=args.scenes,size=3 if args.size_four else 0)
         (p.OUT/('receipt-'+ '-'.join(selected)+'.json')).write_text(json.dumps(dict(cases=results,
             image_sha256=hashlib.sha256(p.CANDIDATE_IMAGE.read_bytes()).hexdigest(),hardware_tested=False),indent=2)+'\n')
 

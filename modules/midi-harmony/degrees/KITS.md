@@ -15,7 +15,7 @@ Each MIDI track has a native 36-byte SETUP record at Part offset `0x4e2`.
 | 15 | Remembered relative octave |
 | 16 | Packed VOIC/SPRD/ROOT |
 | 17 | Native KEY, read through the shared snapshot |
-| 18 | Base CHRD, 0..7 |
+| 18 | Base CHRD bits 0..2; SIZE NAT/2/3/4 bits 3..4; valid byte 0..31 |
 | 19 | Base DEG, 0..83; default 35 |
 
 Context is `bank*4+workingPart`, 0..63. Public shared entries preserve all

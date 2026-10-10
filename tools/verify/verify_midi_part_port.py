@@ -41,7 +41,7 @@ def main():
                             12:(part+t)%4,13:(part+t)%11 if follow else 0,
                             15:(part+t)%5 if follow else 0,
                             16:((t%5)|((part%3)<<3)|((t%4)<<5)) if harmony else 0,
-                            18:t%8 if harmony else 0,19:0}
+                            18:(t%8)|(((part+t)%4)<<3) if harmony else 0,19:0}
                     for field,value in values.items():data[at+field]=value
         p.otp._bank_write(w/'project',int(path.stem[4:]),seed,guard=False)
     card,_=p.emu_card.stage_project(w/'project','OCTABAM','BASS',tree=w/'seed-tree')
