@@ -1,0 +1,22 @@
+{
+ "params": {},
+ "retired": {
+  "params": [],
+  "settings": []
+ },
+ "settings": {
+  "1": {
+   "labels": [
+    "UPSTREAM",
+    "CONTIGUOUS",
+    "MIDI POOL"
+   ],
+   "name": "RETENTION",
+   "type": "option"
+  }
+ },
+ "store": {
+  "id": "mattias.plocks-p2",
+  "major": 1
+ }
+}

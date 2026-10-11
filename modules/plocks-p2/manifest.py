@@ -14,11 +14,28 @@ them into the live lane and puts the Part's value back at the next trig.
 Requires SCENES P2: its page-2 dial hooks show a held step's lock.
 """
 
-from remix.schema import Category, Claims, Detour, Gate, Kind, Linked, Module, Proof
+from dataclasses import replace
+from remix.schema import Apply, Option, Setting, Store, Category, Claims, Detour, Gate, Kind, Linked, Module, Proof
 
 H = bytes.fromhex
 MEMCPY = ("a memcpy site that moves patterns or tracks between the banks, the clipboard "
           "and the undo buffer: page 2 goes along")
+
+def retention_variant(values):
+    if values['RETENTION'] == 'CONTIGUOUS':
+        return dict(linked=(Linked('p2locks','modules/plocks-p2/p2locks.s',dram=True,include=lambda modules: ''),
+                            Linked('p2retention','modules/plocks-p2/retention.s',dram=True)),
+                    claims=Claims(sram=((0x100f8600,15464,'Compressed P2 bank copy in CS1'),)))
+    if values['RETENTION'] == 'MIDI POOL':
+        return dict(
+            requires=('SCENES P2', 'STORE', 'MIDI SRAM'),
+            linked=(Linked('p2locks', 'modules/plocks-p2/p2locks.s', dram=True,
+                           include=lambda modules: '.set P2_POOL,1\n'),
+                    Linked('p2retention', 'modules/plocks-p2/retention.s', dram=True),
+                    Linked('p2pool', 'modules/plocks-p2/pool.s', dram=True)),
+            claims=Claims(sram=((0x100f8600,20,'P2S1 retained checkpoint header'),)))
+    return {}
+
 
 MODULE = Module(
     name="plocks-p2",
@@ -27,7 +44,8 @@ MODULE = Module(
     category=Category.MACHINES, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.PORT, proof_note="",
     doc="Parameter locks on FX1/FX2 page 2 (hold trigs, turn a knob on the SETUP page).",
-    linked=(Linked("p2locks", "modules/plocks-p2/p2locks.s", dram=True),),
+    linked=(Linked("p2locks", "modules/plocks-p2/p2locks.s", dram=True,
+                   include=lambda modules: '.set P2_NATIVE,1\n'),),
     detours=(
         Detour(0x400508E4, H("4fefffb048d77cfc"), "p2locks", "plk_edit",
                "page-1 lock editor entry: on an FX SETUP page the turn locks page 2",
@@ -105,6 +123,11 @@ MODULE = Module(
     requires=("SCENES P2", "STORE"),
     # NV copy of the current bank's page 2 in CS1 (battery SRAM), nv_save in
     # p2locks.s: 0x100f8600..0x100fbdf0, unused by stock beyond its whole-CS1 init.
-    claims=Claims(sram=((0x100f8600, 0x100fbdf0 - 0x100f8600, "P2NV bank copy in CS1"),)),
+    claims=Claims(sram=((0x100f8600, 0x100fbdf0-0x100f8600, "P2 bank copy in CS1"),)),
+    store=Store('mattias.plocks-p2'),
+    settings=(Setting(1,'RETENTION',Option('UPSTREAM','CONTIGUOUS','MIDI POOL'),
+                      default='UPSTREAM',apply=Apply.BUILD,
+                      doc='Current-bank checkpoint allocation; project files are unchanged.'),),
+    variant=retention_variant,
     gates=(Gate('tools/verify/verify_plocksp2.py'),),
 )

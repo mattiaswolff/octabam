@@ -38,8 +38,9 @@ Image A0 (`bottleservice`, `CHANGELOG.md`) carries PLOCKS P2; `p2lk01.work` was 
 
 ## Open
 
-- The CS1 copy holds 4,768 locks (`NV_MAX`; 10,234 until 10 Oct 2026, when 16,400 B of its top went to MIDI SCENES' copy); a current bank with more has no copy
-  and a power cut loses its page-2 locks back to the last save.
+- With `RETENTION=UPSTREAM`, CS1 holds 4,768 locks. A larger current bank
+  falls back to its last disk save after power loss. The opt-in compressed
+  layouts below preserve 10,234 locks without changing project files.
 - That CS1 keeps its contents over a power-off on the unit is read from
   stock's use of it (the power-up check and restore), not measured here.
 - Bank reload and project reload (the `.strd` → `.work` copies) are
@@ -108,7 +109,7 @@ trig. Nothing carries page 2, and every byte of the pattern data is used.
   follows in the same shape (two 6,144 B mirrors for the buffers). memcpy
   itself runs before the loader has placed the runtime, so its call sites
   are hooked, not its entry.
-- **The current bank over a power-off.** Stock keeps the current bank in
+- **The current bank over a power-off (UPSTREAM retention).** Stock keeps the current bank in
   CS1 (`0x10000000`): `0x4000faf0` copies a bank there, edits write
   through, and at power-up `0x40025770` checks it, `0x4000fbb4` restores
   the bank and the firmware's load reads only the other banks from the
@@ -135,3 +136,29 @@ file routines' own entries (`0x40090504`, `0x400905d4`, `0x400909d8`,
 `0x400917c8`, `0x4008ee74`, `0x4008f180`) where this module hooks their
 call sites, so the two share no site. Its CS1 ranges (`0x100f85a0..e8`,
 `0x100ffe00..ff00`) and MIDI SCENES' (`0x100fbdf0..0x100ffe00`) sit on either side of this module's.
+
+## Optional full-capacity retention
+
+The default `RETENTION=UPSTREAM` keeps upstream's native sparse writer and
+4,768-lock reservation. Personal carriers explicitly select a different
+build setting to preserve the earlier 10,234-lock unsaved capacity:
+
+- `CONTIGUOUS`: the lossless Rice/raw codec uses at most 15,464 bytes from
+  `0x100f8600`; it cannot share that range with current MIDI SCENES.
+- `MIDI POOL`: a 20-byte P2S1 header at `0x100f8600` and 15,448 codec payload
+  bytes in [MIDI SRAM](../midi-sram/README.md). This leaves room for Harmony
+  and all four full MIDI Scene tables.
+
+Both options keep the P2LK project file format and runtime table unchanged.
+The codec generator checks its committed ColdFire assembly; the retained
+capacity gate covers the worst Rice gaps as well as dense records. The
+pooled option requires the protected native-copy and MIDI-write boundaries.
+
+
+Run `python3 modules/plocks-p2/generate_retention.py --check` and
+`tools/verify/verify_plocksp2_retention.py` for generated-code identity,
+codec bounds, sparse/dense capacity, interrupted writers and the frozen old
+writer. The full firmware gate also reads synthetic P2LK v1 files. Project
+files remain compatible; retained formats differ by layout, so switching
+firmware layouts requires saving the project first. Emulator instruction
+counts are not measured hardware latency or proof of battery retention.

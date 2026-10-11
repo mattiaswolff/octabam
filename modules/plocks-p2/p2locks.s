@@ -1,3 +1,4 @@
+.include "remix.inc"
 | PLOCKS P2 -- per-step parameter locks for page 2 of FX1 and FX2.
 |
 | Stock's step record is 32 lock bytes, page 1 of the five pages; every
@@ -73,9 +74,13 @@
         .set    SPRINTF,    0x40013a08
         .set    IOB_LEN,    0x1000
         .set    NV,         0x100f8600      | CS1: the current bank's page 2, sparse (see nv_save)
-        .set    NV_END,     0x100fbdf0      | MIDI SCENES' CS1 copy follows (0x100fbdf0..0x100ffe00)
+        .ifdef P2_NATIVE
+        .set    NV_END,     0x100fbdf0
+        .set    NV_MAGIC,   0x50324e56
         .set    NV_MAX,     (NV_END-NV-16)/3
-        .set    NV_MAGIC,   0x50324e56      | 'P2NV'
+        .else
+        .set    NV_END,     0x100ffe00
+        .endif
         .set    CUR_BANK,   0x80000002
 
         .text
@@ -242,6 +247,17 @@ pe_c1:  addl    %a0@(0x9a),%d1
 pe_c2:  moveb   %d0,%a1@
         bra.w   pe_loop
 pe_commit:
+        | Mirror stock's edited flag and pending trig-tap masks. Otherwise
+        | key-up handles a bare trig tap and clears the newly written lock.
+        moveq   #1,%d0
+        movel   %d0,0x460d173a
+        moveq   #0,%d0
+        movew   %d0,0x460d1a9e
+        movew   %d0,0x460d1aa0
+        movew   %d0,0x460d1aa2
+        movew   %d0,0x460d1aa4
+        movew   %d0,0x460d1aa6
+        movew   %d0,0x460d10dc
         bsr.w   ui_bank                | CS1, when it holds this bank
         bsr.w   nv_touch
         | the stock lock editor's marks: the bank edited, the project
@@ -1275,13 +1291,12 @@ MODE_W: .asciz  "w"
 | through, and at power-up 0x40025770 checks it and 0x4000fbb4(bank) puts
 | it back; the firmware's own load then reads every OTHER bank from the
 | card (mask 0xfffb at 0x40084d60). The page-2 locks of that bank go the
-| same way, sparse, in CS1's unused top (0x100f8600..0x100fbdf0, no stock
-| reference and no module's; written only by stock's whole-CS1 init):
-|   +0 'P2NV' (written last), +4 bank, +8 count, +12 sum of the entries,
-|   +16 entries of 3 bytes: step index (bank-relative, 17 bits) << 7 | value.
-| More locks than fit (NV_MAX), or an interrupted write, leave no magic:
-| the power-up then reads that bank's p2lkNN.work instead.
+| same way, compressed, in CS1's unused top. retention.c owns the codec:
+| P2NV (legacy) and P2R1 (Rice gaps), 16-byte header, magic published last.
+| Project files and runtime tables are unchanged. Old P2NV snapshots are
+| accepted at their original full capacity; new writes occupy <=15464 B.
 
+.ifdef P2_NATIVE
 | nv_save: d0 = bank -> CS1 holds its page 2. Keeps every register.
 | Two tasks call it: the UI task (prio 3) and the engine task (prio 1), and
 | the UI task preempts the engine task at any instruction, so a save can
@@ -1438,6 +1453,89 @@ nv_entry:
         orl     %d0,%d1
         rts
 
+.else
+| nv_save: d0 = bank. Keep registers and caller's interrupt mask.
+| Only the outermost writer touches the payload. A preempting UI/engine
+| request invalidates magic, records the latest bank/ticket and returns;
+| the outer writer retries that bank before publishing. Never mask the
+| 98 KB scan: only ownership and the final generation check/store.
+nv_save:
+        lea     %sp@(-24),%sp
+        movem.l %d0-%d2/%a0-%a1,%sp@
+        move.w  %sr,%d1
+        move.w  %d1,%sp@(20)
+        move.w  #0x2700,%sr
+        movel   %d0,NVBANK
+        addql   #1,NVGEN
+        clrl    NV
+        tstl    NVBUSY
+        bne.s   ns_out
+        moveq   #1,%d1
+        movel   %d1,NVBUSY
+ns_again:
+        movel   NVGEN,%d2
+        movel   NVBANK,%d0
+        move.w  %sp@(20),%d1
+        move.w  %d1,%sr
+        movel   %d0,%sp@-             | encode arg 3: bank
+        bsr.w   bank_at
+        movel   %a0,%sp@-             | arg 2: table
+        movel   #NV,%sp@-             | arg 1: retained bytes
+        .ifdef P2_POOL
+        jsr     plk_pool_encode
+        .else
+        jsr     plk_nv_encode         | format magic, or 0 on invalid/overflow
+        .endif
+        lea     %sp@(12),%sp
+        move.w  #0x2700,%sr
+        cmpl    NVGEN,%d2
+        bne.s   ns_again              | latest request owns the final snapshot
+        movel   %d0,NV                | sole publication; failed encode leaves 0
+        clrl    NVBUSY
+ns_out: move.w  %sp@(20),%d1
+        move.w  %d1,%sr
+        movem.l %sp@,%d0-%d2/%a0-%a1
+        lea     %sp@(24),%sp
+        rts
+
+| nv_apply: d0 = bank -> 1 if restored; 0 with STORE untouched otherwise.
+| The C ABI preserves d2-d7/a2-a6. Preserve the other original registers.
+nv_apply:
+        lea     %sp@(-16),%sp
+        movem.l %d0-%d1/%a0-%a1,%sp@
+        bsr.w   bank_at
+        movel   #NV_END-NV,%sp@-
+        movel   %sp@(4),%sp@-         | original bank, before bank_at
+        movel   #NV,%sp@-
+        movel   %a0,%sp@-
+        .ifdef P2_POOL
+        jsr     plk_pool_decode
+        .else
+        jsr     plk_nv_decode
+        .endif
+        lea     %sp@(16),%sp
+        tstl    %d0
+        beq.s   na_out
+        movel   %sp@,%d0
+        movel   %d0,NVBANK
+        | Finish migration before a sharing bridge can reuse the old tail.
+        | P2R1 is already compact; P2NV may still occupy the full old range.
+        movel   NV,%d1
+        .ifdef P2_POOL
+        cmpil   #0x50325331,%d1
+        beq.s   na_yes
+        .else
+        cmpil   #0x50324e56,%d1
+        bne.s   na_yes
+        .endif
+        bsr.w   nv_save
+na_yes: moveq   #1,%d0
+na_out: movem.l %sp@(4),%d1/%a0-%a1
+        lea     %sp@(16),%sp
+        rts
+
+.endif
+
 | nv_touch: d0 = a bank whose page 2 changed -> CS1 again when it is the
 | bank CS1 holds. Keeps every register.
 nv_touch:
@@ -1572,7 +1670,8 @@ NVBANK: .long   -1                      | the bank whose page 2 CS1 holds
 BKMASK:  .long 0                        | banks whose refused p2lkNN.work is copied to .bak at the next write
 NWMASK:  .long 0                        | banks whose p2lkNN.work was refused: not written
 NEEDFILE: .long 0                       | bank + 1: read it from its file at the next bank load
-NVGEN:  .long   0                       | counts nv_save starts (see nv_save)
+NVGEN:  .long   0                       | counts nv_save requests (see nv_save)
+NVBUSY: .long   0                       | one payload writer; nested requests retry
 EDITED: .long   0                       | set by a page-2 lock edit (the file pass reads it)
 P2STAGE: .fill  8*REC,1,0xff            | the staging record, by track
 P2PEND: .fill   24*REC,1,0xff           | pending slots n = 0..2, index n*8 + track
