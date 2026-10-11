@@ -17,6 +17,7 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`direct-jump-kyoti`](direct-jump-kyoti/README.md) | stock effects with DIRECT_JUMP_KYOTI: [PTN] + [YES] toggles an immediate, clock-locked pattern change. | `make check` |
 | [`erase-empty-trigless-locks`](erase-empty-trigless-locks/README.md) | stock effects with ERASE_EMPTY_TRIGLESS_LOCKS: an emptied trigless lock disappears. | `make check` |
 | [`euclid`](euclid/README.md) | Euclid rhythmic modulation: 12 dB LP/BP/HP or AMP, both FX slots. | local render: the module's render gates |
+| [`harmony-degrees`](harmony-degrees/README.md) | MIDI Harmony degree/register roots with all seven scale modes. | `make check`: verify_harmony_degree_integration: linked degree component checks; hardware untested |
 | [`kits`](kits/README.md) | KITS (255 Kits per project) on the stock effects. | port-gated: verify_kits under the port |
 | [`kyoti-fixes`](kyoti-fixes/README.md) | stock effects with QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS and BATCH_BUGFIXES together. | `make check` |
 | [`kyoti-mute-jump`](kyoti-mute-jump/README.md) | stock effects with MUTE_MODES and DIRECT_JUMP_KYOTI together. | `make check` |
@@ -24,6 +25,8 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`lofi-amf-fix`](lofi-amf-fix/README.md) | Reference minimal build: the LO-FI AMF mpysu->mpyuu fix, alone. | `make check` |
 | [`lofi2`](lofi2/README.md) | LOFI2 beside the stock effects (all but PLATE REV and SPRING REV, whose words it takes). | `make check` |
 | [`midi-follow`](midi-follow/README.md) | Per-track RFOL source selection on MIDI NOTE SETUP; Part-owned bass following. | port-gated: verify_midi_follow: stock/patched MIDI capture; not flashed |
+| [`midi-harmony`](midi-harmony/README.md) | Per-track HARM on MIDI NOTE SETUP; scale notes and chords before the stock arp. | port-gated: verify_midi_harmony: emulator verification; not flashed |
+| [`midi-harmony-follow`](midi-harmony-follow/README.md) | MIDI Harmony, Scales and Follow together with all stock effects. | port-gated: verify_midi_harmony_port: emulator verification; not flashed |
 | [`midi-part-state`](midi-part-state/README.md) | Shared native MIDI Part access and copy/clear boundary, without consumer modules. | port-gated: verify_midi_part_copy: linked native publication and copy checks; not flashed |
 | [`midi-scales`](midi-scales/README.md) | All twelve keys and seven modes in the native ARP SETUP KEY control. | port-gated: verify_midi_scales: emulator verification; not flashed |
 | [`midi-scenes`](midi-scenes/README.md) | Reference minimal build: the MIDI SCENES ColdFire patch, alone. | port-gated: `verify_scenes` against MIDISC2.1 under the port; not flashed |
