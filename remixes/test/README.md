@@ -23,6 +23,7 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`kyoti-mute-sidechain`](kyoti-mute-sidechain/README.md) | stock effects with MUTE_MODES and SIDECHAIN_COMPRESSOR together: a muted KEY track keeps feeding the compressor (SC_KEY). | `make check` |
 | [`lofi-amf-fix`](lofi-amf-fix/README.md) | Reference minimal build: the LO-FI AMF mpysu->mpyuu fix, alone. | `make check` |
 | [`lofi2`](lofi2/README.md) | LOFI2 beside the stock effects (all but PLATE REV and SPRING REV, whose words it takes). | `make check` |
+| [`midi-follow`](midi-follow/README.md) | Per-track RFOL source selection on MIDI NOTE SETUP; Part-owned bass following. | port-gated: verify_midi_follow: stock/patched MIDI capture; not flashed |
 | [`midi-part-state`](midi-part-state/README.md) | Shared native MIDI Part access and copy/clear boundary, without consumer modules. | port-gated: verify_midi_part_copy: linked native publication and copy checks; not flashed |
 | [`midi-scales`](midi-scales/README.md) | All twelve keys and seven modes in the native ARP SETUP KEY control. | port-gated: verify_midi_scales: emulator verification; not flashed |
 | [`midi-scenes`](midi-scenes/README.md) | Reference minimal build: the MIDI SCENES ColdFire patch, alone. | port-gated: `verify_scenes` against MIDISC2.1 under the port; not flashed |
