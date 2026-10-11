@@ -25,6 +25,7 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`kyoti-mute-sidechain`](kyoti-mute-sidechain/README.md) | stock effects with MUTE_MODES and SIDECHAIN_COMPRESSOR together: a muted KEY track keeps feeding the compressor (SC_KEY). | `make check` |
 | [`lofi-amf-fix`](lofi-amf-fix/README.md) | Reference minimal build: the LO-FI AMF mpysu->mpyuu fix, alone. | `make check` |
 | [`lofi2`](lofi2/README.md) | LOFI2 beside the stock effects (all but PLATE REV and SPRING REV, whose words it takes). | `make check` |
+| [`midi-ensemble`](midi-ensemble/README.md) | Scales, Follow and Harmony with KITS, MIDI SCENES and full-capacity P2 retention. | `make check`: verify_integrated_retention_port and verify_midi_concert_port: emulator evidence; hardware pending |
 | [`midi-follow`](midi-follow/README.md) | Per-track RFOL source selection on MIDI NOTE SETUP; Part-owned bass following. | port-gated: verify_midi_follow: stock/patched MIDI capture; not flashed |
 | [`midi-harmony`](midi-harmony/README.md) | Per-track HARM on MIDI NOTE SETUP; scale notes and chords before the stock arp. | port-gated: verify_midi_harmony: emulator verification; not flashed |
 | [`midi-harmony-follow`](midi-harmony-follow/README.md) | MIDI Harmony, Scales and Follow together with all stock effects. | port-gated: verify_midi_harmony_port: emulator verification; not flashed |

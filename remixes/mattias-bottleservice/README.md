@@ -1,0 +1,93 @@
+# Mattias BottleService integration
+
+Based on upstream `97028362` and the H8 feature branch. Contains full
+BottleService (USB MIDI, USB AUDIO OUT MASTER, CC MAP and CC FEEDBACK),
+KITS, current MIDI SCENES, SCENES P2, PLOCKS P2, MIDI Follow, Scales,
+Harmony SIZE/CHORD PLAY, RLEN PLEN and TUNER. MIDI Loopback is
+excluded. KITS and MIDI SCENES source remains upstream's.
+
+Build: `make bus REMIX=mattias-bottleservice`.
+
+## Retained capacity
+
+| Store | Retained allocation | Capacity |
+|---|---|---|
+| PLOCKS P2 | 20-byte header at `0x100f8600`, 15,448 bytes in protected MIDI padding | 10,234 locks |
+| Harmony | 10,400 bytes at `0x100f8620` | All 8,192 step tuples |
+| MIDI SCENES | Upstream `0x100fbdf0..0x100ffe00` | Four full 4,096-byte tables |
+| KITS | Upstream allocations | Unchanged |
+
+The earlier P2 compression remains in use. The additional 16,384-byte
+[MIDI SRAM pool](../../modules/midi-sram/README.md) protects unused MIDI step
+fields from native copy/clear operations. Audio sample-lock fields remain
+native. Ordinary upstream PLOCKS keeps its original default allocation.
+P2LK v1, HDP3 and HDN3 formats and all capacities are preserved by the
+STORE-client revision. Acceptance targets current-format projects.
+
+## Shared persistence
+
+Harmony registers `ch_st_*` callbacks with [STORE](../../modules/store/README.md).
+It no longer replaces STORE's hooks or patches native load/new-project call
+sites: 18 Harmony persistence detours and nine STORE overrides are removed.
+The Harmony/P2 bridge now handles only editing and pattern/track copies.
+
+STORE supplies optional checked callbacks before bank writes and copies,
+checked completion after successful copies, and notification after native
+NEW PROJECT. Save failures retain the existing protection for stored bank
+backups. A native-copy failure now suppresses every companion-copy
+notification, fixing the prior P2 backup overwrite on that error path.
+
+Optional callback code compiles out when unused. The eight original STORE
+client combinations retain their generated tables and callback ABI; their
+only shared behavior change is the native-copy failure check.
+
+## Current convention audit
+
+The MIDI modules use declared DRAM units, asserted native hooks and ledger
+claims for Part bytes and retained SRAM. Early Part-copy wrappers stay in
+ROM and publish their DRAM targets only after the loader returns. Runtime
+initialization does not assume zero-filled BSS; ownership and publication
+markers are loaded data, and large working tables have explicit initialization.
+Follow and Scales use native Part storage. Harmony uses STORE for persistence
+and the dedicated bridge only for shared editing/copy hooks. Empty companion
+markers now propagate close failures through STORE, matching the existing
+open/write error handling.
+
+PAGE uses the native handler. The deferred chord scheduler and its system-task
+hook have been removed; direct CHORD PLAY emits the complete chord immediately.
+Generated code is still checked against its C source. No KITS or MIDI SCENES
+implementation changes were needed for this revision.
+
+## Verification
+
+The deployed OCTABAM81 package came from source `491c0f44` on upstream
+`97028362`. Its MAIN OS SHA-256 was
+`a18b7cca8b73b4d1ed5a60d5e62e86b52f764aa9df0afabfdac81305f1b9b12e`.
+The PR preparation is rebased onto upstream `0024729b`, including its newer
+KITS staging behavior. The older package's results do not validate this new
+image. Run the reached gates and focused combined MIDI/persistence checks on
+each proposed revision. Hardware acceptance remains separate.
+
+## Boot investigation
+
+The first-power-on logo hang remains unresolved, including with USB unplugged.
+This release is not a confirmed boot fix. The repeatable host diagnostic
+`python3 tools/verify/verify_midi_boot.py` checks dirty runtime memory (zero,
+0xff, 0xa5), the native boot logo, DSP uploads, panel handshake and audio frames.
+It writes `out/midi-boot/receipt.json` and per-case logs. These are emulator
+reports; the port cannot model hardware caches or electrical startup timing.
+
+A USB-readable device log is **not implemented**. The failure may precede
+filesystem initialization, so writing a file from the early loader is not a
+safe diagnostic. A viable design would keep a bounded breadcrumb in retained
+SRAM, preserve the previous attempt during the next startup, then export from
+the engine task after the filesystem mounts. The spare 3,900-byte region is
+large enough in this selection, but early-boot/reset survival and an exporter
+that also runs after a retained resume still need validation. STORE's project
+file callbacks alone do not cover a hang before the runtime loads.
+
+Upstream BOOT TRACE offers an existing DIN MIDI probe for boot stages. It
+cannot simply be enabled in this selection: its DSP-return hook collides with
+MIDI PART STATE activation. A diagnostic integration must preserve both paths
+and validate its placement before being deployed. See the
+[failure register](../../docs/contributing/FAILURE_MODES.md).

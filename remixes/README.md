@@ -11,6 +11,7 @@ A remix is a named selection of modules; `make image REMIX=<name> BUILD=<n>` bui
 | remix | contains | proof |
 |---|---|---|
 | [`bottleservice`](bottleservice/README.md) | The delay and reverb bus (BusDelay on T1's FX2, BusVerb on T5's FX2, SEND on every other track's FX2, the stock DELAY on T8) + SPECTRUM, CHARACTER and MODULATION on FX1 + USB MIDI + USB AUDIO OUT MASTER (T8 to the computer) + KITS. | on hardware: Sam's MKII (image A6 with KITS, 6 Oct 2026; images A0-A3 with Octakit, 4 Oct 2026) |
+| [`mattias-bottleservice`](mattias-bottleservice/README.md) | Full BottleService, KITS and MIDI SCENES with MIDI Follow, Scales, Harmony SIZE/CHORD PLAY, RLEN PLEN and Tuner; full unsaved capacities, no Loopback. | `make check`: verify_integrated_retention_port: full capacity under the port; hardware untested |
 
 ## Effects
 
