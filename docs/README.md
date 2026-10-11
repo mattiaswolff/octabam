@@ -12,6 +12,11 @@ Where each doc is, by who reads it. A module's own page is
 | [../remixes/README.md](../remixes/README.md) | the remixes you can flash, with where each has run |
 | [guide/REMIXER.md](guide/REMIXER.md) | composing your own remix: the `make remix` TUI, or a `remix.py` by hand |
 
+## MIDI performance
+
+[Playing related MIDI parts](guide/MIDI_MODULES.md) explains the Scales,
+Follow and Harmony workflow, native controls, state ownership and composition.
+
 ## Writing a module or changing the build
 
 | doc | what it is |
