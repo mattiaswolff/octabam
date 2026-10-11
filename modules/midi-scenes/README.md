@@ -80,9 +80,15 @@ displayed Part's slot in the current bank (`msc_a0`). The scene clipboard
   (`bank+0x95048`, `0x100b145e`, `bank+0x9b332`, `0x100f8598`, the refresh at
   `0x40027e00`); without that SAVE PROJECT does nothing for the project.
 
-Not done: a Kit carrying its Part's locks (`kits.work` version 2), the
-conversion of 2.x projects, the on-unit prompt for a refused file, and Part
-Paste and bank-copy rows.
+With KITS selected, `kits.work` version 2 stores each Kit's 4,096-byte MIDI
+scene table. Kit save/load copies it through `scn_slot_ptr` and
+`scn_slot_changed`; the native Part alone does not contain these extra bytes.
+This differs from ordinary Part Save/Reload, which leaves the scene locks
+as they are. See [KITS](../kits/README.md) for the Kit lifecycle.
+
+The former phase-1 limitation claiming that Kit scene storage was unfinished
+is superseded by the current KITS implementation. Remaining Part lifecycle
+coverage and hardware limits are listed below.
 
 ## Differences from MIDISC2.1 (phase 1)
 
