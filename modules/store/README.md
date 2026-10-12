@@ -87,3 +87,13 @@ answers OVERWRITE, YES on row 0 answers IGNORE), `verify_plocksp2` (a bad `p2lk`
 listed and survives SAVE PROJECT), `verify_scenes --persist` (a bad `scenes.work` stays byte
 for byte under IGNORE; OVERWRITE and BACKUP give a good file, BACKUP also `scenes.bak`).
 Not covered: the rows' text on the LCD, a list opened over another window, the prompt on a unit.
+
+## Copy failure boundary
+
+`bankcopy` runs only after a nonnegative native copy result. A negative
+result is returned unchanged without calling companions. The linked-code
+`verify_store_copy` gate injects native failure/success and substitutes
+callback recorders, checking return value, arguments, dispatch and stack.
+It does not execute card I/O or make subsequent companion writes atomic.
+A mismatched bank/companion file after native failure is an inferred risk,
+not a reproduced hardware data-loss event.

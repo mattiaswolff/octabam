@@ -222,6 +222,8 @@ store_fcopy:
         movel   %sp@(12),%sp@-
         jsr     F_COPY
         lea     %sp@(12),%sp
+        tstl    %d0
+        bmi.w   fc_return               | no client may copy after native failure
         SAVE                            | d0 = stock's result, kept
         movel   %sp@(60+4),%d0
         movel   %sp@(60+8),%d1
@@ -229,6 +231,7 @@ store_fcopy:
         lea     ev_bankcopy,%a0
         bsr.w   fire
         REST
+fc_return:
         rts
 
 store_d5_ef9a:

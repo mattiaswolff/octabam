@@ -11,7 +11,7 @@ handlers in CLIENTS below; a client that is not in the remix is left out of
 the tables.
 """
 
-from remix.schema import Category, Detour, Kind, Linked, Module, Proof
+from remix.schema import Category, Detour, Gate, Kind, Linked, Module, Proof
 
 H = bytes.fromhex
 
@@ -65,6 +65,7 @@ MODULE = Module(
     proof=Proof.PORT, proof_note="",
     doc="Platform: the stock save, load, copy, CS1 and Part sites KITS and PLOCKS P2 share.",
     linked=(Linked("store", "modules/store/store.s", dram=True, include=store_inc),),
+    gates=(Gate("tools/verify/verify_store_copy.py", stage="image", venv=True),),
     detours=(
         Detour(0x40090504, H("4feffeb848d77cfc"), "store", "store_loadall",
                "a load of every bank", pad_to=8),
