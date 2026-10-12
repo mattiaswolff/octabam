@@ -1,6 +1,7 @@
 # Mattias BottleService integration
 
-Based on upstream `97028362` and the H8 feature branch. Contains full
+The OCTABAM82 candidate integrates upstream `6e4aeb76` with the prepared MIDI
+contribution stack and the latest SCENES/PLOCKS fixture corrections. Contains full
 BottleService (USB MIDI, USB AUDIO OUT MASTER, CC MAP and CC FEEDBACK),
 KITS, current MIDI SCENES, SCENES P2, PLOCKS P2, MIDI Follow, Scales,
 Harmony SIZE/CHORD PLAY, RLEN PLEN and TUNER. MIDI Loopback is

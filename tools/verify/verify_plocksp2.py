@@ -184,6 +184,9 @@ def main():
         sys.exit("verify_plocksp2: no FX2 page-2 slot 0 available for the fixture")
     for bankfile in sorted(copy.glob("bank*.work")):
         def usable_fx(data):
+            # record() first taps trig 1 to create it; start empty in our copy.
+            for track in range(8):
+                data[ot_project.trac_off(0, track) + 7] &= 0xfe
             for part_index in range(ot_project.NPARTS_ALL):
                 part_start = ot_project.PART_BASE + part_index * ot_project.PART_STRIDE
                 for track in range(8):
