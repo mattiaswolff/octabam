@@ -135,3 +135,8 @@ file routines' own entries (`0x40090504`, `0x400905d4`, `0x400909d8`,
 `0x400917c8`, `0x4008ee74`, `0x4008f180`) where this module hooks their
 call sites, so the two share no site. Its CS1 ranges (`0x100f85a0..e8`,
 `0x100ffe00..ff00`) and MIDI SCENES' (`0x100fbdf0..0x100ffe00`) sit on either side of this module's.
+
+The editor marks a held-trig knob edit before key release, so release does
+not clear the new lock. `verify_plocksp2` exercises the edit/release gesture
+and a subsequent bare tap, which must still clear the step. This port test
+does not establish physical encoder or key timing.

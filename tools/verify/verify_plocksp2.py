@@ -159,6 +159,16 @@ def main():
     for f in pdir.iterdir():
         if f.is_file() and f.suffix.lower() == ".work":
             shutil.copy2(f, copy / f.name)
+    # record() first taps trig 1 to create it, then holds it while editing.
+    # If the source already has this trig, that tap removes it and tests
+    # a different key-release path. Establish the precondition in our copy.
+    from hw import ot_project
+    for bankfile in sorted(copy.glob("bank*.work")):
+        def clear_first_trig(data):
+            for track in range(8):
+                data[ot_project.trac_off(0, track) + 7] &= 0xfe
+        ot_project._bank_write(copy, int(bankfile.stem[4:]), clear_first_trig, guard=False)
+
     card = OUT / "card.img"
     r = subprocess.run([str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(copy), a.set_name, a.name,
                         "--tree", str(OUT / "tree"), "--out", str(card)], cwd=ROOT, capture_output=True, text=True)
@@ -222,8 +232,11 @@ def main():
     def undo(s):
         pclear(s); s.hold("func", "play")
 
+    def tap_clear(s):
+        s.tap("t1")
+
     scen = [panel("record", copy_paste), panel("clear", clear5), panel("pattern", pattern),
-            panel("pclear", pclear), panel("undo", undo)]
+            panel("pclear", pclear), panel("undo", undo), panel("tap_clear", tap_clear)]
 
     # playback: T1 step 1 FX2 page-2 slot 0 = 99 everywhere, trigs on steps 1 and 2
     lock = [f"{STORE + ((b * 16 + p) * 8 + 0) * TRACK_B + 6:#x}=99" for b in range(16) for p in range(16)]
@@ -266,6 +279,8 @@ def main():
     check(f"record: step 1 FX2 page-2 slot 0 locked ({v}, the Part's {knob})", v not in (0xff, knob))
     check(f"record: no other page-2 byte of step 1 ({rec[0].hex()})",
           all(b == 0xff for i, b in enumerate(rec[0]) if i != 6))
+    check("bare trig tap after editing still clears the step page-two locks",
+          steps("tap_clear", 0)[0] == b"\xff" * REC)
     stock = (OUT / "record_stock.bin").read_bytes()
     check(f"record: stock's page-1 locks of step 1 untouched ({stock.hex()})", stock == b"\xff" * 32)
     check(f"trig copy + paste: step 5 = step 1 ({rec[4].hex()})", rec[4] == rec[0])
