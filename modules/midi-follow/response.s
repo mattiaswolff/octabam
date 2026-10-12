@@ -367,7 +367,11 @@ bf_response_tick:
     move.l %sp,%a0
     move.l %a0,-(%sp)
     pea 3
+    .ifdef HAVE_LOOPBACK
+    jsr lb_track_send
+    .else
     jsr 0x40010bc8
+    .endif
     lea 12(%sp),%sp
     rts
     .balign 4

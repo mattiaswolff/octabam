@@ -1,4 +1,4 @@
-/* Experimental per-track routing of proven notes and CC producers.
+/* Per-track routing of complete MIDI channel messages.
  * lb_routes[8]: 0 EXT (default), 1 INT, 2 BOTH. Applied cache of native Part DEST settings.
  * Route before midi_send so INT reaches neither DIN nor USB's entry mirror.
  */
@@ -7,8 +7,7 @@
     .global lb_routes, lb_set_route, lb_flush, lb_channels, lb_applied
     .global lb_head, lb_tail, lb_accepted, lb_delivered, lb_dropped, lb_highwater
     .global lb_owned, lb_internal_held, lb_ring, lb_current
-    .global lb_wake, lb_wake_pending, lb_external_turn
-    .global lb_live_cached, lb_live_tail
+    .global lb_wake, lb_wake_pending, lb_external_turn, lb_rx_internal
 .set MIDI_Q, 0x46c7e974
 .set POST, 0x40000c3c
 .set RECEIVE, 0x40000d00
@@ -49,6 +48,8 @@ lb_capture:
     mvzb %a0@,%d2
     movel %d2,%d3
     andil #0xf0,%d3
+    cmpil #lb_routed,%d0
+    beq.w .routed_source
     cmpil #0x80,%d3
     beq.w .release_source
     cmpil #0x90,%d3
@@ -57,26 +58,45 @@ lb_capture:
     bne.w .capture_done
     cmpil #0x4009fef2,%d0
     beq.s .new_event
-    cmpil #lb_live_cc,%d0
-    beq.s .new_event
     cmpil #0x4009ffbe,%d0
     bne.w .capture_done
     bra.s .new_event
 .note_source:
     tstb %a0@(2)
-    beq.s .release_source
+    beq.w .release_source
     cmpil #0x4009fbb2,%d0
     beq.s .new_event
     cmpil #0x4009fcfa,%d0
     bne.w .capture_done
+.routed_source:
+    cmpil #0x80,%d3
+    beq.w .routed_release
+    cmpil #0x90,%d3
+    bne.s .routed_control
+    tstb %a0@(2)
+    beq.w .routed_release
+    bra.s .new_event
+.routed_control:
+    cmpil #0xa0,%d3
+    bcs.w .capture_done
+    cmpil #0xe0,%d3
+    bhi.w .capture_done
 .new_event:
     cmpil #7,%d1
     bhi.w .capture_done
     movel %d1,%d7
     addql #1,%d7
     lsll #4,%d7
+    cmpil #lb_routed,%d0
+    bne.s .cached_route
+    cmpil #2,%d5
+    bhi.s .cached_route
+    movel %d5,%d0
+    bra.s .route_selected
+.cached_route:
     lea lb_routes,%a1
     mvzb %a1@(0,%d1:l),%d0
+.route_selected:
     cmpil #1,%d0
     bne.s .not_int
     moveq #1,%d4
@@ -86,6 +106,21 @@ lb_capture:
     bne.s .admit
     moveq #3,%d4
     bra.s .admit
+.routed_release:
+    /* An unowned release from an INT track must not escape externally.
+     * Owned releases below still use their original destination bits. */
+    movel %d5,%d0
+    cmpil #2,%d0
+    bls.s .release_route
+    cmpil #7,%d1
+    bhi.w .capture_done
+    lea lb_routes,%a1
+    mvzb %a1@(0,%d1:l),%d0
+.release_route:
+    cmpil #1,%d0
+    bne.s .release
+    moveq #0,%d4
+    bra.s .release
 .release_source:
     cmpil #0x4009f370,%d0
     beq.s .release
@@ -120,8 +155,8 @@ lb_capture:
     bmi.w .owned_release
     movel %d2,%d0
     andil #0xf0,%d0
-    cmpil #0xb0,%d0
-    beq.s .cc
+    cmpil #0x90,%d0
+    bne.s .cc
     mvzb %a1@,%d0
     andil #3,%d0
     bne.w .duplicate
@@ -210,51 +245,6 @@ lb_capture:
     andil #2,%d0
     moveml %sp@,%d7/%a3-%a4
     lea %sp@(12),%sp
-    rts
-
-/* Qualify live CC origin before the stock sender loses its source track.
- * Returning zero skips the shared sender entirely, including USB. */
-lb_live_cached:
-    bsr lb_live_cc
-    tstl %d0
-    beq.s .live_cached_skip
-    pea 0x400d808f
-    pea 3
-    jmp 0x4009f234
-.live_cached_skip:
-    /* The stock continuation removes the two arguments. */
-    lea %sp@(-8),%sp
-    jmp 0x4009f23a
-lb_live_tail:
-    bsr lb_live_cc
-    tstl %d0
-    beq.s .live_tail_skip
-    movel #0x400d808f,%d2
-    movel %d2,%sp@(68)
-    jmp 0x4009f268
-.live_tail_skip:
-    moveml %sp@,%d2-%d7/%a2-%fp
-    lea %sp@(60),%sp
-    rts
-lb_live_cc:
-    lea %sp@(-40),%sp
-    moveml %d0-%d6/%a0-%a2,%sp@
-    movel %sp@(104),%d0
-    cmpil #0x4005542c,%d0
-    bne.s .live_external
-    jsr lb_part_sync
-    movel #lb_live_cc,%d0
-    movel %d7,%d1
-    moveq #3,%d2
-    lea 0x400d808f,%a0
-    bsr lb_capture
-    bra.s .live_return
-.live_external:
-    moveq #2,%d0
-.live_return:
-    movel %d0,%sp@              /* d0 is caller-scratch at these two sites */
-    moveml %sp@,%d0-%d6/%a0-%a2
-    lea %sp@(40),%sp
     rts
 
 /* C ABI lb_flush(track): release only that producer's owned destinations.
@@ -423,6 +413,7 @@ lb_next:
     addql #1,lb_delivered
     moveq #1,%d0
     moveb %d0,lb_external_turn
+    moveb %d0,lb_rx_internal
     movew %d3,%sr
     movel #lb_current,%d0
     bra.s .next_done
@@ -438,6 +429,7 @@ lb_next:
     clrb lb_external_turn
     bra.s .next_again
 .native_done:
+    clrb lb_rx_internal
     clrb lb_external_turn
 .next_done:
     moveml %sp@,%d2-%d3/%a2-%a3
@@ -450,6 +442,7 @@ lb_applied: .space 8,0
 lb_channels: .space 8,0xff
 lb_wake_pending: .byte 0
 lb_external_turn: .byte 0
+lb_rx_internal: .byte 0
     .balign 4
 lb_head: .long 0
 lb_tail: .long 0

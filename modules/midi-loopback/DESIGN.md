@@ -1,9 +1,9 @@
 # MIDI Loopback module sketch
 
 Original sketch: 7 October 2026, based on `6f9e5bc9`. Updated 12 October:
-CHAN-press routing and native Part persistence are implemented for the proven
-notes/CC subset. The broader producer and lifecycle contract below remains a
-proposal. [README.md](README.md) defines the tested implementation boundary.
+CHAN-press routing, native Part persistence and the track-generated channel
+message families are implemented. Remaining hardware and lifecycle acceptance
+items are identified in the README; the design below records the contract. [README.md](README.md) defines the tested implementation boundary.
 No hardware acceptance is claimed.
 
 MIDI Loopback lets selected MIDI tracks control the Octatrack's own audio
@@ -193,7 +193,9 @@ module's verifier.
   [memory placement](../../docs/contributing/PLACEMENT.md).
 - [Shared settings proposal](../../docs/proposals/OTX_PROJECT_PROPOSAL.md).
 
-Next implementation work: complete remaining producer families and global
-panic handling. The proven subset has a panel destination control and native
-Part storage. Live notes, shared-channel interactions and playing-project
-transitions still need evidence before the full contract above is implemented.
+The producer adapters are in `producers.s`. Live controls capture `d7` before
+the common tail restores it; live notes use `d5`; Part setup uses `a3` and
+its explicit bank/Part arguments. Follow calls the adapter conditionally when
+Loopback is composed. Panic combines track routes by assigned channel after
+releasing captured ownership. Shared-channel arbitration is still native,
+and hardware timing and playing-project transitions remain acceptance work.

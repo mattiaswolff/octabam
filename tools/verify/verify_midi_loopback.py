@@ -36,7 +36,9 @@ class Machine:
         self.sym = symbols()
         u = self.u = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
         u.ctl_set_cpu_model(UC_CPU_M68K_CFV4E)
-        for a, size in ((0x40000000, 0x08000000), (0x10000000, 0x200000),
+        for a, size in ((0x40000000, 0x1000000), (0x46000000, 0x200000),
+                        (0x46c70000, 0x20000), (0x47000000, 0x10000),
+                        (0x10000000, 0x200000),
                         (0x80000000, 0x10000), (0xfc000000, 0x1000000)):
             u.mem_map(a, size)
         image = (ROOT / "out/mainos_bus.bin").read_bytes()
@@ -44,7 +46,7 @@ class Machine:
         layout = json.loads((ROOT / "out/platform/layout.json").read_text())
         u.mem_write(layout["base"], (ROOT / "out/platform/runtime/runtime.bin").read_bytes())
         for site, symbol in ((0x4009f794, "lb_tick"), (0x40005558, "lb_receive"),
-                             (0x4009f22a, "lb_live_cached"), (0x4009f25e, "lb_live_tail")):
+                             (0x4009f26e, "lb_control_tail"),):
             assert u.mem_read(site, 6) == b"\x4e\xf9" + self.sym[symbol].to_bytes(4, "big")
         for site in (0x4009fbae, 0x4009fcf6, 0x4009feee, 0x4009ffba,
                      0x4009f8be, 0x4009fc50, 0x4009fcd4, 0x4009f328, 0x400a0020):
@@ -221,7 +223,7 @@ def machine_gate():
         if param == 20:
             cases = [(0x4005542c, route, track, int(route != 0))
                      for route in range(3) for track in range(8)]
-            cases += [(0x40054f74, 2, 0, 0), (0x40043b0e, 2, 0, 0)]
+            cases += [(0x40054f74, 2, 0, 0), (0x40043b0e, 2, 0, 1)]
         for parent, route, track, admitted in cases:
             m = Machine(); m.put(0x40171442 + 36*track + 12, route*4, 1)
             flag_byte, flag_bit = (0, param-18) if param < 24 else (1, param-24)
