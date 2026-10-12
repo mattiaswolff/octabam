@@ -2,7 +2,7 @@
 
 ## OCTABAM83 Synth candidate
 
-Adds SYNTH MACHINE and SCALE QUANTIZER to the OCTABAM82 selection. The
+Adds SYNTH MACHINE only to the OCTABAM82 selection. SCALE QUANTIZER is excluded. The
 TEMPO BUS screen remains available: its code now lives in DRAM, leaving
 the Synth page's ROM location free. Combined validation is pending.
 

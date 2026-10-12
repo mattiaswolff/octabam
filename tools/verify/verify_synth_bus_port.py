@@ -6,6 +6,7 @@ No device access or physical timing acceptance. Run after make bus:
   .venv/bin/python3 tools/verify/verify_synth_bus_port.py --project DIR
 """
 import argparse
+import cmath
 import hashlib
 import json
 import math
@@ -100,9 +101,19 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
                 rows += [f'{100+i*50} {0x90+t:02x} {note:02x} 64',
                          f'{1400+i*50} {0x80+t:02x} {note:02x} 00']
     midi.write_text('\n'.join(sorted(rows, key=lambda x: int(x.split()[0])))+'\n')
-    steps = [(500, f'call:{sym["mh_keyboard"]:#x},0,60,100,0'),
+    # Exercise both audio and MIDI entries of the native CHROMATIC drawer.
+    steps = [('-', 'poke:0x460d16f3=1;0x80000015=1;0x100b14cc=1'),
+             ('-', 'call:0x40044920'),
+             ('-', 'poke:0x80000015=0'),
+             ('-', 'call:0x40044920'),
+             (500, f'call:{sym["mh_keyboard"]:#x},0,60,100,0'),
              (1000, f'call:{sym["mh_keyboard"]:#x},0,60,0,0'),
-             (1800, 'call:0x4009f5bc')]
+             (1800, 'call:0x40006820,1'), (1800, 'call:0x40006820,5')]
+    if voices > 1:
+        # Native UART-only polyphony: injecting C ABI calls waits for the
+        # idle main task and can starve under this six-voice workload.
+        # Concurrent Harmony is checked by the mono/sequence cases.
+        steps = [(frame, action) for frame, action in steps if frame == '-']
     cmd = [str(ROOT/'out/emu/ot_emu'), '--image', str(OUT/'candidate.bin'),
            '--card', str(reload_card or work/'card.img'), '--set', 'OCTABAM', '--project', 'SYNTH',
            '--mkii', '--load-ms', '90000', '--sequencer', '--internal-clock', '--frames', '3000',
@@ -118,30 +129,39 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
     log = (work/'port.log').read_text()
     assert result.returncode == 0 and 'run ended REACHED' in log, work/'port.log'
     assert 'LOAD PROJECT handled' in log and 'DID NOT RETURN' not in log
+    assert 'main never spun' not in log and 'unimplemented opcode' not in log, work/'port.log'
     c = blockdump.classes(blockdump.read(work/'blocks.bin'))
     metrics = {}
     for t in TRACKS:
         audio = recloop.readback_audio(c, t+1)
         assert audio, ('no DSP readback', t+1)
-        # The dump includes load/boot frames; use the audio file's transport marker.
-        core = 1 if t < 4 else 0
-        start = int(re.search(rf'audio_core{core}\.wav, .*?transport start at frame (\d+)', log).group(1))
-        sounding = audio[(start+500)*16:(start+1100)*16]
+        # Block dumps begin at transport; ESAI WAVs include the preceding load.
+        assert len(audio) == 3000*16, ('unexpected block-dump length', len(audio))
+        sounding = audio[500*16:1100*16]
         tail = audio[-400*16:]
         level, quiet = rms(sounding), rms(tail)
         assert level > 100, (name, t+1, 'silent synth', level)
         assert quiet < max(2, level*0.001), (name, t+1, 'voice did not stop', quiet, level)
+        if not sequenced:
+            released = rms(audio[1650*16:1750*16])
+            assert released < max(2, level*0.001), (name, t+1, 'MIDI note-off did not release', released)
         hz = sample.pitch(sounding)
         if voices == 1:
             assert abs(hz-261.6256) < 2, (name, t+1, 'C4 pitch', hz)
-        metrics[f'T{t+1}'] = dict(rms=level, stopped_rms=quiet, pitch_hz=hz)
+        tones = {}
+        if voices > 1:
+            for freq in (261.6256, 329.6276, 391.9954):
+                amp = 2*abs(sum(v*cmath.exp(-2j*math.pi*freq*i/44100) for i, v in enumerate(sounding)))/len(sounding)
+                assert amp > level*0.2, (name, t+1, 'missing chord tone', freq, amp, level)
+                tones[str(freq)] = amp
+        metrics[f'T{t+1}'] = dict(rms=level, stopped_rms=quiet, pitch_hz=hz, chord_amplitudes=tones)
     state = (work/'synth-state.bin').read_bytes()
     assert all(state[t*128+36] == 0 for t in TRACKS), 'synth voice remains active'
     assert (work/'harmony-refs.bin').read_bytes() == bytes(1024)
     notes = [e for e in midi_fixture.notes((work/'output.midi').read_bytes()) if e[1] == 16]
     expected = [('on', 16, n, 100) for n in (60, 64, 67)] + [('off', 16, n, 0) for n in (60, 64, 67)]
-    assert notes == expected, ('concurrent Harmony', notes)
-    print('[ok]', name, metrics, 'Harmony chord/release intact', flush=True)
+    assert notes == (expected if voices == 1 else []), ('concurrent Harmony', notes)
+    print('[ok]', name, metrics, 'Harmony chord/release intact' if voices == 1 else 'native MIDI chord/release', flush=True)
     return dict(audio=metrics, harmony_events=notes, command=cmd)
 
 
