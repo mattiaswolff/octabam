@@ -1,8 +1,9 @@
 # Mattias BottleService integration
 
-## OCTABAM83 Synth candidate
+## OCTABAM83 Synth and MIDI Loopback candidate
 
-Adds SYNTH MACHINE only to the OCTABAM82 selection. SCALE QUANTIZER is excluded. The
+Adds SYNTH MACHINE and MIDI LOOPBACK (source `9d5682fd`) to the OCTABAM82
+selection. SCALE QUANTIZER is excluded. The
 TEMPO BUS screen remains available: its code now lives in DRAM, leaving
 the Synth page's ROM location free. Combined validation is pending.
 

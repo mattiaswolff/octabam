@@ -40,7 +40,7 @@ def marker(path):
         w.writeframes(bytes(4 * 44100 * 2))
 
 
-def fixture(source, work, sequenced, voices):
+def fixture(source, work, sequenced, voices, loopback=False):
     base = ab_fixture.prepare(source, work / 'base')
     sample.SAMPLE_REL = 'AUDIO/FMSYNTH.wav'
     sample.LOOP_FRAMES = 4 * 44100
@@ -66,6 +66,17 @@ def fixture(source, work, sequenced, voices):
                 d[at+5] = 2
                 d[at+13] = 3
                 d[at+15] = 2
+                if loopback:
+                    for source_track, audio_track in enumerate(TRACKS):
+                        at = b + 0x3e2 + 32*source_track
+                        d[at:at+32] = bytes.fromhex(
+                            '54 64 06 40 40 40 00 00 00 00 00 00 40 00 00 05 '
+                            '00 06 40 00 00 00 00 40 00 00 00 00 00 00 00 00')
+                        at = b + 0x4e2 + 36*source_track
+                        d[at:at+36] = bytes(36)
+                        d[at] = audio_track+1
+                        d[at+2] = 128  # Program change OFF.
+                        d[at+12] = 4  # Native Part DEST INT, Follow OFF.
             for pattern in range(16):
                 for t in range(8):
                     at = otp.trac_off(pattern, t)
@@ -74,6 +85,11 @@ def fixture(source, work, sequenced, voices):
                         d[at:at+8] = (1).to_bytes(8, 'big')
                     at = 0x492e + pattern*0x8eec + t*0x8b9
                     d[at+9:at+33] = bytes(24)
+                    if loopback:
+                        d[at+0x39:at+0x839] = b'\xff'*2048
+                        if pattern == 0 and t < 2:
+                            d[at+9:at+17] = (1).to_bytes(8, 'big')
+                            d[at+0x39:at+0x3c] = bytes((84, 100, 6))
         otp._bank_write(project, int(bank.stem[4:]), edit, guard=False)
     for p in project.glob('project.*'):
         raw = p.read_bytes()
@@ -92,10 +108,11 @@ def rms(values):
 def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
     work = OUT/name
     work.mkdir(parents=True, exist_ok=True)
-    fixture(source, work, sequenced, voices)
+    loopback = name == 'loopback'
+    fixture(source, work, sequenced, voices, loopback)
     midi = work/'input.midi'
     rows = []
-    if not sequenced:
+    if not sequenced and not loopback:
         for t in TRACKS:
             for i, note in enumerate((84, 88, 91)[:voices]):
                 rows += [f'{100+i*50} {0x90+t:02x} {note:02x} 64',
@@ -109,7 +126,7 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
              (500, f'call:{sym["mh_keyboard"]:#x},0,60,100,0'),
              (1000, f'call:{sym["mh_keyboard"]:#x},0,60,0,0'),
              (1800, 'call:0x40006820,1'), (1800, 'call:0x40006820,5')]
-    if voices > 1:
+    if voices > 1 or loopback:
         # Native UART-only polyphony: injecting C ABI calls waits for the
         # idle main task and can starve under this six-voice workload.
         # Concurrent Harmony is checked by the mono/sequence cases.
@@ -125,6 +142,9 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
                          f'{sym["mh_refs"]:#x},1024={work}/harmony-refs.bin']
     for frame, action in steps:
         cmd += ['--step', f'{frame}:{action}']
+    if loopback:
+        index = cmd.index('--mem-dump')+1
+        cmd[index] += f';{sym["lb_accepted"]:#x},8={work}/loopback-stats.bin;{sym["lb_internal_held"]:#x},4={work}/loopback-held.bin'
     with (work/'port.log').open('w') as log:
         result = subprocess.run(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=600)
     log = (work/'port.log').read_text()
@@ -139,11 +159,15 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
         # Block dumps begin at transport; ESAI WAVs include the preceding load.
         assert len(audio) == 3000*16, ('unexpected block-dump length', len(audio))
         sounding = audio[500*16:1100*16]
+        if loopback:
+            # Native LEN=6 gives a short note. Measure the loudest complete
+            # window, independent of the receiver task's scheduling offset.
+            sounding = max((audio[i:i+1000] for i in range(0, 2000*16, 1000)), key=rms)
         tail = audio[-400*16:]
         level, quiet = rms(sounding), rms(tail)
         assert level > 100, (name, t+1, 'silent synth', level)
         assert quiet < max(2, level*0.001), (name, t+1, 'voice did not stop', quiet, level)
-        if not sequenced:
+        if not sequenced and not loopback:
             released = rms(audio[1650*16:1750*16])
             assert released < max(2, level*0.001), (name, t+1, 'MIDI note-off did not release', released)
         hz = sample.pitch(sounding)
@@ -161,12 +185,18 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
     # V_STATE, not S_ON, owns each paraphonic voice's sounding/release state.
     poly = (work/'poly-voices.bin').read_bytes()
     assert all(poly[t*256+v*64+36] == 0 for t in TRACKS for v in range(4)), 'poly voice remains active'
-    if voices == 1:  # These cases also invoke the native voice kill.
+    if voices == 1 and not loopback:  # These cases invoke the native voice kill.
         assert all(state[t*128+36] == 0 for t in TRACKS), 'native voice kill did not clear synth'
     assert (work/'harmony-refs.bin').read_bytes() == bytes(1024)
     notes = [e for e in midi_fixture.notes((work/'output.midi').read_bytes()) if e[1] == 16]
     expected = [('on', 16, n, 100) for n in (60, 64, 67)] + [('off', 16, n, 0) for n in (60, 64, 67)]
-    assert notes == (expected if voices == 1 else []), ('concurrent Harmony', notes)
+    assert notes == (expected if voices == 1 and not loopback else []), ('concurrent Harmony', notes)
+    if loopback:
+        assert not midi_fixture.notes((work/'output.midi').read_bytes()), 'INT leaked external notes'
+        stats = (work/'loopback-stats.bin').read_bytes()
+        accepted, delivered = (int.from_bytes(stats[i:i+4], 'big') for i in (0, 4))
+        assert accepted >= 4 and accepted == delivered, ('internal delivery', accepted, delivered)
+        assert (work/'loopback-held.bin').read_bytes() == bytes(4), 'internal note ownership remains'
     print('[ok]', name, metrics, 'Harmony chord/release intact' if voices == 1 else 'native MIDI chord/release', flush=True)
     return dict(audio=metrics, harmony_events=notes, command=cmd)
 
@@ -174,7 +204,7 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--project', required=True, type=Path)
-    ap.add_argument('--case', choices=('sequence', 'midi-mono', 'midi-poly', 'reload'))
+    ap.add_argument('--case', choices=('sequence', 'midi-mono', 'midi-poly', 'reload', 'loopback'))
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT/'candidate.bin').write_bytes((ROOT/'out/mainos_bus.bin').read_bytes())
@@ -183,7 +213,7 @@ def main():
     (OUT/'symbols.json').write_text(json.dumps(sym, indent=2)+'\n')
     marker(OUT/'FMSYNTH.wav')
     results = {}
-    for name, seq, voices in [('sequence', True, 1), ('midi-mono', False, 1), ('midi-poly', False, 3), ('reload', True, 1)]:
+    for name, seq, voices in [('sequence', True, 1), ('midi-mono', False, 1), ('midi-poly', False, 3), ('reload', True, 1), ('loopback', False, 1)]:
         if args.case and name != args.case:
             continue
         reload_card = OUT/'sequence/saved-card.img' if name == 'reload' else None
