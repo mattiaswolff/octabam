@@ -1,5 +1,19 @@
 # Mattias BottleService integration
 
+## OCTABAM83 Synth candidate
+
+Adds SYNTH MACHINE and SCALE QUANTIZER to the OCTABAM82 selection. The
+TEMPO BUS screen remains available: its code now lives in DRAM, leaving
+the Synth page's ROM location free. Combined validation is pending.
+
+The local package includes `AUDIO/FMSYNTH.wav`, four seconds of mono silence
+at 44.1 kHz / 16-bit PCM. Copy it into the set's AUDIO folder, load it into
+a FLEX slot and assign that slot to a FLEX track. The filename activates
+the synth; the marker duration does not limit note length. No automatic
+card copy, slot assignment or firmware installation occurs.
+
+## OCTABAM82 baseline
+
 The OCTABAM82 candidate integrates upstream `6e4aeb76` with the prepared MIDI
 contribution stack and the latest SCENES/PLOCKS fixture corrections. Contains full
 BottleService (USB MIDI, USB AUDIO OUT MASTER, CC MAP and CC FEEDBACK),

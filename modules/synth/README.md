@@ -93,7 +93,8 @@ start of the second free gap.
 
 ## Collisions
 
-`tempo-bus` also uses the second free gap, so the ledger refuses that pair.
+`tempo-bus` moved its code into DRAM on 8 October 2026, so it no longer
+collides with this module's pinned page in the second free gap.
 The engine shares the platform reserve with the other DRAM modules (USB
 MIDI, USB AUDIO, MIDI SCENES) inside one runtime.
 
