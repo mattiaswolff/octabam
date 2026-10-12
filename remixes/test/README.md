@@ -4,6 +4,7 @@ Each carries one module, or one combination, for that module's gates: `make chec
 
 | remix | contains | proof |
 |---|---|---|
+| [`arp-presets`](arp-presets/README.md) | Native MIDI ARP SETUP with a bank of editable rhythms on encoder A. | port-gated: Native panel, save/reload and MIDI capture under the port; hardware untested. |
 | [`batch-bugfixes`](batch-bugfixes/README.md) | stock effects with BATCH_BUGFIXES: the MIDI Plays-Free trig, empty-pattern LED and Part-change carryover fixes. | `make check` |
 | [`brain`](brain/README.md) | bottleservice + BRAIN: card-wide knob defaults, SAVE AS DEFAULT in the BRAIN menu. | port-gated: `verify_brain` under the port, 6 Oct 2026; not on hardware |
 | [`bus`](bus/README.md) | The plain two-server image: BusVerb + BusDelay + send bus + tempo sync. | on hardware: under earlier names |
