@@ -82,8 +82,10 @@ those papers. Octave offsets interact with the existing RNGE and note bounds.
 Two independent editor hooks: the ARP SETUP encoder branch at `0x4007a2fc`, and
 the title call at `0x40079d68`. No playback, MIDI send, KITS, MIDI SCENES,
 KEY, or persistence-format changes. The KEY branch at `0x4007a3e2` stays
-available to MIDI SCALES. Coexistence still needs runtime testing in the
-chosen combined remix. SPD replaces only the formatter pointer at
+available to MIDI SCALES. The combined `mattias-bottleservice` panel gate
+selects C Dorian with F and then CINQUIL with A, preserving the extended
+KEY byte and its native readout. Revalidate other module combinations.
+SPD replaces only the formatter pointer at
 `0x400d40a6`; uncommon/invalid values call the native `0x4003b840` formatter.
 
 The native writers establish these offsets (Part stride `0x18b2`):
@@ -117,7 +119,8 @@ Display/LED calls are stubbed in that focused gate.
 `tools/verify/verify_arp_presets_port.py` stages a silent copy of
 `OT_PROJECT` (or `--project`) and runs the native FUNC+AMP/A panel events,
 captures the LCD, saves through the PROJECT menu, and cold-loads the saved
-virtual card. A 3.48-second MIDI capture produces 28 STRAIGHT versus 11
+virtual card. With MIDI SCALES selected it also checks the F/A interaction
+and captures the extended scale beside the preset title. A 3.48-second MIDI capture produces 28 STRAIGHT versus 11
 TRESILLO onsets from the same root; a switch to OCT332 while the root is
 held reaches +12 without another sequencer trig. Note releases are checked.
 `--midi-only` repeats just the playback cases during development.
