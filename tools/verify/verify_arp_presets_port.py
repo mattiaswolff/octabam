@@ -106,6 +106,23 @@ def main():
                         '--png', str(OUT / 'arp-presets.png')], check=True)
         print('  [PASS] native FUNC+AMP and A reports load tresillo in Part and retained SRAM', flush=True)
 
+        if 'MIDI SCALES' in registry.remix(a.remix).modules:
+            # Same editor, both installed detours: OFF -> C major -> C Dorian,
+            # then load CINQUIL with A without touching the extended KEY.
+            script = lines + [f'{t+200} enc 5 4', f'{t+500} enc 5 4',
+                              f'{t+800} enc 0 1', f'{t+1400} quit']
+            (OUT / 'scales.script').write_text('\n'.join(script) + '\n')
+            run('scales', [*seed, '--live-script', OUT / 'scales.script',
+                           '--lcd', OUT / 'scales.lcd', '--mem-dump',
+                           f'{DB:#x},635712={OUT / "scales.bank"};0x10000000,1048576={OUT / "scales.cs1"}'])
+            b = (OUT / 'scales.bank').read_bytes()
+            c = (OUT / 'scales.cs1').read_bytes()
+            assert b[0x8f273] == 25 and c[0xa53c1] == 25, 'F did not select C Dorian'
+            assert arp(b) == b'\x07\x00\x6d' + bytes(16), 'A changed KEY or failed to load cinquillo'
+            subprocess.run([sys.executable, str(ROOT / 'tools/emu/lcd_view.py'),
+                            str(OUT / 'scales.lcd'), '--png', str(OUT / 'arp-scales.png')], check=True)
+            print('  [PASS] combined panel: F selects C Dorian; A loads cinquillo while preserving extended KEY', flush=True)
+
         # Close SETUP and capture the fixture's SPD 6 as 1/16 through the
         # real descriptor and LCD. The linked-code gate checks all labels.
         for tag in ('sixteenth',):
