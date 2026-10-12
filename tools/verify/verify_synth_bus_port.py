@@ -59,6 +59,7 @@ def fixture(source, work, sequenced, voices, loopback=False):
                     at = b + 0x11a + 24*t
                     d[at:at+6] = bytes((0, 0, voices, 0, 0, 0))
                     d[at+6:at+12] = bytes((0, 127, 10, 64, 64, 127))
+                    d[at+18:at+20] = bytes((70, 70))  # Feed both real bus hosts.
                 # A separate MIDI track emits a C major chord while FM plays.
                 at = b + 0x4e2
                 d[at:at+36] = bytes(36)
@@ -139,7 +140,8 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
            '--midi-out', str(work/'output.midi'), '--card-out', str(work/'saved-card.img'),
            '--mem-dump', f'{sym["sy_state"]:#x},1024={work}/synth-state.bin;'
                          f'{sym["po_voices"]:#x},2048={work}/poly-voices.bin;'
-                         f'{sym["mh_refs"]:#x},1024={work}/harmony-refs.bin']
+                         f'{sym["mh_refs"]:#x},1024={work}/harmony-refs.bin;'
+                         f'0x80000110,512={work}/dsp-records.bin']
     for frame, action in steps:
         cmd += ['--step', f'{frame}:{action}']
     if loopback:
@@ -152,6 +154,20 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
     assert 'LOAD PROJECT handled' in log and 'DID NOT RETURN' not in log
     assert 'main never spun' not in log and 'unimplemented opcode' not in log, work/'port.log'
     c = blockdump.classes(blockdump.read(work/'blocks.bin'))
+    # Read the DSP-facing IDs, not only the live UI IDs: a misresolved
+    # TEMPO SYNC hook once left every record at NONE while the UI was right.
+    records = (work/'dsp-records.bin').read_bytes()
+    bank = (work/'project/bank01.work').read_bytes()
+    expected_ids = bank[otp.PART_BASE+otp.FX2_OFF:otp.PART_BASE+otp.FX2_OFF+8]
+    actual_ids = [int.from_bytes(records[t*64+56:t*64+58], 'big') for t in range(8)]
+    assert actual_ids == list(expected_ids), ('DSP FX2 routing', actual_ids, list(expected_ids))
+    bus_audio = {}
+    for host in (1, 5):
+        audio = recloop.readback_audio(c, host)
+        assert audio, ('missing bus host readback', host)
+        level = rms(audio)
+        assert level > 100, ('Synth send did not reach bus host', host, level)
+        bus_audio[f'T{host}'] = level
     metrics = {}
     for t in TRACKS:
         audio = recloop.readback_audio(c, t+1)
@@ -200,7 +216,7 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
     detail = ('internal delivery/release, no external notes' if loopback else
               'Harmony chord/release intact' if voices == 1 else 'native MIDI chord/release')
     print('[ok]', name, metrics, detail, flush=True)
-    return dict(audio=metrics, harmony_events=notes, command=cmd)
+    return dict(audio=metrics, bus_host_rms=bus_audio, dsp_fx2_ids=actual_ids, harmony_events=notes, command=cmd)
 
 
 def main():

@@ -19,13 +19,10 @@ a FLEX slot and assign that slot to a FLEX track. The filename activates
 the synth; the marker duration does not limit note length. No automatic
 card copy, slot assignment or firmware installation occurs.
 
-The final MAIN OS SHA-256 is
-`a99eae7564abae4d27074444561ed5045ff96fb4fe70bbe815a3864fb1d9beca`.
-Shared checks, 41 per-image module gates and combined Synth/Loopback project
-checks passed, including internal Synth playback on both DSP cores. Full
-retention, KITS/Scenes recall and Harmony regression checks also passed.
-The local package's `release.json` records commands and coverage gaps.
-These are host results; physical-device acceptance remains open.
+Final validation is being rerun after correcting TEMPO SYNC's exported
+entry-point names. They collided with RLEN PLEN's local `cave` symbol,
+leaving DSP-facing FX2 IDs zero. The installed-hook and Synth gates now
+check actual FX2 records and audible Synth sends through both bus hosts.
 
 ## OCTABAM82 baseline
 
