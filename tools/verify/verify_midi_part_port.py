@@ -26,6 +26,7 @@ def main():
     follow='bf_source_get' in sym
     harmony='mh_get' in sym
     runtime=subprocess.check_output(['m68k-elf-nm',str(p.ROOT/'out/platform/runtime/runtime.elf')],text=True)
+    loopback='lb_dest_get' in runtime
     scenes=any(line.split()[-1:] == ['msc21_ram'] for line in runtime.splitlines())
     for path in (w/'project').glob('bank*.work'):
         def seed(data):
@@ -38,7 +39,7 @@ def main():
                 for t in range(8):
                     at=p.otp.PART_BASE+part*p.otp.PART_STRIDE+9+0x4e2+36*t
                     values={3:int(follow and t!=0),5:(part+t)%3 if harmony else 0,
-                            12:(part+t)%4,13:(part+t)%11 if follow else 0,
+                            12:((part+t)%4)|((((part+t)%3)<<2) if loopback else 0),13:(part+t)%11 if follow else 0,
                             15:(part+t)%5 if follow else 0,
                             16:((t%5)|((part%3)<<3)|((t%4)<<5)) if harmony else 0,
                             18:(t%8)|(((part+t)%4)<<3) if harmony else 0,19:0}

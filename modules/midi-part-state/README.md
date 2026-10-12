@@ -1,7 +1,7 @@
 # MIDI Part state
 
-Shared support for MIDI Follow and MIDI Harmony. Include `MIDI PART STATE`
-with either module; the repository's remix selections already do so. It adds
+Shared support for MIDI Follow, MIDI Harmony and MIDI Loopback. Include `MIDI PART STATE`
+with these modules; the repository's remix selections already do so. It adds
 no panel control and does not require KITS. One owner supplies the
 native hooks whether Follow, Harmony or both are selected.
 
@@ -45,8 +45,10 @@ are partially replaced. Full firmware checks below cover native Part and
 project persistence separately. Neither layer establishes hardware acceptance.
 
 SETUP offset 12 is a shared flags byte: bit 0 Follow MODE, bit 1 Follow
-TRIG/LIVE response. This module owns its native range (0..3) and byte claim.
-Each writer preserves the other flag. Fresh Parts initialize both flags to zero.
+TRIG/LIVE response, bits 2–3 Loopback DEST (EXT/INT/BOTH; 3 reads as EXT).
+This module owns the native range (0..15) and byte claim. Each writer preserves
+the other settings. Fresh Parts initialize all flags to zero. Existing Follow
+values 0..3 retain their meaning and select EXT.
 
 For full firmware checks on a copied project, run
 `tools/verify/verify_midi_part_port.py --project DIR` for native Part
