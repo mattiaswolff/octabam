@@ -3,6 +3,21 @@
 Branch ownership, future changes and release steps are documented in the
 [fork workflow](../../docs/guide/FORK_WORKFLOW.md).
 
+## OCTABAM84 ARP PRESETS package
+
+Adds the separate [ARP PRESETS](../../modules/arp-presets/README.md) module
+to the complete OCTABAM83 selection. MIDI ARP SETUP: turn A to load one of
+16 rhythms, then edit steps natively; C is LEN and F is KEY, including the
+existing MIDI Scales modes. Presets replace the current arp, so copy an
+existing custom arp before browsing. Selection is immediate and keeps phase.
+ARP MAIN SPD uses exact musical labels: x6 becomes 1/16, x12 becomes 1/8;
+T means triplet and D dotted. Unusual values keep their native xN readout.
+
+The release receipt records the exact source, image, standard checks,
+combined emulator checks and package identities. Hardware acceptance and
+the previously reported boot symptom remain open. No card copy or upgrade
+is part of this package release.
+
 ## OCTABAM83 Synth and MIDI Loopback package
 
 Adds SYNTH MACHINE and MIDI LOOPBACK (source `9d5682fd`) to the OCTABAM82

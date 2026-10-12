@@ -15,6 +15,7 @@ the complete app separate. A package always builds from **one checkout**;
 | `codex/bridges/midi-loopback-scenes` | Loopback–Scenes CC compatibility; based on the Loopback routing branch. |
 | `codex/modules/tempo-sync` | TEMPO SYNC fixes and its installed-hook regression gate. |
 | `codex/remix/synth-package-20261012` | OCTABAM83 integration candidate and branch-organization handoff; feed into the permanent integration branch. |
+| `codex/modules/arp-presets` | Native ARP SETUP rhythm presets and musical SPD labels. |
 | `codex/modules/midi-scales` | MIDI Scales development. |
 | `codex/modules/midi-follow` | MIDI Follow development. |
 | `codex/modules/midi-harmony` | Harmony, degree roots, SIZE and direct CHORD PLAY development. |
@@ -140,6 +141,8 @@ relative to `out/release-fixtures`. All project writes target disposable copies.
 
 | Tool | Arguments |
 |---|---|
+| `verify_arp_presets.py` | `mattias-bottleservice` |
+| `verify_arp_presets_port.py` | `mattias-bottleservice --project BASE` |
 | `verify_tempo_publish.py` | `mattias-bottleservice` |
 | `verify_synth_bus_port.py` | `--project BASE` |
 | `verify_midi_loopback_scenes.py` | none |
