@@ -29,6 +29,9 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`midi-follow`](midi-follow/README.md) | Per-track RFOL source selection on MIDI NOTE SETUP; Part-owned bass following. | port-gated: verify_midi_follow: stock/patched MIDI capture; not flashed |
 | [`midi-harmony`](midi-harmony/README.md) | Per-track HARM on MIDI NOTE SETUP; scale notes and chords before the stock arp. | port-gated: verify_midi_harmony: emulator verification; not flashed |
 | [`midi-harmony-follow`](midi-harmony-follow/README.md) | MIDI Harmony, Scales and Follow together with all stock effects. | port-gated: verify_midi_harmony_port: emulator verification; not flashed |
+| [`midi-loopback`](midi-loopback/README.md) | Stock effects plus the Part-scoped per-track MIDI loopback prototype. | port-gated: Per-track routing and note/control lifecycle gates; no hardware |
+| [`midi-loopback-follow`](midi-loopback-follow/README.md) | MIDI Loopback routing with Follow, Harmony and Scales; native Part settings. | port-gated: Per-track routing and note/control lifecycle gates; no hardware |
+| [`midi-loopback-usb`](midi-loopback-usb/README.md) | Stock effects with the loopback prototype and USB-MIDI for compatibility gates. | port-gated: USB enumeration/RX/TX and loopback filter controls under RTOS; no hardware |
 | [`midi-part-state`](midi-part-state/README.md) | Shared native MIDI Part access and copy/clear boundary, without consumer modules. | port-gated: verify_midi_part_copy: linked native publication and copy checks; not flashed |
 | [`midi-scales`](midi-scales/README.md) | All twelve keys and seven modes in the native ARP SETUP KEY control. | port-gated: verify_midi_scales: emulator verification; not flashed |
 | [`midi-scenes`](midi-scenes/README.md) | Reference minimal build: the MIDI SCENES ColdFire patch, alone. | port-gated: `verify_scenes` against MIDISC2.1 under the port; not flashed |
