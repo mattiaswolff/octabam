@@ -1,12 +1,12 @@
 # Mattias BottleService integration
 
-## OCTABAM83 Synth and MIDI Loopback candidate
+## OCTABAM83 Synth and MIDI Loopback package
 
 Adds SYNTH MACHINE and MIDI LOOPBACK (source `9d5682fd`) to the OCTABAM82
 selection, with a dedicated MIDI LOOPBACK SCENES compatibility bridge.
 SCALE QUANTIZER is excluded. The
 TEMPO BUS screen remains available: its code now lives in DRAM, leaving
-the Synth page's ROM location free. Combined validation is pending.
+the Synth page's ROM location free.
 
 The bridge routes MIDI Scenes sequencer and crossfader CCs using the actual
 source Part's Loopback DEST, before USB/DIN output. KITS and MIDI SCENES
@@ -18,6 +18,14 @@ at 44.1 kHz / 16-bit PCM. Copy it into the set's AUDIO folder, load it into
 a FLEX slot and assign that slot to a FLEX track. The filename activates
 the synth; the marker duration does not limit note length. No automatic
 card copy, slot assignment or firmware installation occurs.
+
+The final MAIN OS SHA-256 is
+`a99eae7564abae4d27074444561ed5045ff96fb4fe70bbe815a3864fb1d9beca`.
+Shared checks, 41 per-image module gates and combined Synth/Loopback project
+checks passed, including internal Synth playback on both DSP cores. Full
+retention, KITS/Scenes recall and Harmony regression checks also passed.
+The local package's `release.json` records commands and coverage gaps.
+These are host results; physical-device acceptance remains open.
 
 ## OCTABAM82 baseline
 
