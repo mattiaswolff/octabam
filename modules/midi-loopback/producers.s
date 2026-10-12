@@ -3,6 +3,7 @@
  * Explicit route contexts: live keys use UI Part; bank/program uses the
  * bank/Part arguments of the stock setup sender; frame output uses cache.
  */
+    .include "remix.inc"
     .text
     .global lb_track_send,lb_key_send,lb_setup_send,lb_control_send,lb_control_tail
     .global lb_packet,lb_routed
@@ -51,6 +52,15 @@ lb_control_send:
     bsr.s .control_route
     bra.s .args
 .control_route:
+    .ifdef HAVE_SCENES_BRIDGE
+    cmpi.l #scn_morph,%d0
+    bcs.s .native_control
+    cmpi.l #scn_invalidate,%d0
+    bcc.s .native_control
+    jsr lb_scenes_dest
+    rts
+.native_control:
+    .endif
     cmpi.l #0x4005542c,%d0
     beq.s .control_original
     cmpi.l #0x40043b0e,%d0

@@ -11,7 +11,7 @@ REMIX = Remix(
              "USB MIDI", "USB AUDIO OUT",
              "STORE", "KITS", "MIDI SCENES", "MIDI SRAM",
              "MIDI PART STATE", "MIDI FOLLOW", "MIDI SCALES", "MIDI HARMONY", "HARMONY PLOCKS",
-             "RLEN PLEN", "TUNER", "SYNTH MACHINE", "MIDI LOOPBACK",
+             "RLEN PLEN", "TUNER", "SYNTH MACHINE", "MIDI LOOPBACK", "MIDI LOOPBACK SCENES",
              "SCENES P2", "PLOCKS P2",
              "DELAY",    # the stock DELAY keeps its chooser row: T8 hosts it (4 Oct 2026)
              "FX2 LOCK"),   # and the chooser cannot change any track's FX2 (4 Oct 2026, image A1)

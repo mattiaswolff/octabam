@@ -3,9 +3,15 @@
 ## OCTABAM83 Synth and MIDI Loopback candidate
 
 Adds SYNTH MACHINE and MIDI LOOPBACK (source `9d5682fd`) to the OCTABAM82
-selection. SCALE QUANTIZER is excluded. The
+selection, with a dedicated MIDI LOOPBACK SCENES compatibility bridge.
+SCALE QUANTIZER is excluded. The
 TEMPO BUS screen remains available: its code now lives in DRAM, leaving
 the Synth page's ROM location free. Combined validation is pending.
+
+The bridge routes MIDI Scenes sequencer and crossfader CCs using the actual
+source Part's Loopback DEST, before USB/DIN output. KITS and MIDI SCENES
+source is unchanged. CC Feedback is a separate audio-output path; use
+AUDIO CC OUT = INT to keep that feedback internal.
 
 The local package includes `AUDIO/FMSYNTH.wav`, four seconds of mono silence
 at 44.1 kHz / 16-bit PCM. Copy it into the set's AUDIO folder, load it into
