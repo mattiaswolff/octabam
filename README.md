@@ -21,6 +21,11 @@ licence is MIT; a fork that takes requests and tracks issues is allowed.
 
 ## Start here
 
+For this fork's upstream mirror, module branches and complete MIDI app, see
+[the fork workflow](docs/guide/FORK_WORKFLOW.md). Build the complete app from
+`codex/remix/integrated` with `REMIX=mattias-bottleservice`; release tags preserve
+the exact source of each package.
+
 | you want to | read |
 |---|---|
 | put a remix on your Octatrack | [docs/guide/BUILDING.md](docs/guide/BUILDING.md): a fresh machine to a flashed unit, step by step, with the recovery path |

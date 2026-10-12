@@ -11,6 +11,7 @@ Where each doc is, by who reads it. A module's own page is
 | [guide/BUILDING.md](guide/BUILDING.md) | what to install (macOS, Linux/WSL2), the toolchain, your own OS 1.40C, building an image, flashing from the card or over MIDI, after the flash, recovery, back to stock |
 | [../remixes/README.md](../remixes/README.md) | the remixes you can flash, with where each has run |
 | [guide/REMIXER.md](guide/REMIXER.md) | composing your own remix: the `make remix` TUI, or a `remix.py` by hand |
+| [guide/FORK_WORKFLOW.md](guide/FORK_WORKFLOW.md) | Mattias's stable branches, upstream updates and validated package releases |
 
 ## MIDI performance
 
