@@ -23,6 +23,20 @@ Selection takes effect immediately without restarting the arp or sending a
 new chord. It retains the native arp phase; it is not bar-quantized.
 The existing Part/project save and reload paths own the loaded pattern.
 
+## Musical speed labels
+
+ARP MAIN's SPD readout shows `1/16` instead of `x6`, `1/8` instead of
+`x12`, and the other exact straight divisions. `T` means triplet (`16T`
+is a sixteenth-note triplet); `D` means dotted (`16D` is a dotted
+sixteenth). Unusual values keep the native `xN` label. All 96 settings,
+encoder increments, locks, Scenes and LFO values remain native.
+
+The [Elektron manual](https://www.elektron.se/wp-content/uploads/2024/09/Octatrack-MKII-User-Manual_ENG_OS1.40A_210414.pdf),
+section 15.4.3, defines 6 as sixteenths and 12 as eighths. These numbers
+count clock ticks: 24 per quarter note, 96 per whole note. A larger value
+means a longer gap. Labels describe each arp tick; skipped steps lengthen
+the gaps between sounding notes. Track scale does not redefine the label.
+
 ## Rhythm bank and sources
 
 `x` = active step, `.` = rest. These are equal-pulse onset patterns, not
@@ -65,11 +79,12 @@ those papers. Octave offsets interact with the existing RNGE and note bounds.
 
 ## Implementation boundaries
 
-Two independent hooks: the ARP SETUP encoder branch at `0x4007a2fc`, and
+Two independent editor hooks: the ARP SETUP encoder branch at `0x4007a2fc`, and
 the title call at `0x40079d68`. No playback, MIDI send, KITS, MIDI SCENES,
 KEY, or persistence-format changes. The KEY branch at `0x4007a3e2` stays
 available to MIDI SCALES. Coexistence still needs runtime testing in the
-chosen combined remix.
+chosen combined remix. SPD replaces only the formatter pointer at
+`0x400d40a6`; uncommon/invalid values call the native `0x4003b840` formatter.
 
 The native writers establish these offsets (Part stride `0x18b2`):
 
@@ -95,6 +110,8 @@ Unicorn: 1,024 applications covering 16 rhythms × 4 Parts × 8 tracks ×
 first/last bank; exact Part/CS1/live writes and dirty flags; custom matching,
 invalid contexts, encoder bounds, title text, ABI and interrupt-mask
 restoration. Native C/F/LEVEL and both rotation paths compare equal to stock.
+All 96 SPD values and invalid inputs pass a rational musical-duration
+oracle, buffer bounds and ABI checks through the installed formatter.
 Display/LED calls are stubbed in that focused gate.
 
 `tools/verify/verify_arp_presets_port.py` stages a silent copy of

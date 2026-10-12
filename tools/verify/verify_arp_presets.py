@@ -11,6 +11,7 @@ import pathlib
 import struct
 import subprocess
 import sys
+from fractions import Fraction
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
@@ -131,6 +132,25 @@ def main():
                 counts = [sum((s + j) % n in hits for j in range(width)) for s in range(n)]
                 assert max(counts) - min(counts) <= 1, (name, width, counts)
     m = Machine()
+    # Derive labels from musical durations, independently of the C switch.
+    divisions = {}
+    for denominator in (1, 2, 4, 8, 16, 32, 64):
+        for ratio, label in ((Fraction(1), f'1/{denominator}'),
+                             (Fraction(2, 3), f'{denominator}T'),
+                             (Fraction(3, 2), f'{denominator}D')):
+            ticks = Fraction(96, denominator) * ratio
+            if ticks.denominator == 1 and 1 <= ticks <= 96:
+                divisions[int(ticks) - 1] = label
+    assert m.r32(0x400d40a6) == m.symbols['ap_speed'], 'SPD descriptor not installed'
+    for value in (*range(96), 96, 127, 0xffffffff):
+        m.write(0x20000, b'!' * 32)
+        m.call(0x4003b840, 0x20008, value)
+        native = m.read(0x20008, 16).split(b'\0')[0].decode()
+        m.write(0x20000, b'!' * 32)
+        m.call(m.r32(0x400d40a6), 0x20008, value)
+        expected = divisions.get(value, native).encode() + b'\0'
+        assert m.read(0x20000, 32) == b'!' * 8 + expected + b'!' * (24-len(expected)), value
+    print('  [PASS] installed SPD formatter: all 96 values, musical duration oracle, native fallback, invalid values, buffer bounds and ABI')
     for bank in (0, 15):
         for part in range(4):
             for track in range(8):

@@ -302,133 +302,331 @@ ap_title:
 	.size	ap_title, .-ap_title
 	.section	.rodata.str1.1
 .LC1:
-	.string	"ARP A:STRAIGHT"
+	.string	"1/1"
 .LC2:
-	.string	"ARP A:EIGHTHS"
+	.string	"32T"
 .LC3:
-	.string	"ARP A:OFFBEAT"
+	.string	"64T"
 .LC4:
-	.string	"ARP A:PULSE4"
+	.string	"1/32"
 .LC5:
-	.string	"ARP A:TRESILLO"
+	.string	"16T"
 .LC6:
-	.string	"ARP A:CINQUIL"
+	.string	"1/16"
 .LC7:
-	.string	"ARP A:SON3-2"
+	.string	"8T"
 .LC8:
-	.string	"ARP A:SON2-3"
+	.string	"16D"
 .LC9:
-	.string	"ARP A:E5/16"
+	.string	"1/8"
 .LC10:
-	.string	"ARP A:E7/16"
+	.string	"4T"
 .LC11:
-	.string	"ARP A:E3/7"
+	.string	"8D"
 .LC12:
-	.string	"ARP A:E2/5"
+	.string	"1/4"
 .LC13:
-	.string	"ARP A:E4/9"
+	.string	"2T"
 .LC14:
-	.string	"ARP A:E5/12"
+	.string	"4D"
 .LC15:
-	.string	"ARP A:OCTPULSE"
+	.string	"1/2"
 .LC16:
+	.string	"1T"
+.LC17:
+	.string	"2D"
+	.text
+	.align	2
+	.globl	ap_speed
+	.type	ap_speed, @function
+ap_speed:
+	move.l 8(%sp),%d0
+	moveq #15,%d1
+	move.l 4(%sp),%a0
+	cmp.l %d0,%d1
+	jeq .L51
+	jcs .L44
+	mov3q.l #5,%d1
+	cmp.l %d0,%d1
+	jeq .L52
+	jcs .L45
+	mov3q.l #2,%d1
+	cmp.l %d0,%d1
+	jeq .L53
+	jcs .L46
+	tst.l %d0
+	jeq .L54
+	lea .LC2,%a1
+.L50:
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+.L74:
+	rts
+.L44:
+	moveq #47,%d1
+	cmp.l %d0,%d1
+	jeq .L59
+	jcs .L48
+	moveq #31,%d1
+	cmp.l %d0,%d1
+	jeq .L60
+	jcs .L49
+	moveq #17,%d1
+	cmp.l %d0,%d1
+	jeq .L61
+	lea .LC12,%a1
+	moveq #23,%d1
+	cmp.l %d0,%d1
+	jeq .L50
+.L47:
+	move.l %d0,8(%sp)
+	move.l %a0,4(%sp)
+	jmp 1073985600
+.L60:
+	lea .LC13,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L53:
+	lea .LC4,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L48:
+	moveq #71,%d1
+	cmp.l %d0,%d1
+	jeq .L64
+	moveq #95,%d1
+	cmp.l %d0,%d1
+	jeq .L65
+	moveq #63,%d1
+	cmp.l %d0,%d1
+	jne .L47
+	lea .LC16,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L45:
+	moveq #8,%d1
+	cmp.l %d0,%d1
+	jeq .L56
+	moveq #11,%d1
+	cmp.l %d0,%d1
+	jeq .L57
+	mov3q.l #7,%d1
+	cmp.l %d0,%d1
+	jne .L47
+	lea .LC7,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L49:
+	lea .LC14,%a1
+	moveq #35,%d1
+	cmp.l %d0,%d1
+	jne .L47
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L46:
+	lea .LC5,%a1
+	mov3q.l #3,%d1
+	cmp.l %d0,%d1
+	jne .L47
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L54:
+	lea .LC3,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L52:
+	lea .LC6,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L61:
+	lea .LC11,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L65:
+	lea .LC1,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L64:
+	lea .LC17,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L51:
+	lea .LC10,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L59:
+	lea .LC15,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L57:
+	lea .LC9,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+.L56:
+	lea .LC8,%a1
+	move.b (%a1)+,%d0
+	move.b %d0,(%a0)+
+	jne .L50
+	jra .L74
+	.size	ap_speed, .-ap_speed
+	.section	.rodata.str1.1
+.LC18:
+	.string	"ARP A:STRAIGHT"
+.LC19:
+	.string	"ARP A:EIGHTHS"
+.LC20:
+	.string	"ARP A:OFFBEAT"
+.LC21:
+	.string	"ARP A:PULSE4"
+.LC22:
+	.string	"ARP A:TRESILLO"
+.LC23:
+	.string	"ARP A:CINQUIL"
+.LC24:
+	.string	"ARP A:SON3-2"
+.LC25:
+	.string	"ARP A:SON2-3"
+.LC26:
+	.string	"ARP A:E5/16"
+.LC27:
+	.string	"ARP A:E7/16"
+.LC28:
+	.string	"ARP A:E3/7"
+.LC29:
+	.string	"ARP A:E2/5"
+.LC30:
+	.string	"ARP A:E4/9"
+.LC31:
+	.string	"ARP A:E5/12"
+.LC32:
+	.string	"ARP A:OCTPULSE"
+.LC33:
 	.string	"ARP A:OCT332"
 	.section	.rodata
 	.align	2
 	.type	presets, @object
 	.size	presets, 384
 presets:
-	.long	.LC1
+	.long	.LC18
 	.word	-1
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC2
+	.long	.LC19
 	.word	21845
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC3
+	.long	.LC20
 	.word	17476
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC4
+	.long	.LC21
 	.word	4369
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC5
+	.long	.LC22
 	.word	73
 	.byte	8
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC6
+	.long	.LC23
 	.word	109
 	.byte	8
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC7
+	.long	.LC24
 	.word	5193
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC8
+	.long	.LC25
 	.word	18708
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC9
+	.long	.LC26
 	.word	4681
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC10
+	.long	.LC27
 	.word	21673
 	.byte	16
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC11
+	.long	.LC28
 	.word	21
 	.byte	7
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC12
+	.long	.LC29
 	.word	5
 	.byte	5
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC13
+	.long	.LC30
 	.word	85
 	.byte	9
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC14
+	.long	.LC31
 	.word	661
 	.byte	12
 	.zero	2
 	.zero	14
 	.zero	1
-	.long	.LC15
+	.long	.LC32
 	.word	85
 	.byte	8
 	.base64	"AAAAAAwADAAA"
 	.zero	7
 	.zero	1
-	.long	.LC16
+	.long	.LC33
 	.word	73
 	.byte	8
 	.base64	"AAAAAAAADAAA"

@@ -110,3 +110,36 @@ void ap_title(void *window, const char *stock_title, const char *extra) {
     ((void (*)(void *, const char *, const char *))0x400570b8)
         (window, i < 0 ? "ARP A:CUSTOM" : presets[i].title, extra);
 }
+
+/* SPD stores ticks minus one (24 ticks per quarter). This replaces only its
+ * descriptor's formatter, never its encoder, locks, range or clock path.
+ * Four-character labels fit the native parameter cell. Unusual divisions
+ * and invalid values retain the exact native formatting.
+ */
+void ap_speed(char *buffer, unsigned value) {
+    const char *label = 0;
+    switch (value) {
+    case 0: label = "64T"; break;
+    case 1: label = "32T"; break;
+    case 2: label = "1/32"; break;
+    case 3: label = "16T"; break;
+    case 5: label = "1/16"; break;
+    case 7: label = "8T"; break;
+    case 8: label = "16D"; break;
+    case 11: label = "1/8"; break;
+    case 15: label = "4T"; break;
+    case 17: label = "8D"; break;
+    case 23: label = "1/4"; break;
+    case 31: label = "2T"; break;
+    case 35: label = "4D"; break;
+    case 47: label = "1/2"; break;
+    case 63: label = "1T"; break;
+    case 71: label = "2D"; break;
+    case 95: label = "1/1"; break;
+    }
+    if (!label) {
+        ((void (*)(char *, unsigned))0x4003b840)(buffer, value);
+        return;
+    }
+    do { *buffer++ = *label; } while (*label++);
+}

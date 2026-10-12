@@ -106,6 +106,18 @@ def main():
                         '--png', str(OUT / 'arp-presets.png')], check=True)
         print('  [PASS] native FUNC+AMP and A reports load tresillo in Part and retained SRAM', flush=True)
 
+        # Close SETUP and capture the fixture's SPD 6 as 1/16 through the
+        # real descriptor and LCD. The linked-code gate checks all labels.
+        for tag in ('sixteenth',):
+            script = lines + [f'{t+100} key 0x32 down', f'{t+140} key 0x32 up',
+                              f'{t+500} key 0x23 down', f'{t+540} key 0x23 up',
+                              f'{t+1600} quit']
+            (OUT / f'speed-{tag}.script').write_text('\n'.join(script) + '\n')
+            run(f'speed-{tag}', [*seed, '--live-script', OUT / f'speed-{tag}.script',
+                                '--lcd', OUT / f'speed-{tag}.lcd'])
+            subprocess.run([sys.executable, str(ROOT / 'tools/emu/lcd_view.py'),
+                            str(OUT / f'speed-{tag}.lcd'), '--png', str(OUT / f'speed-{tag}.png')], check=True)
+
         # Close ARP, then use the native SAVE PROJECT menu and confirmation.
         tap(0x32); tap(0x1c, 1000); tap(0x21, 700); tap(0x20, 500)
         tap(0x31, 1100); tap(0x31, 30000)
