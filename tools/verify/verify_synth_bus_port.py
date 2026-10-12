@@ -121,6 +121,7 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
            '--block-dump', str(work/'blocks.bin'), '--midi', str(midi),
            '--midi-out', str(work/'output.midi'), '--card-out', str(work/'saved-card.img'),
            '--mem-dump', f'{sym["sy_state"]:#x},1024={work}/synth-state.bin;'
+                         f'{sym["po_voices"]:#x},2048={work}/poly-voices.bin;'
                          f'{sym["mh_refs"]:#x},1024={work}/harmony-refs.bin']
     for frame, action in steps:
         cmd += ['--step', f'{frame}:{action}']
@@ -156,7 +157,12 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
                 tones[str(freq)] = amp
         metrics[f'T{t+1}'] = dict(rms=level, stopped_rms=quiet, pitch_hz=hz, chord_amplitudes=tones)
     state = (work/'synth-state.bin').read_bytes()
-    assert all(state[t*128+36] == 0 for t in TRACKS), 'synth voice remains active'
+    # S_ON identifies the renderer, and stays set after a poly note-off.
+    # V_STATE, not S_ON, owns each paraphonic voice's sounding/release state.
+    poly = (work/'poly-voices.bin').read_bytes()
+    assert all(poly[t*256+v*64+36] == 0 for t in TRACKS for v in range(4)), 'poly voice remains active'
+    if voices == 1:  # These cases also invoke the native voice kill.
+        assert all(state[t*128+36] == 0 for t in TRACKS), 'native voice kill did not clear synth'
     assert (work/'harmony-refs.bin').read_bytes() == bytes(1024)
     notes = [e for e in midi_fixture.notes((work/'output.midi').read_bytes()) if e[1] == 16]
     expected = [('on', 16, n, 100) for n in (60, 64, 67)] + [('off', 16, n, 0) for n in (60, 64, 67)]
