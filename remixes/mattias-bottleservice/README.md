@@ -61,13 +61,23 @@ implementation changes were needed for this revision.
 
 ## Verification
 
-The deployed OCTABAM81 package came from source `491c0f44` on upstream
-`97028362`. Its MAIN OS SHA-256 was
-`a18b7cca8b73b4d1ed5a60d5e62e86b52f764aa9df0afabfdac81305f1b9b12e`.
-The PR preparation is rebased onto upstream `0024729b`, including its newer
-KITS staging behavior. The older package's results do not validate this new
-image. Run the reached gates and focused combined MIDI/persistence checks on
-each proposed revision. Hardware acceptance remains separate.
+OCTABAM82's MAIN OS SHA-256 is
+`0e8349a9441913e0ad11f5841dad0c5af4196c4f6ce66ac4192eebba43085554`.
+The shared and per-remix checks passed on upstream `6e4aeb76`. Separate
+full-firmware emulator runs passed full-capacity retention, 18 KITS/Scenes
+recalls, 12 SIZE/audio-Scenes combinations, 13 eight-track MIDI scenarios,
+and nine Harmony degree/persistence groups. Project routing, MODE DEFAULTS,
+TEMPO BUS, FX2 LOCK, MIDI SCENES persistence, SCENES P2 and PLOCKS P2 also
+passed their focused gates. BIN/SYX decoding and RMX equality identify the
+same tested image.
+
+The local package's `release.json` and `evidence/` record commands, results
+and skips. The MIDI SCENES fixture needed neutral audio FX parameters and
+pattern 2 assigned to Part 2; its unchanged assertions then passed, including
+stock Part-byte equality. The full upstream KITS suite and its private import
+and stranded-project fixtures were not run; the combined recall and MIDI
+SCENES Kit save/load cases were. These are deterministic host results, not
+physical MIDI/USB timing, hardware playback or boot acceptance.
 
 ## Boot investigation
 
