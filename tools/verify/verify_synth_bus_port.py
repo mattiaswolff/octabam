@@ -162,7 +162,7 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
         if loopback:
             # Native LEN=6 gives a short note. Measure the loudest complete
             # window, independent of the receiver task's scheduling offset.
-            sounding = max((audio[i:i+1000] for i in range(0, 2000*16, 1000)), key=rms)
+            sounding = max((audio[i:i+4096] for i in range(0, 2000*16, 1000)), key=rms)
         tail = audio[-400*16:]
         level, quiet = rms(sounding), rms(tail)
         assert level > 100, (name, t+1, 'silent synth', level)
@@ -197,7 +197,9 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
         accepted, delivered = (int.from_bytes(stats[i:i+4], 'big') for i in (0, 4))
         assert accepted >= 4 and accepted == delivered, ('internal delivery', accepted, delivered)
         assert (work/'loopback-held.bin').read_bytes() == bytes(4), 'internal note ownership remains'
-    print('[ok]', name, metrics, 'Harmony chord/release intact' if voices == 1 else 'native MIDI chord/release', flush=True)
+    detail = ('internal delivery/release, no external notes' if loopback else
+              'Harmony chord/release intact' if voices == 1 else 'native MIDI chord/release')
+    print('[ok]', name, metrics, detail, flush=True)
     return dict(audio=metrics, harmony_events=notes, command=cmd)
 
 
