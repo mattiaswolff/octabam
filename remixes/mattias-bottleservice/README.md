@@ -1,5 +1,8 @@
 # Mattias BottleService integration
 
+Branch ownership, future changes and release steps are documented in the
+[fork workflow](../../docs/guide/FORK_WORKFLOW.md).
+
 ## OCTABAM83 Synth and MIDI Loopback package
 
 Adds SYNTH MACHINE and MIDI LOOPBACK (source `9d5682fd`) to the OCTABAM82

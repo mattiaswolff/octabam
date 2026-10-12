@@ -1,5 +1,9 @@
 # Working in this repository
 
+For Mattias's fork, module branches, personal remix or package work, read
+[the fork workflow](docs/guide/FORK_WORKFLOW.md) before editing. It defines
+branch ownership, merge direction and release evidence.
+
 octabam is a remixer for the Octatrack's OS: it composes modules, each
 credited to its author, into one image built from the user's own 1.40C.
 `README.md` says what each module and remix is and where it has run;
