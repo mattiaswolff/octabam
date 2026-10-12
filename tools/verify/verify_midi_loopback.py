@@ -405,7 +405,8 @@ def fixture(source, dest, length=6, control=None, all_tracks=False):
         otp._bank_write(dest, int(path.stem[4:]), mutate, guard=False)
     values = dict(TRACK=7, MIDI_MODE=0, MIDI_AUTO_CHANNEL=10,
                   MIDI_AUDIO_TRK_CC_IN=1, MIDI_AUDIO_TRK_NOTE_IN=1,
-                  MIDI_AUDIO_TRK_CC_OUT=3, MIDI_AUDIO_TRK_NOTE_OUT=3,
+                  # Isolate MIDI-track routing from audio CC Feedback.
+                  MIDI_AUDIO_TRK_CC_OUT=0, MIDI_AUDIO_TRK_NOTE_OUT=0,
                   MIDI_CLOCK_RECEIVE=0, MIDI_TRANSPORT_RECEIVE=0,
                   MIDI_CLOCK_SEND=0, MIDI_TRANSPORT_SEND=0,
                   MIDI_PROGRAM_CHANGE_SEND=0, PATTERN_TEMPO_ENABLED=0,
@@ -422,9 +423,9 @@ def fixture(source, dest, length=6, control=None, all_tracks=False):
         path.write_bytes(raw)
 
 
-def decode(raw):
+def decode(raw, start=0):
     status, data, result = None, [], []
-    for byte in raw:
+    for index, byte in enumerate(raw):
         if byte >= 0xf8:
             continue
         if byte & 128:
@@ -432,8 +433,24 @@ def decode(raw):
         elif status is not None:
             data.append(byte)
             if len(data) == (1 if status & 0xf0 in (0xc0, 0xd0) else 2):
-                result.append([status, *data]); data = []
+                if index >= start:
+                    result.append([status, *data])
+                data = []
     return result
+
+
+def transport_midi(capture, log):
+    """Keep every transport message, retaining pre-transport running status.
+
+    CC Feedback can send boot defaults before the project disables audio
+    output. Preserve the complete file, but don't count boot as track output.
+    """
+    raw = capture.read_bytes()
+    match = re.search(r'midi out\s+: (\d+) byte\(s\) on UART0 \((\d+) after the transport start\)', log)
+    assert match, 'missing transport capture boundary'
+    total, after = map(int, match.groups())
+    assert total == len(raw) and 0 <= after <= total
+    return decode(raw, start=total-after)
 
 
 def port_gate(source, remix):
@@ -486,7 +503,7 @@ def port_gate(source, remix):
         assert result.returncode == 0 and "run ended REACHED" in text, str(log)
         assert "load run ended: LOAD PROJECT handled" in text, str(log)
         outcomes[label] = {key: path.read_bytes().hex() for key, path in dumps.items()}
-        outcomes[label]["midi"] = decode(capture.read_bytes())
+        outcomes[label]["midi"] = transport_midi(capture, text)
         print(f"  [port] {label}: level={dumps['level'].read_bytes()[0]}, "
               f"stats={outcomes[label]['stats']}, MIDI={outcomes[label]['midi']}", flush=True)
     off, internal, uart = (outcomes[k] for k in ("off", "internal", "uart"))
@@ -548,10 +565,13 @@ def routing_port_gate(source, remix):
     text = (out / "run.log").read_text()
     assert result.returncode == 0 and "run ended REACHED" in text
     assert "load run ended: LOAD PROJECT handled" in text
-    midi = decode((out / "wire.midi").read_bytes())
+    midi = transport_midi(out / "wire.midi", text)
+    has_scenes = b'scn_ccnote' in subprocess.check_output(['m68k-elf-nm', str(ROOT/'out/platform/runtime/runtime.elf')])
     for track, route in enumerate(routes):
         events = [msg for msg in midi if msg[0] & 15 == track]
-        expected = [[0x90 | track, 84, 100], [0xb0 | track, 46, 70], [0x90 | track, 84, 0]]
+        note_on, cc, note_off = [0x90 | track, 84, 100], [0xb0 | track, 46, 70], [0x90 | track, 84, 0]
+        # MIDI Scenes deliberately sends the CC loop before note-on.
+        expected = [cc, note_on, note_off] if has_scenes else [note_on, cc, note_off]
         assert events == ([] if route == 1 else expected), (track, route, events)
         assert dumps["level"].read_bytes()[track * 2] == (70 if route else 127), (track, route)
     assert dumps["note"].read_bytes() == bytes([255] * 8)
@@ -616,7 +636,7 @@ def controls_gate(source, remix, only=None):
             assert "load run ended: LOAD PROJECT handled" in text, str(log)
             raw = stats.read_bytes()
             counts = [int.from_bytes(raw[i:i+4], "big") for i in range(0, 24, 4)]
-            midi = decode(capture.read_bytes())
+            midi = transport_midi(capture, text)
             ccs = [msg[2] for msg in midi if msg[:2] == [0xb0, 34]]
             # Only the receiver's generic parameter writer, excluding load and
             # frame refresh stores. Compare every value, in order, with the wire.

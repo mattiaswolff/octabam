@@ -9,7 +9,8 @@ MODULE = Module(
     proof=Proof.PORT, proof_note="Panel, native Part persistence and routing under emulator; no hardware",
     requires=("MIDI PART STATE",),
     linked=(Linked("loopback", "modules/midi-loopback/loopback.s", cpu="54455", dram=True),
-            Linked("loopbackproducers", "modules/midi-loopback/producers.s", dram=True),
+            Linked("loopbackproducers", "modules/midi-loopback/producers.s", dram=True,
+                   include=lambda modules: '.set HAVE_SCENES_BRIDGE,1\n' if 'MIDI LOOPBACK SCENES' in modules else ''),
             Linked("loopbacksettings", "modules/midi-loopback/settings.s", dram=True),
             Linked("loopbackpage", "modules/midi-loopback/page.s", dram=True)),
     detours=(
