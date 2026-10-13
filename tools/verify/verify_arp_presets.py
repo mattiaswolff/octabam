@@ -39,6 +39,7 @@ PATTERNS = [
     ('E5/12', 12, [1, 3, 5, 8, 10]),
     ('OCTPULSE', 8, [1, 3, 5, 7]),
     ('OCT332', 8, [1, 4, 7]),
+    ('KENTBASS', 16, [2, 4, 7, 11, 14, 16]),
 ]
 DB, STRIDE = 0x400e21e0, 0x9b340
 STOP, STACK = 0x10000, 0x30000
@@ -164,7 +165,7 @@ def main():
                     assert m.r32(0x100f8598) == 1
                     m.call('ap_title', 0, 0, 0)
                     assert m.title == 'ARP A:' + name
-    print('  [PASS] 1024 applications: rhythms, exact Part/CS1/live write boundaries, dirty bits, titles, ABI and interrupt mask')
+    print(f'  [PASS] {len(PATTERNS) * 64} applications: rhythms, exact Part/CS1/live write boundaries, dirty bits, titles, ABI and interrupt mask')
     m.seed(); m.call('ap_apply', 4)
     for offset in (0x8f270, 0x905a2, 0x905b2, 0x905c1):
         m.call('ap_apply', 4)
@@ -172,7 +173,7 @@ def main():
         assert m.call('ap_match') == 0xffffffff
         m.call('ap_title', 0, 0, 0); assert m.title == 'ARP A:CUSTOM'
     before = m.state()
-    for i in (16, 0xffffffff):
+    for i in (len(PATTERNS), 0xffffffff):
         m.call('ap_apply', i); assert m.state() == before
     for addr, value, width in ((0x100b14cc, 8, 1), (0x100b14cf, 4, 1), (0x46c82456, DB + 1, 4)):
         previous = m.read(addr, width)
@@ -184,10 +185,10 @@ def main():
     assert m.state() == before
     assert m.call('ap_match') == 0xffffffff
     m.call(0x4007a2ec, 0, 1); assert m.call('ap_match') == 0
-    for i in range(1, 16):
+    for i in range(1, len(PATTERNS)):
         m.call(0x4007a2ec, 0, 127); assert m.call('ap_match') == i
     before = m.state(); m.call(0x4007a2ec, 0, 1); assert m.state() == before
-    for i in range(14, -1, -1):
+    for i in range(len(PATTERNS) - 2, -1, -1):
         m.call(0x4007a2ec, 0, -1); assert m.call('ap_match') == i
     before = m.state(); m.call(0x4007a2ec, 0, -1); assert m.state() == before
     print('  [PASS] CUSTOM recognition, invalid inputs, real A handler, zero movement, fast turns and end stops')

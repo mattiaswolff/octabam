@@ -30,6 +30,8 @@ static const struct preset presets[] = {
     {"ARP A:E5/12",    0x0295, 12, {0}},
     {"ARP A:OCTPULSE", 0x0055,  8, {0,0,0,0,12,0,12,0}},
     {"ARP A:OCT332",   0x0049,  8, {0,0,0,0,0,0,12,0}},
+    /* Offbeat-only Kent-inspired rhythm; quarter-note kick positions omitted. */
+    {"ARP A:KENTBASS", 0xa44a, 16, {0}},
 };
 #define COUNT (sizeof(presets) / sizeof(presets[0]))
 

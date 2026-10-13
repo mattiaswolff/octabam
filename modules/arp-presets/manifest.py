@@ -6,7 +6,7 @@ MODULE = Module(
     category=Category.MIDI_USB, author='Mattias Wolff',
     author_url='https://github.com/mattiaswolff/octabam',
     proof=Proof.PORT, proof_note='Native panel, save/reload and held-root MIDI capture under the port; hardware untested.',
-    doc='Encoder A on MIDI ARP SETUP loads 16 editable rhythmic presets; C LEN and F KEY remain native.',
+    doc='Encoder A on MIDI ARP SETUP loads 17 editable rhythmic presets; C LEN and F KEY remain native.',
     linked=(Linked('arppresets', 'modules/arp-presets/presets.s', dram=True),),
     symbol_refs=(SymbolRef(0x400d40a6, 0x4003b840, 'arppresets', 'ap_speed',
                            'ARP SPD musical divisions; native fallback for unusual ticks'),),

@@ -60,6 +60,7 @@ velocity accents, swing, or full reproductions of a musical style.
 | E5/12 | 12 | `x.x.x..x.x..` | none |
 | OCTPULSE | 8 | `x.x.x.x.` | steps 5 and 7: +12 |
 | OCT332 | 8 | `x..x..x.` | step 7: +12 |
+| KENTBASS | 16 | `.x.x..x...x..x.x` | none |
 
 The traditional timelines and Euclidean family follow Godfried Toussaint,
 [The Euclidean Algorithm Generates Traditional Musical Rhythms](https://cgm.cs.mcgill.ca/~godfried/publications/banff.pdf)
@@ -76,6 +77,20 @@ Jajoria, Krenn and Mäder,
 rhythmic figure across songs. The straight/offbeat controls and two octave
 variants here are original practical arrangements, not transcriptions from
 those papers. Octave offsets interact with the existing RNGE and note bounds.
+
+KENTBASS is the requested offbeat-only approximation of the opening bass
+rhythm in Kent's [Vals för Satan (din vän pessimisten)](https://www.youtube.com/watch?v=-XDsjqiYjKU).
+It activates steps **2, 4, 7, 11, 14 and 16**, with no pitch offsets.
+The four-on-the-floor kick positions **1, 5, 9 and 13 are rests**. The mixed
+recording does not establish whether bass also retriggers under the kick;
+this deliberately excludes those uncertain attacks, rather than claiming an
+isolated-stem transcription. Try SPD `1/16` (`x6`), LEN 16 and a repeated
+root near 126 BPM. Loading the preset does not change tempo or SPD.
+A comparison of the first 20 bars (approximately 0:00.18–0:38.28), using
+300–850 Hz attack-strength measurements and excluding the kick positions,
+found the same six strongest offbeat attacks in every bar. This supports a
+16-tick onset cycle without drift against the kick in that opening; it does
+not determine any longer filter, accent or other-layer cycle.
 
 ## Implementation boundaries
 
@@ -108,7 +123,7 @@ the checked-in `presets.s` consumed by Linked, following BRAIN's approach.
 ## Verification
 
 `tools/verify/verify_arp_presets.py` executes the built code in ColdFire
-Unicorn: 1,024 applications covering 16 rhythms × 4 Parts × 8 tracks ×
+Unicorn: 1,088 applications covering 17 rhythms × 4 Parts × 8 tracks ×
 first/last bank; exact Part/CS1/live writes and dirty flags; custom matching,
 invalid contexts, encoder bounds, title text, ABI and interrupt-mask
 restoration. Native C/F/LEVEL and both rotation paths compare equal to stock.
@@ -118,10 +133,10 @@ Display/LED calls are stubbed in that focused gate.
 
 `tools/verify/verify_arp_presets_port.py` stages a silent copy of
 `OT_PROJECT` (or `--project`) and runs the native FUNC+AMP/A panel events,
-captures the LCD, saves through the PROJECT menu, and cold-loads the saved
-virtual card. With MIDI SCALES selected it also checks the F/A interaction
-and captures the extended scale beside the preset title. A 3.48-second MIDI capture produces 28 STRAIGHT versus 11
-TRESILLO onsets from the same root; a switch to OCT332 while the root is
+captures the LCD, browses to KENTBASS, saves through the PROJECT menu, and
+cold-loads the saved virtual card with its six offbeat attacks intact. With MIDI SCALES selected it also checks the F/A interaction
+and captures the extended scale beside the preset title. A 3.48-second MIDI capture produces 28 STRAIGHT, 11
+TRESILLO and 10 KENTBASS onsets from the same root; a switch to OCT332 while the root is
 held reaches +12 without another sequencer trig. Note releases are checked.
 `--midi-only` repeats just the playback cases during development.
 

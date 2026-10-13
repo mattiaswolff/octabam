@@ -105,7 +105,7 @@ from the card (section 5).
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| [**ARP PRESETS**](modules/arp-presets/README.md) | [Mattias Wolff](https://github.com/mattiaswolff/octabam) | Encoder A on MIDI ARP SETUP loads 16 editable rhythmic presets; C LEN and F KEY remain native. | port-gated: Native panel, save/reload and held-root MIDI capture under the port; hardware untested. |
+| [**ARP PRESETS**](modules/arp-presets/README.md) | [Mattias Wolff](https://github.com/mattiaswolff/octabam) | Encoder A on MIDI ARP SETUP loads 17 editable rhythmic presets; C LEN and F KEY remain native. | port-gated: Native panel, save/reload and held-root MIDI capture under the port; hardware untested. |
 | [**CC FEEDBACK**](modules/cc-feedback/README.md) | [sambanks](https://github.com/sambanks) | Every knob value change is transmitted as its CC (page 1: 16-45; page 2: CC MAP's 62-73), so a controller's encoders follow the unit. | port-gated: `verify_ccfeedback` (Unicorn) and `verify_set` (the port's MIDI OUT bytes) |
 | [**CC MAP**](modules/cc-map/README.md) | [sambanks](https://github.com/sambanks) | MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's. | on hardware: Sam's MKII (image 96, 13 Sep 2026) |
 | [**USB AUDIO IN**](modules/usb-audio-in/README.md) | [bryantysinger](https://github.com/bryantysinger) | The host's channels into inputs A/B, C/D or A-D by its INPUTS setting (UAC2 EP3 OUT, implicit feedback); the jacks while the stream is closed. | port-gated: `verify_usb_in` under the port for each INPUTS value (28 Sep 2026); ABCD ran on Bryan T's MKII as usbin-test build 16 (27 Sep 2026), with its inject poked into SPATIALIZER's words |
