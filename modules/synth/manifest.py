@@ -66,3 +66,10 @@ MODULE = runpy.run_path(str(_UPSTREAM), run_name="remix_manifest_synth")["MODULE
 MODULE = dataclasses.replace(
     MODULE, category=Category.MACHINES, author="timhastie/octatrick-modules", author_url="https://github.com/timhastie/octatrick-modules",
     proof=Proof.HARDWARE, proof_note="`octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) through 2.9; the last two 2.9 fixes under the port")
+
+# Optional Sophie source adapter; the unselected assembly is byte-for-byte upstream.
+_BRIDGE = pathlib.Path(__file__).resolve().parents[1] / "sophie" / "bridge.py"
+_sophie_assembly = runpy.run_path(str(_BRIDGE))["assembly"]
+MODULE = dataclasses.replace(MODULE, linked=tuple(
+    dataclasses.replace(unit, source="modules/synth/engine.s", include=_sophie_assembly)
+    if unit.label == "poly" else unit for unit in MODULE.linked))

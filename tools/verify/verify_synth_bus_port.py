@@ -106,7 +106,8 @@ def rms(values):
     return math.sqrt(sum(v*v for v in values) / max(1, len(values)))
 
 
-def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
+def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None,
+             check_pitch=True, extra_dumps=()):
     work = OUT/name
     work.mkdir(parents=True, exist_ok=True)
     loopback = name == 'loopback'
@@ -144,6 +145,8 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
                          f'0x80000110,512={work}/dsp-records.bin']
     for frame, action in steps:
         cmd += ['--step', f'{frame}:{action}']
+    if extra_dumps:
+        cmd[cmd.index('--mem-dump')+1] += ';'+';'.join(extra_dumps)
     if loopback:
         index = cmd.index('--mem-dump')+1
         cmd[index] += f';{sym["lb_accepted"]:#x},8={work}/loopback-stats.bin;{sym["lb_internal_held"]:#x},4={work}/loopback-held.bin'
@@ -153,7 +156,17 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
     assert result.returncode == 0 and 'run ended REACHED' in log, work/'port.log'
     assert 'LOAD PROJECT handled' in log and 'DID NOT RETURN' not in log
     assert 'main never spun' not in log and 'unimplemented opcode' not in log, work/'port.log'
-    c = blockdump.classes(blockdump.read(work/'blocks.bin'))
+    blocks = blockdump.read(work/'blocks.bin')
+    # The dump opens after LOAD, before the two pre-transport panel calls.
+    # Those calls can advance audio frames; its frame counter is not reset
+    # by PLAY. Keep the final 3000 frames whose completion the log confirms.
+    end_frame = max(row[1] for row in blocks)
+    assert end_frame >= 3000, ('incomplete frame capture', end_frame)
+    blocks = [row for row in blocks if row[1] > end_frame-3000]
+    for core in (0, 1):
+        frames = [row[1] for row in blocks if row[0] == '<' and row[2] == 1 and row[3] == core]
+        assert frames == list(range(end_frame-2999, end_frame+1)), ('missing/duplicate DSP frame', core)
+    c = blockdump.classes(blocks)
     # Read the DSP-facing IDs, not only the live UI IDs: a misresolved
     # TEMPO SYNC hook once left every record at NONE while the UI was right.
     records = (work/'dsp-records.bin').read_bytes()
@@ -187,7 +200,7 @@ def run_case(source, name, sym, sequenced=False, voices=1, reload_card=None):
             released = rms(audio[1650*16:1750*16])
             assert released < max(2, level*0.001), (name, t+1, 'MIDI note-off did not release', released)
         hz = sample.pitch(sounding)
-        if voices == 1:
+        if voices == 1 and check_pitch:
             assert abs(hz-261.6256) < 2, (name, t+1, 'C4 pitch', hz)
         tones = {}
         if voices > 1:

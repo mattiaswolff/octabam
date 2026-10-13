@@ -138,3 +138,13 @@ Ghidra file is committed.
 | joelanders/mc68k-md-mm (Musashi-derived ColdFire core) | GPL-3.0 | pinned commit in `scripts/setup.sh` |
 | mischa85/elektron-firmware-tool | MIT, Copyright (c) 2026 Marcel Bierling | `tools/patches/elektron-firmware-tool.patch` |
 | Unicorn (via `.venv`, `make emu-setup`) | GPL-2.0 | `tools/patches/unicorn_emac_fractional.patch` |
+
+## Sophie FUSE proof of concept
+
+`modules/sophie/upstream` pins [soejrd/digisophie](https://github.com/soejrd/digisophie)
+at `ce17b9e4868027bafe8684054b45f28ea368bd7c`. Its MIT-licensed Sophie engine
+is compiled unchanged; its own `LICENSE` and `THIRD_PARTY.md` retain the
+original Sophie attribution. The optional diagnostic code is not built here.
+The Octatrack adapter uses the existing Tim Hastie Synth Machine integration;
+its pinned submodule and MIT notices remain unchanged. `modules/sophie/bridge.py`
+adds opt-in call sites at build time and refuses an unreviewed source revision.

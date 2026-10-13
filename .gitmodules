@@ -37,3 +37,6 @@
 [submodule "modules/repitch-repeat98-kyoti/upstream"]
 	path = modules/repitch-repeat98-kyoti/upstream
 	url = https://github.com/sambanks/octatrack-kyoti-fw
+[submodule "modules/sophie/upstream"]
+	path = modules/sophie/upstream
+	url = https://github.com/soejrd/digisophie.git
