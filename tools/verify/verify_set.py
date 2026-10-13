@@ -272,6 +272,8 @@ def main():
     midi.write_text("\n".join(lines) + "\n")
 
     dumps = {k: OUT / f"{k}.bin" for k in ("ids", "records", "lanes")}
+    if "POST FADER" in mods:
+        dumps["mixsram"] = OUT / "mixsram.bin"
     midi_out = OUT / "midi_out.bin" if "CC FEEDBACK" in mods else None
     if midi_out:
         # the stock emitter's per-channel cache and dirty bitmap, the engine's queue
@@ -291,7 +293,8 @@ def main():
                "--mem-dump", f"{LIVE_IDS:#x},16={dumps['ids']};{RECORDS:#x},512={dumps['records']};{LANES:#x},576={dumps['lanes']}"
                + (f";0x46c7bf2c,2048={dumps['cccache']};0x46c7d7d8,256={dumps['ccbits']};0x460d17ce,16={dumps['engq']}"
                   f";0x46c82456,4={dumps['dbptr']};0x80000000,4={dumps['partix']}"
-                  f";{BLOB + (bank - 1) * BANK_STRIDE + PART_KNOBS:#x},{4 * PART_STRIDE}={dumps['parts']}" if midi_out else ""),
+                  f";{BLOB + (bank - 1) * BANK_STRIDE + PART_KNOBS:#x},{4 * PART_STRIDE}={dumps['parts']}" if midi_out else "")
+               + (f";0x80000000,32768={dumps['mixsram']}" if "POST FADER" in mods else ""),
                "--dsp-peek", "0:Y:36082,1;1:Y:36082,1;1:X:6229,1;1:X:6275,1;0:Y:36081,1;0:Y:9f4,1"] \
             + (["--poke-trig", str(a.poke_trig)] if a.poke_trig else []) \
             + (["--midi-out", str(midi_out)] if midi_out else []) + a.extra.split()
@@ -338,6 +341,19 @@ def main():
                 bad.append(f"{what} lane {want.hex()} record {got.hex()}")
         check(f"page 2: T{t + 1} record halfwords 18-26 == the lane", not bad, "; ".join(bad))
 
+    # POST FADER intentionally changes only the DSP-bound send words. Use
+    # the actual mixer snapshot to predict the new transport values; every
+    # non-send/legacy remix keeps the existing assertions.
+    mixsram = dumps["mixsram"].read_bytes() if "POST FADER" in mods else None
+    def send_knob(track, value):
+        key = registry.by_id(part["fx2"][track])
+        if mixsram is None or key is None or key.key not in ("SEND", "DELAY SERVER", "REVERB SERVER"):
+            return value
+        ptr = int.from_bytes(mixsram[0x3c10:0x3c14], "big") - 0x80000000
+        assert 0 <= ptr <= len(mixsram) - 64, "invalid mixer snapshot pointer"
+        level = mixsram[ptr + track * 8 + 2]
+        return value * level * level // 16384
+
     # midi
     aux = recs[64 + 24] << 8 | recs[64 + 25]                     # T2 halfword 12
     t2_fx2 = registry.by_id(part["fx2"][1])
@@ -345,7 +361,7 @@ def main():
         # a select on slot 0 clamps to its count, as slot 6 does below (VOCODER's
         # NOTE is 61 steps: CC 100 lands as 60)
         n0 = t2_fx2.params[0].count if t2_fx2.params and t2_fx2.params[0].count else 128
-        want = min(100, n0 - 1)
+        want = send_knob(1, min(100, n0 - 1))
         check(f"midi: CC 40 = 100 on T2's channel reached T2's AUX halfword (as {want})", (aux >> 8) == want,
               f"halfword 12 = {aux:#06x} (knob {aux >> 8}; the lane's slew takes ~30 frames)")
     else:
@@ -379,7 +395,7 @@ def main():
     if del_host is not None:
         v = peek.get(("1", "X", 0x6229))
         check(f"midi: CC 41 = 50 on T{del_host + 1}'s channel reached BusDelay's REV "
-              f"(raw $29 of its block, X:0x6229 on core 1)", v == "320000", f"{v}")
+              f"(raw $29 of its block, X:0x6229 on core 1)", v == f"{send_knob(del_host, 50) << 16:06x}", f"{v}")
         if "CC MAP" in mods:
             v = peek.get(("1", "X", 0x6275))
             n = int(v, 16) if v else -1
@@ -390,10 +406,10 @@ def main():
     if verb_host is not None:
         v = peek.get(("0", "Y", 0x36081))
         check(f"midi: CC 41 = 30 on T{verb_host + 1}'s channel reached BusVerb's REV flag "
-              f"(Y:0x36081 on core 0)", v == "1e0000", f"{v}")
+              f"(Y:0x36081 on core 0)", v == f"{send_knob(verb_host, 30) << 16:06x}", f"{v}")
         v = peek.get(("0", "Y", 0x9f4))
         check(f"midi: CC 40 = 70 on T{verb_host + 1}'s channel reached BusVerb's DEL ramp "
-              f"(Y:0x09f4 on core 0)", v == "460000", f"{v}")
+              f"(Y:0x09f4 on core 0)", v == f"{send_knob(verb_host, 70) << 16:06x}", f"{v}")
     m = re.search(r"midi in    : (\d+) byte\(s\) still queued", text)
     check("midi: the firmware took every byte", m is not None and m.group(1) == "0",
           f"{m.group(1) if m else '?'} queued at the end")

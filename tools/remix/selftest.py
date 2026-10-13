@@ -896,7 +896,7 @@ def main():
              "testgen": ("PLATE REV",),     # TESTGEN runs in its words; the other 13 stay
              "vocoder": ("PLATE REV", "DJ EQ"),   # VOCODER runs in PLATE's words; DJ EQ out so the tables sit in X
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "rig": _rig, "bottleservice": _rig,
+             "rig": _rig, "bottleservice": _rig, "send-return-poc": _rig,
              "character-txtr": _rig,   # bottleservice with the TXTR station
              "brain": _rig}   # bottleservice with BRAIN (a ColdFire module)
     for _n in registry.remix_names():
