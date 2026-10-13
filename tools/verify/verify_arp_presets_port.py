@@ -135,6 +135,19 @@ def main():
             subprocess.run([sys.executable, str(ROOT / 'tools/emu/lcd_view.py'),
                             str(OUT / f'speed-{tag}.lcd'), '--png', str(OUT / f'speed-{tag}.png')], check=True)
 
+        # Browse from tresillo to the new final preset using actual A reports.
+        # Its leading rest and omitted kick beats must survive native save/load.
+        for _ in range(12): lines.append(f'{t} enc 0 1'); t += 300
+        (OUT / 'kentbass.script').write_text('\n'.join(lines + [f'{t+400} quit']) + '\n')
+        run('kentbass-ui', [*seed, '--live-script', OUT / 'kentbass.script',
+                           '--lcd', OUT / 'kentbass.lcd', '--mem-dump',
+                           f'{DB:#x},635712={OUT / "kentbass.bank"}'])
+        expected = b'\x0f\xa4\x4a' + bytes(16)
+        assert arp((OUT / 'kentbass.bank').read_bytes()) == expected, 'A did not select offbeat-only KENTBASS'
+        subprocess.run([sys.executable, str(ROOT / 'tools/emu/lcd_view.py'),
+                        str(OUT / 'kentbass.lcd'), '--png', str(OUT / 'kentbass.png')], check=True)
+        print('  [PASS] native A selects KENTBASS: steps 2/4/7/11/14/16, no kick positions or offsets', flush=True)
+
         # Close ARP, then use the native SAVE PROJECT menu and confirmation.
         tap(0x32); tap(0x1c, 1000); tap(0x21, 700); tap(0x20, 500)
         tap(0x31, 1100); tap(0x31, 30000)
@@ -149,7 +162,8 @@ def main():
     # sustained root to an octave preset without injecting a new note trig.
     # 9600 frames of 16 samples at 44.1 kHz cover 3.48 s: 28 arp ticks at
     # 120 BPM / SPD 6, long enough to see multiple eight-tick cycles.
-    for tag, preset, switch in (('straight', 0, False), ('tresillo', 4, False), ('switch', 4, True)):
+    for tag, preset, switch in (('straight', 0, False), ('tresillo', 4, False),
+                                ('kentbass', 16, False), ('switch', 4, True)):
         extra = ['--step', '-:poke:0x100b14cc=0;0x100b14cf=0',
                  '--step', f'-:call:{symbols["ap_apply"]:#x},{preset}',
                  '--sequencer', '--internal-clock', '--frames', '9600',
@@ -177,8 +191,10 @@ def main():
     straight, tresillo, switched = [ons(OUT / f'{tag}.midi') for tag in ('straight', 'tresillo', 'switch')]
     assert len(straight) == 28 and set(straight) == {60}, straight
     assert len(tresillo) == 11 and set(tresillo) == {60}, tresillo
+    kentbass = ons(OUT / 'kentbass.midi')
+    assert len(kentbass) == 10 and set(kentbass) == {60}, kentbass
     assert set(switched) == {60, 72}, switched
-    print(f'  [PASS] native MIDI: {len(straight)} straight / {len(tresillo)} tresillo onsets; held-root switch reaches +12; balanced releases', flush=True)
+    print(f'  [PASS] native MIDI: {len(straight)} straight / {len(tresillo)} tresillo / {len(kentbass)} kentbass onsets; held-root switch reaches +12; balanced releases', flush=True)
 
 
 if __name__ == '__main__': main()

@@ -58,7 +58,7 @@ ap_match:
 .L5:
 	addq.l #1,%d2
 	lea (24,%a1),%a1
-	cmp.l #presets+388,%a1
+	cmp.l #presets+412,%a1
 	jne .L7
 .L2:
 	movem.l (%sp),#1148
@@ -87,7 +87,7 @@ ap_match:
 	.type	ap_apply, @function
 ap_apply:
 	lea (-52,%sp),%sp
-	moveq #15,%d0
+	moveq #16,%d0
 	movem.l #1052,(%sp)
 	move.l 56(%sp),%d2
 	cmp.l %d2,%d0
@@ -124,7 +124,7 @@ ap_apply:
 	move.l %d0,30(%sp)
 	jsr 1073905124
 #APP
-| 76 "modules/arp-presets/presets.c" 1
+| 78 "modules/arp-presets/presets.c" 1
 	move.w %sr,%d4
 	move.w #0x2700,%sr
 | 0 "" 2
@@ -216,7 +216,7 @@ ap_apply:
 	mov3q.l #1,269452696
 	move.w 42(%sp),%d0
 #APP
-| 90 "modules/arp-presets/presets.c" 1
+| 92 "modules/arp-presets/presets.c" 1
 	move.w %d0,%sr
 | 0 "" 2
 #NO_APP
@@ -245,7 +245,7 @@ ap_select:
 	jeq .L24
 	tst.l 4(%sp)
 	jle .L23
-	moveq #15,%d1
+	moveq #16,%d1
 	cmp.l %d0,%d1
 	jeq .L20
 	addq.l #1,%d0
@@ -531,10 +531,12 @@ ap_speed:
 	.string	"ARP A:OCTPULSE"
 .LC33:
 	.string	"ARP A:OCT332"
+.LC34:
+	.string	"ARP A:KENTBASS"
 	.section	.rodata
 	.align	2
 	.type	presets, @object
-	.size	presets, 384
+	.size	presets, 408
 presets:
 	.long	.LC18
 	.word	-1
@@ -631,6 +633,12 @@ presets:
 	.byte	8
 	.base64	"AAAAAAAADAAA"
 	.zero	7
+	.zero	1
+	.long	.LC34
+	.word	-23478
+	.byte	16
+	.zero	2
+	.zero	14
 	.zero	1
 
     .text
