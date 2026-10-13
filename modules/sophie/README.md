@@ -6,7 +6,7 @@ Load `FMSYNTH-SOPHIE.wav` on a FLEX track. Set VOIC to 1. Create the silent mark
 
 The engine keeps its 48 kHz output and internal 24 kHz oscillator cadence; the adapter resamples to 44.1 kHz and ramps the existing AMP gain across split source blocks. Controls reach the next 32-frame engine block. The optional bridge hash-checks the pinned Synth source and inserts explicit callbacks without editing that submodule. It owns no second copy of a stock hook. Without SOPHIE selected, the bridge emits the original assembly verbatim.
 
-Build `make bus REMIX=sophie`. Generate the assembly with `python3 modules/sophie/generate.py`. 
+Build `make bus REMIX=sophie`. Generate the assembly with `python3 modules/sophie/generate.py`.
 ## Measured locally
 
 - The host adapter matches an independently resampled render of the pinned upstream engine exactly. Irregular source block splits, marker isolation and unsupported polyphony are checked.
