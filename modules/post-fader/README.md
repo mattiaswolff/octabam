@@ -1,5 +1,10 @@
 # POST FADER proof of concept
 
+Maintained feature branch: `codex/modules/post-fader`. The original tested
+prototype remains at `codex/poc/send-return-20261013` (`9b9e2060`). This
+branch owns the optional module, its tests and its dedicated test remix.
+It is not yet selected by the personal integrated release.
+
 Extracted from sanderlegit's [PR 542](https://github.com/sambanks/octabam/pull/542),
 head `2b4b0ed1b4c91e184c59994e352c194afc00b18a`, onto upstream
 `fb5daa9766f1af1f61207c6baae056347a2edcd5` on 13 October 2026.
